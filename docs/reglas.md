@@ -1,0 +1,7 @@
+- Todo en camelCase.
+- Todos los tipos en minúsculas.
+- Todas las divisas en mayúsculas (USD, PEN, EUR, BTC, ETH, USDT).
+- Todos los IDs personalizados en minúsculas con guiones bajos.
+- Todas las fechas en Firestore son Timestamp.
+- Los snapshots usan ID YYYY-MM-DD.
+- No se guarda información que pueda recalcularse, salvo por rendimiento.
