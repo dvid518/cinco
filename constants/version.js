@@ -2,7 +2,7 @@ export const VERSION = {
     numero: "1.0.0-beta.1",
     nombre: "cinco",
     descripcion: "Gestión personal de patrimonio y finanzas",
-    anio: 2026,
+    ano: 2026,
     autor: "David",
     
     // Metadatos internos
@@ -19,6 +19,6 @@ export function getVersionInfo() {
         version: VERSION.numero,
         nombre: VERSION.nombre,
         descripcion: VERSION.descripcion,
-        copyright: `© ${VERSION.anio} ${VERSION.nombre}`
+        copyright: `© ${VERSION.ano} ${VERSION.nombre}`
     }
 }

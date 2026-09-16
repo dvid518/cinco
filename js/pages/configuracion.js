@@ -173,7 +173,7 @@ export function render() {
             <div class="panel-footer">
                 <span class="footer-brand">${VERSION.nombre}</span>
                 <span class="footer-version">v${VERSION.numero}</span>
-                <span class="footer-copy">© ${VERSION.anio} ${VERSION.nombre}</span>
+                <span class="footer-copy">© ${VERSION.ano} ${VERSION.nombre}</span>
             </div>
         </section>
     `

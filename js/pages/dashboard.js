@@ -250,12 +250,12 @@ function diasHastaDiaDelMes(diaMes) {
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
 
-    const anio = hoy.getFullYear()
+    const ano = hoy.getFullYear()
     const mes = hoy.getMonth()
 
-    let objetivo = new Date(anio, mes, diaMes)
+    let objetivo = new Date(ano, mes, diaMes)
     if (objetivo < hoy) {
-        objetivo = new Date(anio, mes + 1, diaMes)
+        objetivo = new Date(ano, mes + 1, diaMes)
     }
 
     const diff = objetivo - hoy
