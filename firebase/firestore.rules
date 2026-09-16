@@ -1,0 +1,130 @@
+rules_version = '2';
+
+// ============================================================
+// CINCO — Reglas de seguridad Firestore
+// ============================================================
+// Modelo:
+//   - usuarios/{uid}/{coleccion}/{doc}  → privado por usuario
+//   - usuarios/{uid}/activos/{id}/historial/{fecha} → privado
+//   - config/{doc}                       → lectura autenticada, escritura solo consola
+//
+// No hay colecciones globales de datos de usuario.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------------
+    // FUNCIONES AUXILIARES
+    // ----------------------------------------------------------
+
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+
+    function esPropietario(uid) {
+      return estaAutenticado() && request.auth.uid == uid;
+    }
+
+    // Comprueba que el usuario autenticado es el dueño del recurso
+    // (útil para subcolecciones anidadas tipo activos/{id}/historial/{fecha})
+    function esPropietarioDelDocumento() {
+      return estaAutenticado()
+        && request.auth.uid == resource.data.uid;
+    }
+
+    // ----------------------------------------------------------
+    // USUARIOS
+    // ----------------------------------------------------------
+
+    match /usuarios/{uid} {
+      // Solo el propio usuario puede leer/actualizar/borrar su doc raíz
+      allow read: if esPropietario(uid);
+      allow create: if esPropietario(uid);
+      allow update: if esPropietario(uid);
+      allow delete: if esPropietario(uid);
+
+      // --------------------------------------------------------
+      // CUENTAS
+      // --------------------------------------------------------
+      match /cuentas/{cuentaId} {
+        allow read, write: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // MOVIMIENTOS
+      // --------------------------------------------------------
+      match /movimientos/{movimientoId} {
+        allow read, write: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // POSICIONES
+      // --------------------------------------------------------
+      match /posiciones/{posicionId} {
+        allow read, write: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // PENDIENTES
+      // --------------------------------------------------------
+      match /pendientes/{pendienteId} {
+        allow read, write: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // SNAPSHOTS
+      // --------------------------------------------------------
+      match /snapshots/{fecha} {
+        allow read, write: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // TRADES
+      // --------------------------------------------------------
+      match /trades/{tradeId} {
+        allow read, write: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // ACTIVOS (ahora por usuario)
+      // --------------------------------------------------------
+      match /activos/{activoId} {
+        allow read, write: if esPropietario(uid);
+
+        // ------------------------------------------------------
+        // HISTORIAL DE PRECIOS DE UN ACTIVO
+        // ------------------------------------------------------
+        match /historial/{fecha} {
+          allow read, write: if esPropietario(uid);
+        }
+      }
+
+      // --------------------------------------------------------
+      // CATCH-ALL: cualquier subcolección futura bajo el usuario
+      // queda protegida por defecto.
+      // --------------------------------------------------------
+      match /{document=**} {
+        allow read, write: if esPropietario(uid);
+      }
+    }
+
+    // ----------------------------------------------------------
+    // CONFIG (global, versionado)
+    // ----------------------------------------------------------
+
+    match /config/{docId} {
+      // Cualquier usuario autenticado puede leer la config global
+      allow read: if estaAutenticado();
+      // Solo se escribe desde la consola de Firebase
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // DENY POR DEFECTO
+    // ----------------------------------------------------------
+    // Cualquier ruta no contemplada queda denegada explícitamente.
+    // (Firestore ya deniega por defecto, esto es documentativo.)
+
+  }
+}

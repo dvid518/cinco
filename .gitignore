@@ -1,0 +1,89 @@
+# ============================================
+# SISTEMA
+# ============================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================
+# EDITORES / IDE
+# ============================================
+
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# ============================================
+# FIREBASE — LOGS Y DEBUG
+# ============================================
+
+.firebase/
+firebase-debug.log
+firestore-debug.log
+firestore.rules.local
+ui-debug.log
+*-debug.log
+
+# ============================================
+# FIREBASE — CLAVES SENSIBLES (NUNCA A GIT)
+# ============================================
+# Si algún día descargas una clave de servicio desde la consola,
+# esto evita que se suba por accidente.
+
+serviceAccountKey.json
+firebase-adminsdk*.json
+*-firebase-adminsdk-*.json
+gcloud-service-account*.json
+
+# ============================================
+# VARIABLES DE ENTORNO
+# ============================================
+
+.env
+.env.local
+.env.*.local
+
+# ============================================
+# NODE (aunque no uses npm, evita ruido)
+# ============================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ============================================
+# BACKUPS LOCALES
+# ============================================
+
+*.dvid
+*.bak
+*.backup
+
+# ============================================
+# WINDOWS
+# ============================================
+
+$RECYCLE.BIN/
+*.lnk
+
+# ============================================
+# TEMPORALES
+# ============================================
+
+*.tmp
+*.temp
+.cache/

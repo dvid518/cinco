@@ -1,0 +1,211 @@
+@import url("style.css");
+
+/* ============================================
+   DASHBOARD - GRID
+   ============================================ */
+
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    width: 100%;
+    height: 100%;
+    align-content: start;
+}
+
+/* ============================================
+   CARDS - ESTILO MEJORADO
+   ============================================ */
+
+.dashboard .card {
+    background: var(--surface);
+    border-radius: 20px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Color de la línea según el tipo de card */
+.dashboard .card.positive::before {
+    background: var(--positive);
+    opacity: 0.6;
+}
+
+.dashboard .card.negative::before {
+    background: var(--negative);
+    opacity: 0.6;
+}
+
+.dashboard .card.primary::before {
+    background: var(--border);
+    opacity: 0.5;
+}
+
+/* Hover */
+.dashboard .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--text);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+.dashboard .card:hover::before {
+    opacity: 1;
+}
+
+/* Título */
+.dashboard .card .card-title {
+    font-size: 13px;
+    color: var(--textSecondary);
+    font-weight: 500;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Valor */
+.dashboard .card .card-value {
+    font-family: var(--font-secondary);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.dashboard .card .card-value.positive {
+    color: var(--positive);
+}
+
+.dashboard .card .card-value.negative {
+    color: var(--negative);
+}
+
+/* Subtítulo */
+.dashboard .card .card-sub {
+    font-size: 12px;
+    color: var(--textSecondary);
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    opacity: 0.7;
+}
+
+/* ============================================
+   CARD HEADER (para patrimonio con combo)
+   ============================================ */
+
+.patrimonio-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.patrimonio-card .card-header .card-title {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   DIVISA SELECT
+   ============================================ */
+
+.divisa-select {
+    background: var(--background);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 4px 14px;
+    font-family: var(--font-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+}
+
+.divisa-select:hover {
+    border-color: var(--text);
+    background-color: var(--lightHover);
+}
+
+.divisa-select:focus {
+    border-color: var(--positive);
+    box-shadow: 0 0 0 3px rgba(0, 230, 149, 0.1);
+}
+
+.divisa-select option {
+    background: var(--surface);
+    color: var(--text);
+}
+
+/* ============================================
+   ICONOS DECORATIVOS EN CARDS (opcional)
+   ============================================ */
+
+.dashboard .card .card-icon {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 28px;
+    opacity: 0.15;
+    pointer-events: none;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .dashboard .card {
+        padding: 18px;
+    }
+
+    .dashboard .card .card-value {
+        font-size: 26px;
+    }
+}
+
+/* ============================================
+   GRÁFICO VACÍO
+   ============================================ */
+
+   .grafico-vacio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    height: 100%;
+    min-height: 180px;
+}
+
+.grafico-vacio-icon {
+    font-size: 40px;
+    opacity: 0.4;
+    margin-bottom: 12px;
+}
+
+.grafico-vacio-texto {
+    color: var(--textSecondary);
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 4px 0;
+}
+
+.grafico-vacio-hint {
+    color: var(--textSecondary);
+    font-size: 12px;
+    opacity: 0.6;
+    margin: 0;
+}

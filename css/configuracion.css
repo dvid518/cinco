@@ -1,0 +1,368 @@
+@import url("style.css");
+
+/* ========================================
+   CONFIGURACIÓN
+   ======================================== */
+
+#panel .panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    padding-bottom: 20px;
+}
+
+#panel .panel-section h2 {
+    color: var(--border);
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    font-weight: 600;
+}
+
+/* ========================================
+   GRUPOS
+   ======================================== */
+
+.config-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.config-label {
+    color: var(--textSecondary);
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 120px;
+}
+
+.config-label.danger {
+    color: var(--negative);
+}
+
+.config-value {
+    color: var(--text);
+    font-family: var(--font-secondary);
+    font-size: 14px;
+}
+
+.config-hint {
+    color: var(--textSecondary);
+    font-size: 12px;
+    width: 100%;
+    margin-top: 4px;
+}
+
+/* ========================================
+   TOGGLE DE TEMA
+   ======================================== */
+
+.toggle-group {
+    display: flex;
+    gap: 4px;
+    background: var(--background);
+    border-radius: 50px;
+    padding: 3px;
+}
+
+.toggle-option {
+    padding: 4px 16px;
+    border-radius: 50px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: var(--textSecondary);
+    font-family: var(--font-primary);
+}
+
+.toggle-option.active {
+    background: var(--border);
+    color: var(--background);
+    font-weight: 500;
+}
+
+.toggle-option:hover:not(.active) {
+    background: var(--lightHover);
+}
+
+/* ========================================
+   SELECT
+   ======================================== */
+
+.glass-select {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 6px 16px;
+    color: var(--text);
+    font-family: var(--font-primary);
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.glass-select:focus {
+    border-color: var(--positive);
+    box-shadow: 0 0 0 3px rgba(0, 230, 149, 0.1);
+}
+
+.glass-select:hover {
+    border-color: var(--text);
+}
+
+/* ========================================
+   BOTONES
+   ======================================== */
+
+.glass-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 6px 20px;
+    color: var(--text);
+    font-family: var(--font-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.glass-btn:hover {
+    background: var(--lightHover);
+    border-color: var(--text);
+    transform: scale(1.02);
+}
+
+.glass-btn.danger {
+    border-color: var(--negative);
+    color: var(--negative);
+}
+
+.glass-btn.danger:hover {
+    background: var(--negative);
+    color: var(--background);
+}
+
+.button-group {
+    display: flex;
+    gap: 8px;
+}
+
+/* ========================================
+   TIPO DE CAMBIO
+   ======================================== */
+
+.exchange-rate {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.rate-value {
+    font-family: var(--font-secondary);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.rate-update {
+    font-size: 12px;
+    color: var(--textSecondary);
+}
+
+.exchange-rate-inputs {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.exchange-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 180px;
+}
+
+.exchange-input label {
+    font-size: 13px;
+    color: var(--textSecondary);
+    white-space: nowrap;
+}
+
+.exchange-input .form-input {
+    flex: 1;
+    min-width: 80px;
+}
+
+.exchange-input span {
+    font-size: 13px;
+    color: var(--textSecondary);
+}
+
+/* ========================================
+   ZONA PELIGROSA
+   ======================================== */
+
+.danger-zone {
+    border-left: 3px solid var(--negative);
+    padding-left: 16px;
+    margin-top: 4px;
+    padding-top: 16px;
+}
+
+.danger-zone.no-border {
+    border-left: none;
+    padding-left: 0;
+}
+
+/* ========================================
+   FOOTER DEL PANEL
+   ======================================== */
+
+.panel-footer {
+    margin-top: auto;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--textSecondary);
+}
+
+.footer-brand {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 14px;
+}
+
+.footer-version {
+    font-family: var(--font-secondary);
+    font-size: 12px;
+}
+
+.footer-copy {
+    font-size: 12px;
+}
+
+/* ========================================
+   SWITCH / TOGGLE
+   ======================================== */
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--textSecondary);
+    border-radius: 24px;
+    transition: 0.3s ease;
+}
+
+.slider::before {
+    content: '';
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: var(--background);
+    border-radius: 50%;
+    transition: 0.3s ease;
+}
+
+.switch input:checked + .slider {
+    background: var(--positive);
+}
+
+.switch input:checked + .slider::before {
+    transform: translateX(20px);
+}
+
+.toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.toggle-row span {
+    font-size: 14px;
+    color: var(--text);
+}
+
+/* ========================================
+   SECCIONES OCULTAS
+   ======================================== */
+
+#panel .panel-section.hidden-section {
+    display: none;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+    .config-group {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .config-label {
+        min-width: auto;
+    }
+
+    .toggle-group {
+        width: 100%;
+    }
+
+    .toggle-option {
+        flex: 1;
+        text-align: center;
+    }
+
+    .exchange-rate {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .button-group {
+        width: 100%;
+    }
+
+    .button-group .glass-btn {
+        flex: 1;
+        text-align: center;
+    }
+
+    .panel-footer {
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+    }
+}2

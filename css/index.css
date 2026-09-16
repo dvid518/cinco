@@ -1,0 +1,182 @@
+@import url("style.css");
+
+/* ============================================
+   LOGIN
+   ============================================ */
+
+.login-section {
+    display: flex;
+    margin: 0 auto;
+    min-height: 100vh;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+#logo {
+    color: var(--text);
+    width: 60px;
+    height: 60px;
+    transition: transform 0.3s ease;
+}
+
+#logo:hover {
+    transform: scale(1.1);
+}
+
+/* --------------------------------------------
+   FORMULARIO
+   -------------------------------------------- */
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 320px;
+}
+
+.login-form .pass-block {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 50px;
+    gap: 6px;
+}
+
+.login-form input {
+    border-radius: 30px;
+    padding: 20px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.login-form input#clave {
+    flex: 1;
+    min-width: 0;
+}
+
+.login-form button.submit {
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: width 0.3s ease;
+}
+
+.login-form button.submit:hover {
+    width: 60px;
+}
+
+.login-form button.submit svg {
+    width: 25px;
+    height: 25px;
+}
+
+/* --------------------------------------------
+   DIVISOR
+   -------------------------------------------- */
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+    color: var(--textSecondary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+    opacity: 0.4;
+}
+
+/* --------------------------------------------
+   BOTÓN DE GOOGLE
+   -------------------------------------------- */
+
+.google-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 320px;
+    height: 50px;
+    padding: 0 20px;
+    border-radius: 30px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.google-btn:hover {
+    background: var(--lightHover);
+    border-color: var(--text);
+    transform: scale(1.02);
+}
+
+.google-btn svg {
+    flex-shrink: 0;
+}
+
+.google-btn.destacado {
+    border-color: var(--positive);
+    box-shadow: 0 0 0 3px rgba(0, 230, 149, 0.15);
+    animation: pulso 1.2s ease-in-out infinite;
+}
+
+/* --------------------------------------------
+   ERROR
+   -------------------------------------------- */
+
+.error-msg {
+    font-size: 14px;
+    max-width: 320px;
+    text-align: center;
+    min-height: 20px;
+}
+
+/* --------------------------------------------
+   ANIMACIONES
+   -------------------------------------------- */
+
+@keyframes pulso {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.03);
+    }
+}
+
+/* --------------------------------------------
+   RESPONSIVE
+   -------------------------------------------- */
+
+@media (max-width: 400px) {
+    .login-section {
+        gap: 20px;
+    }
+
+    #logo {
+        width: 48px;
+        height: 48px;
+    }
+}

@@ -1,0 +1,484 @@
+@import url("style.css");
+
+/* ============================================
+   NAVBAR
+   ============================================ */
+
+.nav-section {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    height: 50px;
+    width: 90%;
+    justify-content: space-between;
+    margin: 0 auto;
+    margin-top: 30px;
+}
+
+.nav-section:hover .nav-container {
+    gap: 20px;
+}
+
+/* Contenedores */
+.logo-container {
+    height: inherit;
+    width: 50px;
+    border-radius: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+#logo {
+    height: 30px;
+    margin-top: 5px;
+}
+
+.logo-container:hover {
+    transform: scale(1.05);
+}
+
+.logo-container:hover #logo {
+    transform: rotate(72deg);
+}
+
+.nav-container {
+    height: inherit;
+    display: flex;
+    flex-direction: row;
+    border-radius: 60px;
+    gap: 10px;
+    transition: all 0.3s ease;
+}
+
+.nav-container a {
+    height: inherit;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0px 20px;
+    color: var(--textAct);
+    transition: all 0.3s ease;
+}
+
+.nav-container a:hover,
+.nav-container a.act {
+    padding: 0px 25px;
+    transform: scale(1.02);
+    color: var(--textSecondary);
+    font-weight: 500;
+    background-color: var(--lightHover);
+}
+
+.user-container {
+    height: inherit;
+    width: 50px;
+    border-radius: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+#conf-icon,
+#exis {
+    color: var(--text);
+    transition: all 0.3s ease;
+    margin-top: 4px;
+}
+
+#conf-icon {
+    height: 30px;
+    width: 30px;
+}
+
+#exis {
+    height: 25px;
+    width: 25px;
+}
+
+.user-container:hover {
+    width: 60px;
+    transform: scale(1.02);
+}
+
+.user-container:hover #conf-icon {
+    color: var(--border);
+    transform: rotate(-60deg);
+}
+
+.user-container:hover #exis {
+    color: var(--border);
+    transform: rotate(-90deg);
+}
+
+.logo-container:hover,
+.user-container:hover {
+    background-color: var(--lightHover);
+}
+
+/* Activos */
+.act {
+    color: var(--border);
+}
+
+.hide {
+    visibility: hidden;
+    opacity: 0;
+}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
+
+#sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 20%;
+    min-width: 180px;
+    gap: 6px;
+    border-radius: 25px;
+    padding: 8px;
+    flex-shrink: 0;
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+#sidebar button {
+    width: 100%;
+    text-align: start;
+    padding: 12px 16px;
+    border-radius: 50px;
+    background: transparent;
+    border: none;
+    color: var(--textSecondary);
+    font-family: var(--font-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+#sidebar button:hover {
+    color: var(--border);
+    background-color: var(--lightHover);
+    padding-left: 20px;
+}
+
+#sidebar button.act {
+    color: var(--border);
+    background-color: var(--lightHover);
+    font-weight: 500;
+    padding-left: 20px;
+}
+
+#sidebar button.selected {
+    background-color: var(--border);
+    color: var(--surface);
+}
+
+/* Scrollbar del sidebar */
+#sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+#sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#sidebar::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+}
+
+/* ============================================
+   PANEL
+   ============================================ */
+
+#panel {
+    flex: 1;
+    padding: 28px 5% 28px 5%;
+    border-radius: 25px;
+    color: var(--text);
+    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: 100%;
+    min-height: 0;
+}
+
+#panel h2 {
+    color: var(--border);
+    font-size: 28px;
+    margin: 0 0 4px 0;
+    font-weight: 600;
+}
+
+#panel .row {
+    font-family: var(--font-secondary);
+}
+
+/* Scrollbar del panel */
+#panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+#panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#panel::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+}
+
+/* ============================================
+   LASTRAR
+   ============================================ */
+
+.lastbar {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    width: 50%;
+    height: 50px;
+}
+
+.lastbar:hover {
+    gap: 25px;
+}
+
+.lastbar .item {
+    width: 12px;
+    height: 12px;
+    border-radius: 20px;
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.lastbar .item svg {
+    visibility: hidden;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.lastbar .bar,
+.lastbar .pendientes {
+    display: flex;
+    align-items: center;
+}
+
+.lastbar .bar {
+    height: inherit;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.lastbar:hover .bar {
+    gap: 14px;
+}
+
+.lastbar:hover .item {
+    width: 40px;
+    height: 40px;
+}
+
+.lastbar:hover .desact {
+    opacity: 0.5;
+}
+
+.lastbar:hover .item svg {
+    visibility: visible;
+    opacity: 1;
+}
+
+.lastbar .item:hover {
+    background-color: var(--lightHover);
+    width: 45px;
+    transform: scale(1.05);
+}
+
+.lastbar .item span {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    transform: translateY(-10px);
+    color: var(--text);
+    padding: 4px 12px;
+    border-radius: 30px;
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.lastbar .item:hover span {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: none;
+    position: absolute;
+    display: flex;
+    font-size: 15px;
+    padding: 3px 8px;
+    border-radius: 30px;
+    margin-bottom: 80px;
+    animation: shake 1.5s infinite;
+}
+
+.lastbar .item svg {
+    color: var(--text);
+    width: 20px;
+    height: 20px;
+    display: block;
+    position: relative;
+    z-index: 2;
+    transition: all 0.3s ease;
+}
+
+/* Íconos */
+.lastbar .item:hover #icon-mov {
+    transition: all 0.3s ease;
+    transform: rotate(90deg);
+}
+
+.lastbar .item:hover #icon-act {
+    transition: all 0.6s ease;
+    transform: rotate(-360deg);
+}
+
+.lastbar .item:hover #icon-ext .arrow {
+    transition: all 0.3s ease;
+    animation: shake 1s linear infinite;
+}
+
+.lastbar .item:hover #icon-pen {
+    transition: all 0.3s ease;
+    transform: rotate(90deg);
+}
+
+.lastbar .item:hover #icon-edit {
+    transition: all 0.4s ease;
+    transform: rotate(-30deg);
+}
+
+.lastbar .item:hover #icon-arch rect {
+    transition: all 0.3s ease;
+    transform: translateY(-2px);
+}
+
+.lastbar .item:hover #icon-trash .cover {
+    transition: all 0.3s ease;
+    transform: translateY(-2px);
+}
+
+.lastbar .item:hover #icon-up {
+    transition: all 0.3s ease;
+    transform: translateY(-3px);
+}
+
+.lastbar .item:hover #icon-down {
+    transition: all 0.3s ease;
+    transform: translateY(3px);
+}
+
+.lastbar .item:hover #icon-trend-up {
+    transition: all 0.3s ease;
+    transform: rotate(-15deg);
+}
+
+.lastbar .item:hover #icon-trend-down {
+    transition: all 0.3s ease;
+    transform: rotate(15deg);
+}
+
+.lastbar .item:hover #icon-save {
+    transition: all 0.3s ease;
+    transform: rotate(10deg);
+}
+
+.lastbar .item:hover #icon-logout .arrow {
+    transition: all 0.3s ease;
+    transform: translateX(2px);
+}
+
+/* ============================================
+   LASTRAR - MODO SIEMPRE VISIBLE
+   ============================================ */
+
+.lastbar-always-visible .item {
+    width: 40px !important;
+    height: 40px !important;
+}
+
+.lastbar-always-visible .item svg {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.lastbar-always-visible .item:hover {
+    width: 45px !important;
+}
+
+/* ============================================
+   KEYFRAMES
+   ============================================ */
+
+@keyframes shake {
+    0% {
+        transform: translateY(0px);
+    }
+    10% {
+        transform: translateY(1px);
+    }
+    30% {
+        transform: translateY(-1px);
+    }
+    50% {
+        transform: translateY(1px);
+    }
+    70% {
+        transform: translateY(-1px);
+    }
+    90% {
+        transform: translateY(1px);
+    }
+    100% {
+        transform: translateY(0px);
+    }
+}
+
+/* ============================================
+   NAVEGACIÓN · OCULTAR PÁGINAS
+   ============================================ */
+
+   .nav-container a.nav-oculto {
+    display: none;
+}
+
+/* ============================================
+   ÚLTIMA BARRA · BOTÓN ACTIVO
+   ============================================ */
+
+.lastbar .item.activo {
+    background-color: var(--lightHover);
+    border-color: var(--text);
+}
+
+.lastbar .item.activo svg {
+    color: var(--positive);
+}

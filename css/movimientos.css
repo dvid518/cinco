@@ -1,0 +1,138 @@
+@import url("style.css");
+
+/* ============================================
+   MOVIMIENTOS
+   ============================================ */
+
+.movimientos {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 16px;
+}
+
+/* --------------------------------------------
+   FILTROS
+   -------------------------------------------- */
+
+.movimientos .filtros {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px;
+    background: var(--surface);
+    border-radius: 25px;
+    border: 1px solid var(--border);
+}
+
+.movimientos .filtros select,
+.movimientos .filtros input {
+    padding: 8px 16px;
+    border-radius: 50px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+
+/* --------------------------------------------
+   CABECERA DEL PANEL
+   -------------------------------------------- */
+
+#panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* --------------------------------------------
+   LISTA
+   -------------------------------------------- */
+
+.lista-movimientos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    padding-right: 4px;
+    min-height: 0;
+}
+
+.lista-movimientos::-webkit-scrollbar {
+    width: 6px;
+}
+
+.lista-movimientos::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.lista-movimientos::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+}
+
+/* --------------------------------------------
+   ITEM DE MOVIMIENTO
+   -------------------------------------------- */
+
+.movimiento-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+}
+
+.movimiento-item:hover {
+    transform: scale(1.01);
+    background: var(--lightHover);
+}
+
+.movimiento-item .info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.movimiento-item .info .concepto {
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.movimiento-item .info .fecha {
+    font-size: 12px;
+    color: var(--textSecondary);
+}
+
+.movimiento-item .info .tipo {
+    font-size: 11px;
+    color: var(--textSecondary);
+    opacity: 0.8;
+}
+
+.movimiento-item .monto {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+    margin-left: 12px;
+}
+
+.movimiento-item .monto.positive {
+    color: var(--positive);
+}
+
+.movimiento-item .monto.negative {
+    color: var(--negative);
+}

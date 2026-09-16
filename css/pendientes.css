@@ -1,0 +1,152 @@
+@import url("style.css");
+
+/* ============================================
+   PENDIENTES (modal)
+   ============================================ */
+
+.pendientes-cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pendientes-contador {
+    color: var(--textSecondary);
+    font-size: 13px;
+}
+
+.pendiente-crear-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+/* --------------------------------------------
+   LISTA
+   -------------------------------------------- */
+
+.pendientes-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.pendientes-lista::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pendientes-lista::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.pendientes-lista::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+}
+
+.pendiente-vacio {
+    color: var(--textSecondary);
+    text-align: center;
+    padding: 30px 0;
+    margin: 0;
+}
+
+.pendiente-hint {
+    font-size: 12px;
+    color: var(--textSecondary);
+    margin-top: 4px;
+}
+
+/* --------------------------------------------
+   ITEM
+   -------------------------------------------- */
+
+.pendiente-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 12px;
+    border-left: 4px solid var(--border);
+    transition: all 0.2s ease;
+    gap: 12px;
+}
+
+.pendiente-item.cobrar {
+    border-left-color: var(--positive);
+}
+
+.pendiente-item.pagar {
+    border-left-color: var(--negative);
+}
+
+.pendiente-item:hover {
+    background: var(--lightHover);
+}
+
+.pendiente-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.pendiente-concepto {
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pendiente-detalle {
+    font-size: 12px;
+    color: var(--textSecondary);
+}
+
+.pendiente-vencido {
+    color: var(--negative);
+    font-weight: 500;
+}
+
+.pendiente-acciones {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* --------------------------------------------
+   SELECTOR DE TIPOS DE MOVIMIENTO
+   -------------------------------------------- */
+
+.selector-tipos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.tipo-movimiento-btn {
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-primary);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.tipo-movimiento-btn:hover {
+    background: var(--lightHover);
+    border-color: var(--text);
+    transform: scale(1.02);
+}

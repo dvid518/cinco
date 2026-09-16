@@ -1,0 +1,99 @@
+@import url("style.css");
+
+/* ============================================
+   CUENTAS
+   ============================================ */
+
+.cuentas {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    gap: 20px;
+}
+
+/* --------------------------------------------
+   SIDEBAR · PUNTO DE COLOR
+   -------------------------------------------- */
+
+#sidebar button .cuenta-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+/* --------------------------------------------
+   DETALLE DE CUENTA
+   -------------------------------------------- */
+
+.cuenta-detalle {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+.cuenta-detalle .field {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.cuenta-detalle .field .label {
+    color: var(--textSecondary);
+    font-size: 14px;
+}
+
+.cuenta-detalle .field .value {
+    color: var(--text);
+    font-family: var(--font-secondary);
+    font-weight: 500;
+}
+
+.cuenta-detalle .saldo {
+    font-size: 32px;
+    font-family: var(--font-secondary);
+    text-align: center;
+    padding: 20px 0;
+}
+
+.cuenta-detalle .saldo.positive {
+    color: var(--positive);
+}
+
+.cuenta-detalle .saldo.negative {
+    color: var(--negative);
+}
+
+/* --------------------------------------------
+   CABECERA DEL DETALLE
+   -------------------------------------------- */
+
+.cuenta-detalle-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cuenta-detalle-header .cuenta-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.cuenta-detalle-header h2 {
+    margin: 0;
+}
+
+/* --------------------------------------------
+   MODAL · GRUPO CONDICIONAL
+   -------------------------------------------- */
+
+.form-group[hidden] {
+    display: none;
+}

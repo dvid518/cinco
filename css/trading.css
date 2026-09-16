@@ -1,0 +1,122 @@
+@import url("style.css");
+
+/* Estilos específicos de trading */
+.trading {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 20px;
+}
+
+.trading .panel-trading {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+}
+
+.trading .panel-trading .grafico {
+    background: var(--surface);
+    border-radius: 25px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    min-height: 300px;
+}
+
+.trading .panel-trading .info {
+    background: var(--surface);
+    border-radius: 25px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.trading .panel-trading .info .precio-actual {
+    font-family: var(--font-secondary);
+    font-size: 32px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.trading .panel-trading .info .precio-actual.positive {
+    color: var(--positive);
+}
+
+.trading .panel-trading .info .precio-actual.negative {
+    color: var(--negative);
+}
+
+.trading .trades {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.trading .trade-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+
+.trading .trade-item .tipo {
+    padding: 2px 12px;
+    border-radius: 50px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.trading .trade-item .tipo.long {
+    background: var(--positive);
+    color: var(--background);
+}
+
+.trading .trade-item .tipo.short {
+    background: var(--negative);
+    color: var(--text);
+}
+
+.trading .trade-item .entrada {
+    font-family: var(--font-secondary);
+}
+
+.trading .trade-item .salida {
+    font-family: var(--font-secondary);
+}
+
+.trading .trade-item .resultado.positive {
+    color: var(--positive);
+}
+
+.trading .trade-item .resultado.negative {
+    color: var(--negative);
+}
+
+/* ============================================
+   TRADING - ITEMS
+   ============================================ */
+
+   .trade-item {
+    cursor: default;
+}
+
+.trade-item:hover {
+    transform: none;
+    cursor: default;
+}
+
+.trade-acciones {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    justify-content: flex-end;
+}
+
+.trade-acciones .glass-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+}
