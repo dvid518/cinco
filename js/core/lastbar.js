@@ -27,17 +27,22 @@ function itemTema() {
 }
 
 /** Actualiza el ícono del botón de tema según el modo actual (mantiene el DOM). */
-export function actualizarIconoTema() {
+export function actualizarIconoTema(tema = getTemaLocal()) {
     const item = document.getElementById("lastbar-item-tema")
     if (!item) return
 
-    const modo = getTemaLocal()
-    const iconoTema = ICONO_POR_MODO[modo] || "sun"
+    const iconoTema = ICONO_POR_MODO[tema] || "sun"
     const svg = item.querySelector("svg")
     if (svg) {
         svg.outerHTML = icono(iconoTema, 20)
     }
 }
+
+// Sincroniza el ícono cuando el tema cambia desde cualquier lugar
+// (configuración, lastbar, etc.) sin recargar la página.
+window.addEventListener("tema-cambiado", (event) => {
+    actualizarIconoTema(event.detail?.tema)
+})
 
 const ITEM_PENDIENTES = `
     <div class="item glass" data-accion="pendientes" role="button" tabindex="0">

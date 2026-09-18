@@ -91,10 +91,14 @@ export async function eliminarPendiente(uid, pendienteId) {
 
 export async function consolidarPendiente(uid, pendienteId, movimientoId) {
     const referencia = doc(db, "usuarios", uid, "pendientes", pendienteId)
-    const resultado = await updateDoc(referencia, {
+    const datos = {
         pendiente: false,
         fechaConsolidacion: serverTimestamp()
-    })
+    }
+    if (movimientoId) {
+        datos.movimientoId = movimientoId
+    }
+    const resultado = await updateDoc(referencia, datos)
     cacheCapa.invalidarPrefijo(uid, "pendientes")
     return resultado
 }

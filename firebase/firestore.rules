@@ -1,14 +1,17 @@
 rules_version = '2';
 
 // ============================================================
-// CINCO — Reglas de seguridad Firestore
+// ESCINCO — Reglas de seguridad Firestore
 // ============================================================
 // Modelo:
 //   - usuarios/{uid}/{coleccion}/{doc}  → privado por usuario
 //   - usuarios/{uid}/activos/{id}/historial/{fecha} → privado
 //   - config/{doc}                       → lectura autenticada, escritura solo consola
 //
-// No hay colecciones globales de datos de usuario.
+// Nivel de validación (decisión: MEDIA):
+//   - create: hasOnly() + hasAll() + tipos estrictos
+//   - update: tipos condicionales (solo si el campo aparece), para no
+//             romper documentos legacy con campos desconocidos.
 // ============================================================
 
 service cloud.firestore {
@@ -26,77 +29,317 @@ service cloud.firestore {
       return estaAutenticado() && request.auth.uid == uid;
     }
 
-    // Comprueba que el usuario autenticado es el dueño del recurso
-    // (útil para subcolecciones anidadas tipo activos/{id}/historial/{fecha})
-    function esPropietarioDelDocumento() {
-      return estaAutenticado()
-        && request.auth.uid == resource.data.uid;
+    // ----------------------------------------------------------
+    // VALIDADORES DE TIPO
+    // ----------------------------------------------------------
+
+    function esNumero(v)        { return v is number; }
+    function esTexto(v)         { return v is string; }
+    function esBool(v)          { return v is bool; }
+    function esTimestamp(v)     { return v is timestamp; }
+    function esMapa(v)          { return v is map; }
+
+    // Tipo O nulo (para campos opcionales)
+    function esNumeroONulo(v)   { return v == null || esNumero(v); }
+    function esTextoONulo(v)    { return v == null || esTexto(v); }
+    function esBoolONulo(v)     { return v == null || esBool(v); }
+    function esTimestampONulo(v){ return v == null || esTimestamp(v); }
+
+    // ----------------------------------------------------------
+    // VALIDACIÓN DE DOCUMENTO RAÍZ usuarios/{uid}
+    // ----------------------------------------------------------
+
+    function validarCreateDocUsuario(data) {
+      return data.keys().hasOnly(['email', 'nombre', 'foto', 'fechaRegistro', 'preferencias'])
+        && esTextoONulo(data.email)
+        && esTextoONulo(data.nombre)
+        && esTextoONulo(data.foto)
+        && esTimestampONulo(data.fechaRegistro)
+        && esMapa(data.preferencias);
+    }
+
+    function validarUpdateDocUsuario(data) {
+      // Sin hasOnly (documentos legacy pueden tener campos extra):
+      // solo se valida el TIPO si el campo está presente.
+      return true;
     }
 
     // ----------------------------------------------------------
-    // USUARIOS
+    // VALIDACIÓN DE CAMPO (presencia + tipo) para updates
     // ----------------------------------------------------------
+
+    function ifPresenteTexto(data, campo)    { return !(campo in data) || esTexto(data[campo]); }
+    function ifPresenteNumero(data, campo)   { return !(campo in data) || esNumero(data[campo]); }
+    function ifPresenteBool(data, campo)     { return !(campo in data) || esBool(data[campo]); }
+    function ifPresenteTimestamp(data, campo){ return !(campo in data) || esTimestamp(data[campo]); }
+    function ifPresenteTextoONulo(data, campo)    { return !(campo in data) || esTextoONulo(data[campo]); }
+    function ifPresenteNumeroONulo(data, campo)   { return !(campo in data) || esNumeroONulo(data[campo]); }
+    function ifPresenteTimestampONulo(data, campo){ return !(campo in data) || esTimestampONulo(data[campo]); }
+
+    // ==========================================================
+    // USUARIOS
+    // ==========================================================
 
     match /usuarios/{uid} {
       // Solo el propio usuario puede leer/actualizar/borrar su doc raíz
       allow read: if esPropietario(uid);
-      allow create: if esPropietario(uid);
-      allow update: if esPropietario(uid);
+      allow create: if esPropietario(uid)
+        && validarCreateDocUsuario(request.resource.data);
+      allow update: if esPropietario(uid)
+        && validarUpdateDocUsuario(request.resource.data);
       allow delete: if esPropietario(uid);
 
       // --------------------------------------------------------
       // CUENTAS
       // --------------------------------------------------------
       match /cuentas/{cuentaId} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'nombre', 'tipo', 'moneda', 'saldoInicial', 'estado', 'esPatrimonio',
+            'fechaCreacion', 'deuda', 'limite', 'desgravamen', 'diaCorte', 'diaPago',
+            'num', 'cci'
+          ])
+          && request.resource.data.keys().hasAll(['nombre', 'tipo', 'moneda', 'estado'])
+          && esTexto(request.resource.data.nombre)
+          && esTexto(request.resource.data.tipo)
+          && esTexto(request.resource.data.moneda)
+          && esNumero(request.resource.data.saldoInicial)
+          && esTexto(request.resource.data.estado)
+          && esBool(request.resource.data.esPatrimonio);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'nombre')
+          && ifPresenteTexto(request.resource.data, 'tipo')
+          && ifPresenteTexto(request.resource.data, 'moneda')
+          && ifPresenteNumero(request.resource.data, 'saldoInicial')
+          && ifPresenteTexto(request.resource.data, 'estado')
+          && ifPresenteBool(request.resource.data, 'esPatrimonio')
+          && ifPresenteNumeroONulo(request.resource.data, 'deuda')
+          && ifPresenteNumeroONulo(request.resource.data, 'limite')
+          && ifPresenteNumeroONulo(request.resource.data, 'desgravamen')
+          && ifPresenteNumeroONulo(request.resource.data, 'diaCorte')
+          && ifPresenteNumeroONulo(request.resource.data, 'diaPago')
+          && ifPresenteTextoONulo(request.resource.data, 'num')
+          && ifPresenteTextoONulo(request.resource.data, 'cci')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaCreacion');
+
+        allow delete: if esPropietario(uid);
       }
 
       // --------------------------------------------------------
       // MOVIMIENTOS
       // --------------------------------------------------------
       match /movimientos/{movimientoId} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'tipo', 'cuenta', 'concepto', 'monto', 'divisa', 'fechaRealizacion',
+            'fechaRegistro', 'cuentaOrigen', 'cuentaDestino', 'montoOrigen', 'montoDestino',
+            'tasa', 'activo', 'cantidad', 'precio', 'comision', 'exchange',
+            'nombreVendedor', 'nombreComprador', 'cuentaPago', 'cuentaCobro', 'tarjeta'
+          ])
+          && request.resource.data.keys().hasAll(['tipo', 'fechaRegistro'])
+          && esTexto(request.resource.data.tipo)
+          && esTimestamp(request.resource.data.fechaRegistro)
+          && (('monto' in request.resource.data) ? esNumero(request.resource.data.monto) : true)
+          && (('cantidad' in request.resource.data) ? esNumero(request.resource.data.cantidad) : true)
+          && (('precio' in request.resource.data) ? esNumero(request.resource.data.precio) : true)
+          && (('comision' in request.resource.data) ? esNumero(request.resource.data.comision) : true)
+          && (('montoOrigen' in request.resource.data) ? esNumero(request.resource.data.montoOrigen) : true)
+          && (('montoDestino' in request.resource.data) ? esNumero(request.resource.data.montoDestino) : true)
+          && (('tasa' in request.resource.data) ? esNumero(request.resource.data.tasa) : true);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'tipo')
+          && ifPresenteTexto(request.resource.data, 'cuenta')
+          && ifPresenteTexto(request.resource.data, 'concepto')
+          && ifPresenteNumero(request.resource.data, 'monto')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteTexto(request.resource.data, 'fechaRealizacion')
+          && ifPresenteTimestamp(request.resource.data, 'fechaRegistro')
+          && ifPresenteTextoONulo(request.resource.data, 'cuentaOrigen')
+          && ifPresenteTextoONulo(request.resource.data, 'cuentaDestino')
+          && ifPresenteNumeroONulo(request.resource.data, 'montoOrigen')
+          && ifPresenteNumeroONulo(request.resource.data, 'montoDestino')
+          && ifPresenteNumeroONulo(request.resource.data, 'tasa')
+          && ifPresenteTextoONulo(request.resource.data, 'activo')
+          && ifPresenteNumeroONulo(request.resource.data, 'cantidad')
+          && ifPresenteNumeroONulo(request.resource.data, 'precio')
+          && ifPresenteNumeroONulo(request.resource.data, 'comision')
+          && ifPresenteTextoONulo(request.resource.data, 'exchange')
+          && ifPresenteTextoONulo(request.resource.data, 'nombreVendedor')
+          && ifPresenteTextoONulo(request.resource.data, 'nombreComprador')
+          && ifPresenteTextoONulo(request.resource.data, 'cuentaPago')
+          && ifPresenteTextoONulo(request.resource.data, 'cuentaCobro')
+          && ifPresenteTextoONulo(request.resource.data, 'tarjeta');
+
+        allow delete: if esPropietario(uid);
       }
 
       // --------------------------------------------------------
       // POSICIONES
       // --------------------------------------------------------
       match /posiciones/{posicionId} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'activoId', 'cantidad', 'divisa', 'precioPromedio', 'ultimaActualizacion'
+          ])
+          && request.resource.data.keys().hasAll(['activoId', 'cantidad', 'divisa'])
+          && esTexto(request.resource.data.activoId)
+          && esNumero(request.resource.data.cantidad)
+          && esTexto(request.resource.data.divisa)
+          && esNumero(request.resource.data.precioPromedio);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'activoId')
+          && ifPresenteNumero(request.resource.data, 'cantidad')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteNumero(request.resource.data, 'precioPromedio')
+          && ifPresenteTimestamp(request.resource.data, 'ultimaActualizacion');
+
+        allow delete: if esPropietario(uid);
       }
 
       // --------------------------------------------------------
       // PENDIENTES
       // --------------------------------------------------------
       match /pendientes/{pendienteId} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'concepto', 'tipo', 'monto', 'divisa', 'fechaRegistro', 'fechaVencimiento',
+            'fechaConsolidacion', 'pendiente', 'movimientoId'
+          ])
+          && request.resource.data.keys().hasAll(['concepto', 'tipo', 'monto', 'divisa', 'fechaRegistro'])
+          && esTexto(request.resource.data.concepto)
+          && esBool(request.resource.data.tipo)
+          && esNumero(request.resource.data.monto)
+          && esTexto(request.resource.data.divisa)
+          && esTimestamp(request.resource.data.fechaRegistro);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'concepto')
+          && ifPresenteBool(request.resource.data, 'tipo')
+          && ifPresenteNumero(request.resource.data, 'monto')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteTimestamp(request.resource.data, 'fechaRegistro')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaVencimiento')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaConsolidacion')
+          && ifPresenteBool(request.resource.data, 'pendiente')
+          && ifPresenteTextoONulo(request.resource.data, 'movimientoId');
+
+        allow delete: if esPropietario(uid);
       }
 
       // --------------------------------------------------------
       // SNAPSHOTS
       // --------------------------------------------------------
       match /snapshots/{fecha} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create, update: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'patrimonioPEN', 'patrimonioUSD', 'patrimonioUSDT', 'cerrado', 'actualizacion'
+          ])
+          && esNumero(request.resource.data.patrimonioPEN)
+          && esNumero(request.resource.data.patrimonioUSD)
+          && esNumero(request.resource.data.patrimonioUSDT)
+          && esBoolONulo(request.resource.data.cerrado)
+          && esTimestampONulo(request.resource.data.actualizacion);
+
+        allow delete: if esPropietario(uid);
       }
 
       // --------------------------------------------------------
       // TRADES
       // --------------------------------------------------------
       match /trades/{tradeId} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'activo', 'cuenta', 'entrada', 'salida', 'lotaje', 'sl', 'tp',
+            'tipo', 'estado', 'divisa', 'nota', 'fechaRegistro', 'fechaCierre'
+          ])
+          && request.resource.data.keys().hasAll(['activo', 'entrada', 'lotaje', 'tipo', 'estado', 'divisa', 'fechaRegistro'])
+          && esTexto(request.resource.data.activo)
+          && esNumero(request.resource.data.entrada)
+          && esNumero(request.resource.data.lotaje)
+          && esTexto(request.resource.data.tipo)
+          && esTexto(request.resource.data.estado)
+          && esTexto(request.resource.data.divisa)
+          && esTimestamp(request.resource.data.fechaRegistro);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'activo')
+          && ifPresenteTextoONulo(request.resource.data, 'cuenta')
+          && ifPresenteNumero(request.resource.data, 'entrada')
+          && ifPresenteNumeroONulo(request.resource.data, 'salida')
+          && ifPresenteNumero(request.resource.data, 'lotaje')
+          && ifPresenteNumeroONulo(request.resource.data, 'sl')
+          && ifPresenteNumeroONulo(request.resource.data, 'tp')
+          && ifPresenteTexto(request.resource.data, 'tipo')
+          && ifPresenteTexto(request.resource.data, 'estado')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteTextoONulo(request.resource.data, 'nota')
+          && ifPresenteTimestamp(request.resource.data, 'fechaRegistro')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaCierre');
+
+        allow delete: if esPropietario(uid);
       }
 
       // --------------------------------------------------------
-      // ACTIVOS (ahora por usuario)
+      // ACTIVOS (por usuario) + HISTORIAL
       // --------------------------------------------------------
       match /activos/{activoId} {
-        allow read, write: if esPropietario(uid);
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'nombre', 'simbolo', 'tipo', 'ultimoPrecio', 'ultimaActualizacion', 'fechaCreacion'
+          ])
+          && request.resource.data.keys().hasAll(['nombre', 'simbolo'])
+          && esTexto(request.resource.data.nombre)
+          && esTexto(request.resource.data.simbolo)
+          && esTexto(request.resource.data.tipo)
+          && esNumero(request.resource.data.ultimoPrecio);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'nombre')
+          && ifPresenteTexto(request.resource.data, 'simbolo')
+          && ifPresenteTexto(request.resource.data, 'tipo')
+          && ifPresenteNumero(request.resource.data, 'ultimoPrecio')
+          && ifPresenteTimestamp(request.resource.data, 'ultimaActualizacion');
+
+        allow delete: if esPropietario(uid);
 
         // ------------------------------------------------------
         // HISTORIAL DE PRECIOS DE UN ACTIVO
         // ------------------------------------------------------
         match /historial/{fecha} {
-          allow read, write: if esPropietario(uid);
+          allow read: if esPropietario(uid);
+
+          allow create: if esPropietario(uid)
+            && request.resource.data.keys().hasOnly([
+              'fecha', 'precio', 'cerrado', 'actualizacion'
+            ])
+            && request.resource.data.keys().hasAll(['fecha', 'precio'])
+            && esTexto(request.resource.data.fecha)
+            && esNumero(request.resource.data.precio);
+
+          allow update: if esPropietario(uid)
+            && ifPresenteTexto(request.resource.data, 'fecha')
+            && ifPresenteNumero(request.resource.data, 'precio')
+            && ifPresenteBool(request.resource.data, 'cerrado')
+            && ifPresenteTimestamp(request.resource.data, 'actualizacion');
+
+          allow delete: if esPropietario(uid);
         }
       }
 

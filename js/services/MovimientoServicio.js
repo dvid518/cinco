@@ -3,7 +3,9 @@ import {
     crearMovimiento,
     obtenerCuenta,
     actualizarCuenta,
-    obtenerMovimientos
+    obtenerMovimientos,
+    actualizarMovimientoDoc,
+    eliminarMovimientoDoc
 } from "../../firebase/firestore.js"
 import { TIPOS_MOVIMIENTO, CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
 
@@ -45,27 +47,131 @@ export async function registrarMovimiento(uid, tipo, datos) {
     // 2. Actualizar saldos
     await actualizarSaldos(uid, tipoFinal, datos)
 
-    // 3. Actualizar posición si es compra/venta de activo
+    // 3. Actualizar posición si es compra/venta de activo.
+    //    El error NO se traga: si la posición no pudo actualizarse, el
+    //    usuario debe saberlo para no dejar el inventario inconsistente.
     if (esMovimientoDeActivo(tipoFinal)) {
+        const { actualizarPosicionPorMovimiento } = await import("./PosicionServicio.js")
         try {
-            const { actualizarPosicionPorMovimiento } = await import("./PosicionServicio.js")
             await actualizarPosicionPorMovimiento(uid, {
                 tipo: tipoFinal,
                 activo: datos.activo,
                 cuenta: datos.cuenta,
                 cantidad: datos.cantidad,
                 precio: datos.precio,
-                comision: datos.comision || 0,       // ✅ AHORA SÍ SE PASA
+                comision: datos.comision || 0,
                 divisa: datos.divisa
             })
             console.log(`[INFO] Posición actualizada para activo: ${datos.activo}`)
         } catch (error) {
             console.error("[ERROR] Error actualizando posición:", error)
-            // No lanzamos para no bloquear el movimiento ya creado
+            throw new Error(
+                `El movimiento se guardó, pero no se pudo actualizar la posición de "${datos.activo}": ${error.message}`
+            )
         }
     }
 
     return movimiento
+}
+
+/**
+ * Aplica el efecto de un movimiento de activo a la posición.
+ * Se reutiliza tras crear, al revertir y al volver a aplicar en ediciones.
+ */
+async function aplicarPosicion(uid, tipo, datos) {
+    const { actualizarPosicionPorMovimiento } = await import("./PosicionServicio.js")
+    await actualizarPosicionPorMovimiento(uid, {
+        tipo,
+        activo: datos.activo,
+        cuenta: datos.cuenta,
+        cantidad: datos.cantidad,
+        precio: datos.precio,
+        comision: datos.comision || 0,
+        divisa: datos.divisa
+    })
+}
+
+/**
+ * Revierte el efecto de un movimiento de activo (compra ↔ venta).
+ */
+async function revertirPosicion(uid, m) {
+    if (!esMovimientoDeActivo(m.tipo)) return
+
+    const tipoInverso = {
+        [TIPOS_MOVIMIENTO.COMPRA_ACTIVO]: TIPOS_MOVIMIENTO.VENTA_ACTIVO,
+        [TIPOS_MOVIMIENTO.VENTA_ACTIVO]: TIPOS_MOVIMIENTO.COMPRA_ACTIVO,
+        [TIPOS_MOVIMIENTO.P2P_COMPRA]: TIPOS_MOVIMIENTO.P2P_VENTA,
+        [TIPOS_MOVIMIENTO.P2P_VENTA]: TIPOS_MOVIMIENTO.P2P_COMPRA
+    }[m.tipo]
+
+    await aplicarPosicion(uid, tipoInverso, {
+        activo: m.activo,
+        cuenta: m.cuenta,
+        cantidad: Math.abs(m.cantidad || 0),
+        precio: m.precio,
+        comision: 0,
+        divisa: m.divisa
+    })
+}
+
+// ============================================
+// ACTUALIZAR MOVIMIENTO
+// ============================================
+// Revierte el efecto del movimiento original (saldos + posición) y aplica
+// el del nuevo. NO reescribe fechaRegistro (se mantiene la creación).
+
+export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal, tipo, datos) {
+    const tipoUpper = tipo.toUpperCase()
+    const tipoFinal = Object.values(TIPOS_MOVIMIENTO).find(
+        t => t.toUpperCase() === tipoUpper
+    )
+
+    if (!tipoFinal) {
+        throw new Error(`Tipo de movimiento inválido: ${tipo}`)
+    }
+
+    const config = CONFIG_MOVIMIENTOS[tipoFinal]
+    if (!config) {
+        throw new Error(`Configuración no encontrada para: ${tipoFinal}`)
+    }
+
+    const camposFaltantes = config.camposObligatorios.filter(campo => {
+        return datos[campo] === undefined || datos[campo] === null || datos[campo] === ""
+    })
+
+    if (camposFaltantes.length > 0) {
+        throw new Error(`Campos obligatorios faltantes: ${camposFaltantes.join(", ")}`)
+    }
+
+    // 1. Deshacer el efecto del movimiento original
+    await revertirSaldos(uid, movimientoOriginal.tipo, movimientoOriginal)
+    await revertirPosicion(uid, movimientoOriginal)
+
+    // 2. Aplicar el nuevo efecto
+    await actualizarSaldos(uid, tipoFinal, datos)
+    if (esMovimientoDeActivo(tipoFinal)) {
+        await aplicarPosicion(uid, tipoFinal, datos)
+    }
+
+    // 3. Actualizar el documento
+    await actualizarMovimientoDoc(uid, movimientoId, {
+        tipo: tipoFinal,
+        ...datos
+    })
+
+    return true
+}
+
+// ============================================
+// ELIMINAR MOVIMIENTO
+// ============================================
+// Revierte el efecto del movimiento (saldos + posición) y borra el doc.
+
+export async function eliminarMovimiento(uid, m) {
+    await revertirSaldos(uid, m.tipo, m)
+    await revertirPosicion(uid, m)
+    await eliminarMovimientoDoc(uid, m.id)
+    return true
 }
 
 function esMovimientoDeActivo(tipo) {
@@ -142,6 +248,58 @@ async function actualizarSaldos(uid, tipo, datos) {
 
         default:
             console.warn(`Tipo de movimiento sin actualización de saldo: ${tipo}`)
+    }
+}
+
+// ============================================
+// REVERTIR SALDOS (inverso de actualizarSaldos)
+// ============================================
+
+async function revertirSaldos(uid, tipo, datos) {
+    switch (tipo) {
+        case TIPOS_MOVIMIENTO.INGRESO:
+            await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "restar")
+            break
+
+        case TIPOS_MOVIMIENTO.GASTO:
+            await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "sumar")
+            break
+
+        case TIPOS_MOVIMIENTO.TRANSFERENCIA:
+            await actualizarSaldoCuenta(uid, datos.cuentaOrigen, datos.monto, "sumar")
+            await actualizarSaldoCuenta(uid, datos.cuentaDestino, datos.monto, "restar")
+            break
+
+        case TIPOS_MOVIMIENTO.CAMBIO_DIVISA:
+            await actualizarSaldoCuenta(uid, datos.cuentaOrigen, datos.montoOrigen, "sumar")
+            await actualizarSaldoCuenta(uid, datos.cuentaDestino, datos.montoDestino, "restar")
+            break
+
+        case TIPOS_MOVIMIENTO.COMPRA_ACTIVO:
+        case TIPOS_MOVIMIENTO.P2P_COMPRA: {
+            const total = (datos.cantidad * datos.precio) + (datos.comision || 0)
+            await actualizarSaldoCuenta(uid, datos.cuenta, total, "sumar")
+            break
+        }
+
+        case TIPOS_MOVIMIENTO.VENTA_ACTIVO:
+        case TIPOS_MOVIMIENTO.P2P_VENTA: {
+            const total = (datos.cantidad * datos.precio) - (datos.comision || 0)
+            await actualizarSaldoCuenta(uid, datos.cuenta, total, "restar")
+            break
+        }
+
+        case TIPOS_MOVIMIENTO.COMPRA_TARJETA:
+            await actualizarDeudaTarjeta(uid, datos.cuenta, datos.monto, "reducir")
+            break
+
+        case TIPOS_MOVIMIENTO.PAGO_TARJETA:
+            await actualizarDeudaTarjeta(uid, datos.tarjeta, datos.monto, "aumentar")
+            await actualizarSaldoCuenta(uid, datos.cuentaOrigen, datos.monto, "sumar")
+            break
+
+        default:
+            break
     }
 }
 
@@ -241,23 +399,26 @@ export async function obtenerMovimientosConFiltros(uid, filtros = {}) {
 
     let resultado = movimientos
 
-    if (filtros.tipo) {
+    if (filtros.tipos && filtros.tipos.length > 0) {
+        const tiposValidos = filtros.tipos
+        resultado = resultado.filter(m => tiposValidos.includes(m.tipo))
+    } else if (filtros.tipo) {
         resultado = resultado.filter(m => m.tipo === filtros.tipo)
     }
 
     if (filtros.desde) {
-        const desde = new Date(filtros.desde)
+        const desde = parseFechaLocal(filtros.desde)
         resultado = resultado.filter(m => {
-            const fecha = normalizarFecha(m.fechaRealizacion)
+            const fecha = normalizarFecha(m.fechaRealizacion || m.fechaRegistro)
             return fecha >= desde
         })
     }
 
     if (filtros.hasta) {
-        const hasta = new Date(filtros.hasta)
-        hasta.setHours(23, 59, 59)
+        const hasta = parseFechaLocal(filtros.hasta)
+        hasta.setHours(23, 59, 59, 999)
         resultado = resultado.filter(m => {
-            const fecha = normalizarFecha(m.fechaRealizacion)
+            const fecha = normalizarFecha(m.fechaRealizacion || m.fechaRegistro)
             return fecha <= hasta
         })
     }
@@ -267,14 +428,46 @@ export async function obtenerMovimientosConFiltros(uid, filtros = {}) {
             return (
                 m.cuenta === filtros.cuenta ||
                 m.cuentaOrigen === filtros.cuenta ||
-                m.cuentaDestino === filtros.cuenta
+                m.cuentaDestino === filtros.cuenta ||
+                m.tarjeta === filtros.cuenta
             )
         })
     }
 
+    if (filtros.divisa) {
+        const divisa = filtros.divisa.toUpperCase()
+        resultado = resultado.filter(m => {
+            return (
+                (m.divisa || "").toUpperCase() === divisa ||
+                (m.cuentaDivisa || "").toUpperCase() === divisa
+            )
+        })
+    }
+
+    if (filtros.q) {
+        const busqueda = filtros.q.toLowerCase().trim()
+        if (busqueda) {
+            resultado = resultado.filter(m => {
+                const texto = [
+                    m.concepto,
+                    m.activo,
+                    m.exchange,
+                    m.nombreVendedor,
+                    m.nombreComprador,
+                    m.cuentaPago,
+                    m.cuentaCobro
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase()
+                return texto.includes(busqueda)
+            })
+        }
+    }
+
     resultado.sort((a, b) => {
-        const fechaA = normalizarFecha(a.fechaRealizacion)
-        const fechaB = normalizarFecha(b.fechaRealizacion)
+        const fechaA = normalizarFecha(a.fechaRealizacion || a.fechaRegistro)
+        const fechaB = normalizarFecha(b.fechaRealizacion || b.fechaRegistro)
         return fechaB - fechaA
     })
 
@@ -287,4 +480,13 @@ function normalizarFecha(valor) {
     if (valor?.toDate) return valor.toDate()
     if (valor instanceof Date) return valor
     return new Date(valor)
+}
+
+// Parsea "YYYY-MM-DD" como fecha LOCAL (no UTC), para que los filtros
+// coincidan con el día mostrado en el formulario.
+function parseFechaLocal(valor) {
+    if (!valor) return null
+    const [anio, mes, dia] = String(valor).split("-").map(Number)
+    if (!anio || !mes || !dia) return new Date(valor)
+    return new Date(anio, mes - 1, dia)
 }

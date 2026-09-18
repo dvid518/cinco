@@ -1,4 +1,3 @@
-@import url("style.css");
 
 .pass-field {
     position: relative;
@@ -69,8 +68,8 @@
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 100px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    border-radius: 30px;
+    box-shadow: 0 8px 24px var(--shadow);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     opacity: 0;
@@ -200,14 +199,19 @@
 .filtros input,
 .filtros select {
     padding: 8px 16px;
+    padding-right: 42px;
     border-radius: 50px;
-    background: var(--background);
+    background-color: var(--background);
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-primary);
     font-size: 13px;
     outline: none;
     transition: all 0.3s ease;
+}
+
+.filtros input {
+    padding-right: 16px;
 }
 
 .filtros input:hover,
@@ -219,6 +223,107 @@
 .filtros select:focus {
     border-color: var(--positive);
     box-shadow: 0 0 0 3px var(--anillo-positivo);
+}
+
+.filtros .filtro-buscar {
+    flex: 1;
+    min-width: 140px;
+}
+
+/* --------------------------------------------
+   TOTALES DEL FILTRO
+   -------------------------------------------- */
+
+.totales {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 16px 0;
+    font-size: 13px;
+}
+
+.totales-count {
+    color: var(--textSecondary);
+    font-weight: 500;
+}
+
+.totales-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 50px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.totales-positivo {
+    color: var(--positive);
+    font-family: var(--font-secondary);
+    font-weight: 600;
+}
+
+.totales-negativo {
+    color: var(--negative);
+    font-family: var(--font-secondary);
+    font-weight: 600;
+}
+
+.totales-sep {
+    color: var(--textSecondary);
+}
+
+.totales-divisa {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* --------------------------------------------
+   ACCIONES DE CARD (editar / eliminar)
+   -------------------------------------------- */
+
+.card-item-acciones {
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.card-item:hover .card-item-acciones {
+    opacity: 1;
+}
+
+.card-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--textSecondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.card-action-btn:hover {
+    color: var(--text);
+    border-color: var(--text);
+    background: var(--lightHover);
+}
+
+.card-action-btn[data-accion="eliminar"]:hover {
+    color: var(--negative);
+    border-color: var(--negative);
+    background: var(--lightHover);
+}
+
+@media (max-width: 640px) {
+    .card-item-acciones {
+        opacity: 1;
+    }
 }
 
 /* --------------------------------------------
@@ -331,15 +436,6 @@
     font-size: 12px;
     color: var(--textSecondary);
     opacity: 0.7;
-}
-
-/* --------------------------------------------
-   PUNTO DE COLOR DE CUENTA
-   -------------------------------------------- */
-
-#sidebar button .cuenta-color,
-.cuenta-detalle-header .cuenta-color {
-    background: var(--cuenta-color, var(--slateGrey));
 }
 
 /* --------------------------------------------

@@ -20,7 +20,6 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "concepto",
             "monto",
-            "divisa",
             "fechaRealizacion"
         ]
     },
@@ -31,7 +30,6 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "concepto",
             "monto",
-            "divisa",
             "fechaRealizacion"
         ]
     },
@@ -42,7 +40,6 @@ export const CONFIG_MOVIMIENTOS = {
             "cuentaOrigen",
             "cuentaDestino",
             "monto",
-            "divisa",
             "fechaRealizacion"
         ]
     },
@@ -66,8 +63,10 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "cantidad",
             "precio",
-            "divisa",
             "fechaRealizacion"
+        ],
+        camposOpcionales: [
+            "comision"
         ]
     },
 
@@ -78,8 +77,10 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "cantidad",
             "precio",
-            "divisa",
             "fechaRealizacion"
+        ],
+        camposOpcionales: [
+            "comision"
         ]
     },
 
@@ -90,11 +91,13 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "cantidad",
             "precio",
-            "divisa",
+            "fechaRealizacion"
+        ],
+        camposOpcionales: [
+            "comision",
             "exchange",
             "nombreVendedor",
-            "cuentaPago",
-            "fechaRealizacion"
+            "cuentaPago"
         ]
     },
 
@@ -105,11 +108,13 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "cantidad",
             "precio",
-            "divisa",
+            "fechaRealizacion"
+        ],
+        camposOpcionales: [
+            "comision",
             "exchange",
             "nombreComprador",
-            "cuentaCobro",
-            "fechaRealizacion"
+            "cuentaCobro"
         ]
     },
 
@@ -119,7 +124,6 @@ export const CONFIG_MOVIMIENTOS = {
             "cuenta",
             "concepto",
             "monto",
-            "divisa",
             "fechaRealizacion"
         ]
     },

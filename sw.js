@@ -1,6 +1,6 @@
 import { VERSION } from "./constants/version.js"
 
-const VERSION_APP = `cinco-v${VERSION.numero}`
+const VERSION_APP = `escinco-v${VERSION.numero}`
 const CACHE_SHELL = `${VERSION_APP}-shell`
 const CACHE_RUNTIME = `${VERSION_APP}-runtime`
 
@@ -37,6 +37,7 @@ const SHELL_ASSETS = [
     "/js/core/pwa.js",
     "/js/core/iconos.js",
     "/js/core/cache.js",
+    "/js/core/fechas.js",
 
     // JS pages
     "/js/pages/index.js",
@@ -55,6 +56,7 @@ const SHELL_ASSETS = [
     "/js/ui/graficos.js",
     "/js/ui/notificaciones.js",
     "/js/ui/exportar.js",
+    "/js/ui/colapsoSidebar.js",
 
     // JS models
     "/js/models/Activo.js",
@@ -179,9 +181,11 @@ self.addEventListener("fetch", (event) => {
         return
     }
 
-    // 4. Mismo origen (CSS, JS, iconos, etc.) → cache-first
+    // 4. Mismo origen (CSS, JS, iconos, etc.) → network-first
+    //    Prioriza la red para que los cambios de código lleguen de inmediato;
+    //    la caché solo se usa como respaldo offline.
     if (url.origin === self.location.origin) {
-        event.respondWith(cacheFirst(request, CACHE_SHELL))
+        event.respondWith(networkFirst(request, CACHE_RUNTIME))
         return
     }
 
@@ -210,23 +214,6 @@ function esFuente(url) {
 // ============================================
 // ESTRATEGIAS
 // ============================================
-
-async function cacheFirst(request, cacheName) {
-    const cached = await caches.match(request)
-    if (cached) return cached
-
-    try {
-        const response = await fetch(request)
-        if (response && response.status === 200 && response.type === "basic") {
-            const cache = await caches.open(cacheName)
-            cache.put(request, response.clone())
-        }
-        return response
-    } catch (error) {
-        // Fallback final
-        throw error
-    }
-}
 
 async function staleWhileRevalidate(request, cacheName) {
     const cache = await caches.open(cacheName)

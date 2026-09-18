@@ -101,6 +101,20 @@ export async function obtenerMovimientos(uid) {
     })
 }
 
+export async function actualizarMovimientoDoc(uid, movimientoId, datos) {
+    const referencia = doc(db, "usuarios", uid, "movimientos", movimientoId)
+    const resultado = await updateDoc(referencia, datos)
+    cacheCapa.invalidar(uid, "movimientos")
+    return resultado
+}
+
+export async function eliminarMovimientoDoc(uid, movimientoId) {
+    const referencia = doc(db, "usuarios", uid, "movimientos", movimientoId)
+    const resultado = await deleteDoc(referencia)
+    cacheCapa.invalidar(uid, "movimientos")
+    return resultado
+}
+
 // ============================================
 // PREFERENCIAS DE USUARIO
 // ============================================

@@ -191,10 +191,10 @@ function mostrarErrorPagina(page, error) {
 // LASTRAR · MODO PERSISTIDO (bug de recarga)
 // ============================================
 // Se aplica en cada render para que sobreviva a la recarga:
-// localStorage "cinco_lastbar_mode" → clase .lastbar-always-visible.
+// localStorage "escinco_lastbar_mode" → clase .lastbar-always-visible.
 
 function aplicarModoLastbarPersistido() {
-    const modo = localStorage.getItem("cinco_lastbar_mode") || "hide"
+    const modo = localStorage.getItem("escinco_lastbar_mode") || "hide"
     const lastbar = document.querySelector(".lastbar")
     if (lastbar) {
         lastbar.classList.toggle("lastbar-always-visible", modo === "show")
@@ -217,7 +217,7 @@ function renderPage(page) {
     // Preservar el overlay de carga a través del innerHTML (sigue visible
     // durante el render y el init del módulo, hasta ocultarOverlayCarga).
     const overlay = container.querySelector(".loading-overlay")
-    const html = module.render ? module.render() : `<p>Cargando ${page}...</p>`
+    const html = module.render ? module.render() : `<div></div>`
     container.innerHTML = html
     if (overlay) container.appendChild(overlay)
 

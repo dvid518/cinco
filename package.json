@@ -4,5 +4,14 @@
   },
   "devDependencies": {
     "vite": "^8.3.0"
+  },
+  "scripts": {
+    "serve": "firebase serve",
+    "emulators": "firebase emulators:start",
+    "dev": "vite",
+    "build": "vite build",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy": "firebase deploy --only hosting,firestore:rules"
   }
 }

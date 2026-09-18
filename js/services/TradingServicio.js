@@ -2,11 +2,14 @@ import {
     crearTrade,
     obtenerTrades,
     obtenerTrade,
+    actualizarTrade,
     cerrarTrade,
     reabrirTrade,
     actualizarNotaTrade,
     eliminarTrade
 } from "../repositories/TradeRepositorio.js"
+import { buscarActivoPorSimbolo } from "../repositories/ActivoRepositorio.js"
+import { obtenerPrecioActual } from "./HistorialServicio.js"
 
 // ============================================
 // TRADING SERVICIO
@@ -16,8 +19,15 @@ export async function registrarTrade(uid, datos) {
     return await crearTrade(uid, datos)
 }
 
+/**
+ * Obtiene los trades con métricas y P&L flotante para los abiertos.
+ * El P&L flotante usa el último precio conocido del activo (por símbolo),
+ * con respaldo en ultimoPrecio del activo cuando no hay precio de hoy.
+ */
 export async function obtenerTradesConFiltros(uid, filtros = {}) {
     const trades = await obtenerTrades(uid, filtros)
+
+    await anexarPnlFlotante(uid, trades)
 
     let pnlTotal = 0
     let ganancias = 0
@@ -47,6 +57,55 @@ export async function obtenerTradesConFiltros(uid, filtros = {}) {
             pnlTotal
         }
     }
+}
+
+async function anexarPnlFlotante(uid, trades) {
+    const preciosPorSimbolo = new Map()
+
+    for (const t of trades) {
+        if (!t.estaAbierto) continue
+
+        const simbolo = t.activo?.trim().toUpperCase()
+        if (!simbolo || preciosPorSimbolo.has(simbolo)) continue
+
+        preciosPorSimbolo.set(simbolo, null)
+
+        try {
+            const activo = await buscarActivoPorSimbolo(uid, simbolo)
+            if (activo) {
+                const precioHoy = await obtenerPrecioActual(uid, activo.id)
+                preciosPorSimbolo.set(simbolo, precioHoy ?? activo.ultimoPrecio ?? null)
+            }
+        } catch (error) {
+            console.warn(`[WARN] Sin precio para ${simbolo}:`, error)
+        }
+    }
+
+    trades.forEach(t => {
+        if (t.estaAbierto) {
+            const precio = preciosPorSimbolo.get(t.activo?.trim().toUpperCase()) ?? null
+
+            if (precio && precio > 0) {
+                if (t.tipo === "long") {
+                    t.pnlFlotante = (precio - t.entrada) * t.lotaje
+                    t.precioActual = precio
+                } else {
+                    t.pnlFlotante = (t.entrada - precio) * t.lotaje
+                    t.precioActual = precio
+                }
+            } else {
+                t.pnlFlotante = null
+                t.precioActual = null
+            }
+        }
+    })
+}
+
+export async function editarTrade(uid, tradeId, datos) {
+    if (!datos || typeof datos !== "object") {
+        throw new Error("Datos de trade inválidos")
+    }
+    return await actualizarTrade(uid, tradeId, datos)
 }
 
 export async function finalizarTrade(uid, tradeId, salida) {

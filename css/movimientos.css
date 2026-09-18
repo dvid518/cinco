@@ -1,4 +1,3 @@
-@import url("style.css");
 
 /* ============================================
    MOVIMIENTOS
@@ -29,9 +28,13 @@
 .movimientos .filtros input {
     padding: 8px 16px;
     border-radius: 50px;
-    background: var(--background);
+    background-color: var(--background);
     border: 1px solid var(--border);
     color: var(--text);
+}
+
+.movimientos .filtros select {
+    padding-right: 42px;
 }
 
 /* --------------------------------------------

@@ -1,19 +1,8 @@
-// ============================================
-// SISTEMA DE MODALES
-// ============================================
-// - Soporta variantes: info | form | confirm | wide | narrow
-// - Drag con ratón y touch desde .modal-header
-// - Cierre por botón ✕, click fuera o ESC
-// - Sin style inline (usa CSS variables --modal-x / --modal-y)
-// ============================================
-
 let modalAbierto = false
 let escHandlerActivo = null
+let tabHandlerActivo = null
+let prevFocus = null
 let dragState = null
-
-// --------------------------------------------
-// ABRIR MODAL
-// --------------------------------------------
 
 /**
  * @param {Object} opciones
@@ -29,7 +18,7 @@ let dragState = null
  */
 export function abrirModal(opciones) {
     const {
-        titulo = "CINCO",
+        titulo = "ESCINCO",
         contenido = "",
         variante = "form",
         confirmText = "Confirmar",
@@ -54,22 +43,31 @@ export function abrirModal(opciones) {
         <div class="modal modal-${variante}" role="dialog" aria-modal="true">
             <div class="modal-header">
                 <h2 class="modal-title">${titulo}</h2>
-                <button class="modal-close" id="modal-close-btn" type="button" aria-label="Cerrar">✕</button>
+                <button class="modal-close" id="modal-close-btn" type="button" aria-label="Cerrar">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
             </div>
             <div class="modal-body">
                 ${contenido}
             </div>
             ${(mostrarCancelar || mostrarConfirmar) ? `
-                <div class="modal-footer">
-                    ${mostrarCancelar ? `<button class="modal-btn modal-btn-secondary" id="modal-cancel" type="button">${cancelText}</button>` : ""}
-                    ${mostrarConfirmar ? `<button class="modal-btn modal-btn-primary" id="modal-confirm" type="button">${confirmText}</button>` : ""}
-                </div>
+            <div class="modal-footer">
+                ${mostrarCancelar ? `<button class="modal-btn modal-btn-secondary" id="modal-cancel"
+                    type="button">${cancelText}</button>` : ""}
+                ${mostrarConfirmar ? `<button class="modal-btn modal-btn-primary" id="modal-confirm"
+                    type="button">${confirmText}</button>` : ""}
+            </div>
             ` : ""}
         </div>
     `
 
     document.body.appendChild(overlay)
     modalAbierto = true
+
+    prevFocus = document.activeElement
 
     // --------------------------------------------
     // EVENTOS
@@ -79,8 +77,10 @@ export function abrirModal(opciones) {
     const cancelBtn = overlay.querySelector("#modal-cancel")
     const confirmBtn = overlay.querySelector("#modal-confirm")
     const modalEl = overlay.querySelector(".modal")
+    let procesando = false
 
     const cerrar = (motivo = "cancelar") => {
+        if (procesando) return
         if (motivo === "cancelar" && typeof onCancel === "function") {
             onCancel()
         }
@@ -92,8 +92,24 @@ export function abrirModal(opciones) {
             cerrarModal()
             return
         }
+        if (procesando) return
+
+        // Mientras procesa: blur sobre todo el modal + bloqueo de interacción
+        // para evitar doble envío (misma acción ejecutada dos veces).
+        procesando = true
+        overlay.classList.add("modal-procesando")
+        confirmBtn?.setAttribute("disabled", "true")
+        cancelBtn?.setAttribute("disabled", "true")
+        closeBtn?.setAttribute("disabled", "true")
 
         const resultado = await onConfirm()
+
+        procesando = false
+        overlay.classList.remove("modal-procesando")
+        confirmBtn?.removeAttribute("disabled")
+        cancelBtn?.removeAttribute("disabled")
+        closeBtn?.removeAttribute("disabled")
+
         if (resultado !== false) {
             cerrarModal()
         }
@@ -102,6 +118,39 @@ export function abrirModal(opciones) {
     closeBtn?.addEventListener("click", () => cerrar("cancelar"))
     cancelBtn?.addEventListener("click", () => cerrar("cancelar"))
     confirmBtn?.addEventListener("click", confirmar)
+
+    // --------------------------------------------
+    // FOCO INICIAL Y TRAP DE FOCUS
+    // --------------------------------------------
+
+    const obtenerEnfocables = () =>
+        [...modalEl.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+        )].filter(el => el.offsetParent !== null)
+    const enfocables = obtenerEnfocables()
+    ;(enfocables[0] || modalEl).focus?.()
+
+    tabHandlerActivo = (e) => {
+        if (e.key !== "Tab") return
+
+        const lista = obtenerEnfocables()
+        if (lista.length === 0) return
+
+        const primero = lista[0]
+        const ultimo = lista[lista.length - 1]
+        const activo = document.activeElement
+
+        if (e.shiftKey) {
+            if (activo === primero || !modalEl.contains(activo)) {
+                e.preventDefault()
+                ultimo.focus()
+            }
+        } else if (activo === ultimo || !modalEl.contains(activo)) {
+            e.preventDefault()
+            primero.focus()
+        }
+    }
+    document.addEventListener("keydown", tabHandlerActivo)
 
     // Click fuera del modal
     if (cerrarAlClickFuera) {
@@ -145,9 +194,19 @@ export function cerrarModal({ silencioso = false } = {}) {
         escHandlerActivo = null
     }
 
+    if (tabHandlerActivo) {
+        document.removeEventListener("keydown", tabHandlerActivo)
+        tabHandlerActivo = null
+    }
+
     if (dragState) {
         desactivarDrag()
     }
+
+    if (prevFocus && typeof prevFocus.focus === "function" && prevFocus.isConnected) {
+        prevFocus.focus()
+    }
+    prevFocus = null
 
     if (!silencioso) {
         // Hook para limpieza externa si se necesita
@@ -157,6 +216,35 @@ export function cerrarModal({ silencioso = false } = {}) {
 export function estaAbierto() {
     return modalAbierto
 }
+
+// --------------------------------------------
+// BOTÓN DE CALENDARIO (inputs type="date")
+// --------------------------------------------
+// Delegación global (se instala al cargar el módulo): cualquier
+// ".btn-calendario" abre el date picker del input de fecha que le
+// acompaña, esté dentro de un modal o en la página.
+
+function vincularBotonesCalendario() {
+    document.addEventListener("click", (e) => {
+        const boton = e.target.closest(".btn-calendario")
+        if (!boton) return
+
+        const input = boton.parentElement?.querySelector('input[type="date"]')
+        if (!input) return
+
+        if (typeof input.showPicker === "function") {
+            try {
+                input.showPicker()
+                return
+            } catch {
+                // Si el navegador no permite abrirlo aquí, fallback a foco
+            }
+        }
+        input.focus()
+    })
+}
+
+vincularBotonesCalendario()
 
 // --------------------------------------------
 // DRAG DEL MODAL

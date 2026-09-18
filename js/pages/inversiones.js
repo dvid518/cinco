@@ -1,9 +1,12 @@
 import { sesion } from "../core/sesion.js"
+import { getFechaHoy, parseFechaLocal } from "../core/fechas.js"
 import { obtenerPosicionesConValor } from "../services/PosicionServicio.js"
 import {
     buscarActivoPorSimbolo,
-    crearActivo
+    crearActivo,
+    actualizarPrecioActivo
 } from "../repositories/ActivoRepositorio.js"
+import { eliminarPosicion } from "../repositories/PosicionRepositorio.js"
 import {
     obtenerHistorialParaGrafico,
     registrarPrecio
@@ -12,8 +15,8 @@ import { crearGraficoLinea, destruirGrafico } from "../ui/graficos.js"
 import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { obtenerCuentas } from "../../firebase/firestore.js"
-import { DIVISAS } from "../../constants/divisas.js"
 import { icono } from "../core/iconos.js"
+import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
 let uid = null
 let posicionesData = null
@@ -24,12 +27,14 @@ let posicionesData = null
 
 export function render() {
     return `
+        ${envolverSidebar(`
         <section id="sidebar">
             <button class="glass act" data-filtro="todas">${icono("list", 18)}<span>Todas</span></button>
             <button class="glass" data-filtro="accion">${icono("trending-up", 18)}<span>Acciones</span></button>
             <button class="glass" data-filtro="etf">${icono("layers", 18)}<span>ETFs</span></button>
             <button class="glass" data-filtro="crypto">${icono("bitcoin", 18)}<span>Cripto</span></button>
         </section>
+    `)}
         <section id="panel" class="glass">
             <div class="panel-header">
                 <h2>Inversiones</h2>
@@ -49,7 +54,7 @@ export function render() {
                 </div>
             </div>
             <div id="lista-posiciones" class="lista-posiciones">
-                <p class="lista-vacia">Cargando posiciones...</p>
+                <div class="lista-vacia"><div class="loading-spinner"></div></div>
             </div>
         </section>
     `
@@ -133,6 +138,9 @@ function plantillaPosicion(p) {
                 <div class="posicion-detalle">
                     ${p.cantidad.toFixed(4)} · Precio: ${activo?.ultimoPrecio?.toFixed(2) || "0.00"} ${p.divisa.toUpperCase()}
                 </div>
+                <div class="posicion-detalle posicion-acciones-hint">
+                    ${icono("refresh-cw", 12)} Toca para ver gráfico, actualizar precio o eliminar
+                </div>
             </div>
             <div class="posicion-valores">
                 <div class="posicion-valor">
@@ -152,7 +160,7 @@ function enlazarClicksPosiciones(container, posiciones) {
             const activoId = item.dataset.activoId
             const posicion = posiciones.find(p => p.activoId === activoId)
             if (posicion) {
-                await mostrarGraficoActivo(activoId, posicion.activo)
+                await mostrarGraficoActivo(activoId, posicion.activo, posicion)
             }
         })
     })
@@ -162,7 +170,7 @@ function enlazarClicksPosiciones(container, posiciones) {
 // MOSTRAR GRÁFICO DE ACTIVO
 // ============================================
 
-async function mostrarGraficoActivo(activoId, activo) {
+async function mostrarGraficoActivo(activoId, activo, posicion) {
     console.log("[INFO] Mostrando gráfico para:", activo?.simbolo || activoId)
 
     const datos = await obtenerHistorialParaGrafico(uid, activoId, 7)
@@ -175,6 +183,10 @@ async function mostrarGraficoActivo(activoId, activo) {
             <div class="grafico-nombre">${activo?.nombre || ""} (${activo?.simbolo || ""})</div>
             <div class="grafico-precio">${activo?.ultimoPrecio?.toFixed(2) || "0.00"}</div>
             <div class="grafico-periodo">Últimos 7 días</div>
+        </div>
+        <div class="grafico-acciones">
+            <button type="button" class="glass-btn btn-actualizar-precio">${icono("refresh-cw", 14)} Actualizar precio</button>
+            <button type="button" class="glass-btn danger btn-eliminar-posicion">${icono("trash-2", 14)} Eliminar posición</button>
         </div>
     `
 
@@ -196,7 +208,102 @@ async function mostrarGraficoActivo(activoId, activo) {
             label: activo?.simbolo || "Precio",
             simbolo: activo?.simbolo || ""
         })
+
+        document.querySelector(".btn-actualizar-precio")?.addEventListener("click", () => {
+            abrirModalActualizarPrecio(activo, posicion)
+        })
+
+        document.querySelector(".btn-eliminar-posicion")?.addEventListener("click", () => {
+            confirmarEliminarPosicion(posicion)
+        })
     }, 150)
+}
+
+// ============================================
+// ACTUALIZAR PRECIO MANUAL
+// ============================================
+
+function abrirModalActualizarPrecio(activo, posicion) {
+    const nombre = activo?.nombre || "activo"
+    const precioActual = activo?.ultimoPrecio || posicion?.precioPromedio || ""
+
+    const html = `
+        <form class="form-movimiento">
+            <div class="form-group">
+                <label for="precio-manual">Nuevo precio (${nombre})</label>
+                <input type="number" id="precio-manual" class="form-input" step="0.01" min="0.01" value="${precioActual}" placeholder="0.00" required>
+                <span class="form-hint">Actualiza el último precio conocido del activo.</span>
+            </div>
+        </form>
+    `
+
+    abrirModal({
+        titulo: "Actualizar precio",
+        contenido: html,
+        confirmText: "Guardar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            const precio = parseFloat(document.getElementById("precio-manual")?.value)
+
+            if (!precio || precio <= 0) {
+                mostrarNotificacion("error", "El precio debe ser mayor a 0")
+                return false
+            }
+
+            try {
+                await actualizarPrecioActivo(uid, activo.id, precio)
+                await registrarPrecio(uid, activo.id, precio)
+                await cargarPosiciones()
+                mostrarNotificacion("exito", "Precio actualizado correctamente")
+                return true
+            } catch (error) {
+                console.error("Error actualizando precio:", error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
+}
+
+// ============================================
+// ELIMINAR POSICIÓN
+// ============================================
+
+function confirmarEliminarPosicion(posicion) {
+    if (!posicion?.id) {
+        mostrarNotificacion("error", "Posición no encontrada")
+        return
+    }
+
+    abrirModal({
+        titulo: "Eliminar posición",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    ¿Eliminar la posición de <strong>${posicion.activo?.nombre || posicion.activoId}</strong>
+                    (${posicion.cantidad.toFixed(4)})?
+                </p>
+                <p class="modal-message-warning">
+                    Solo se elimina la posición. Los movimientos de compra/venta
+                    se conservan en tu historial.
+                </p>
+            </div>
+        `,
+        confirmText: "Eliminar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            try {
+                await eliminarPosicion(uid, posicion.id)
+                await cargarPosiciones()
+                mostrarNotificacion("exito", "Posición eliminada")
+                return true
+            } catch (error) {
+                console.error("Error eliminando posición:", error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
 }
 
 // ============================================
@@ -268,7 +375,7 @@ function configurarEventos() {
 // ============================================
 
 export function abrirModalCompra() {
-    const hoy = new Date().toISOString().split("T")[0]
+    const hoy = getFechaHoy()
 
     const html = `
         <form id="form-comprar" class="form-movimiento form-movimiento-grid">
@@ -302,14 +409,6 @@ export function abrirModalCompra() {
                 <input type="number" id="compra-comision" class="form-input" step="0.01" min="0" placeholder="0.00" value="0">
             </div>
             <div class="form-group">
-                <label for="compra-divisa">Divisa</label>
-                <select id="compra-divisa" class="form-input">
-                    <option value="${DIVISAS.PEN}">PEN</option>
-                    <option value="${DIVISAS.USD}" selected>USD</option>
-                    <option value="${DIVISAS.USDT}">USDT</option>
-                </select>
-            </div>
-            <div class="form-group">
                 <label for="compra-cuenta">Cuenta de origen *</label>
                 <select id="compra-cuenta" class="form-input" required>
                     <option value="">Seleccionar cuenta</option>
@@ -317,7 +416,23 @@ export function abrirModalCompra() {
             </div>
             <div class="form-group">
                 <label for="compra-fecha">Fecha</label>
-                <input type="date" id="compra-fecha" class="form-input" value="${hoy}">
+                <div class="campo-fecha">
+                    <input type="date" id="compra-fecha" class="form-input" value="${hoy}">
+                    <button type="button" class="btn-calendario" aria-label="Abrir calendario">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days preview-icon">
+                            <path d="M8 2v4"/>
+                            <path d="M16 2v4"/>
+                            <rect width="18" height="18" x="3" y="4" rx="2"/>
+                            <path d="M3 10h18"/>
+                            <path d="M8 14h.01"/>
+                            <path d="M12 14h.01"/>
+                            <path d="M16 14h.01"/>
+                            <path d="M8 18h.01"/>
+                            <path d="M12 18h.01"/>
+                            <path d="M16 18h.01"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </form>
     `
@@ -333,8 +448,9 @@ export function abrirModalCompra() {
             const cantidad = parseFloat(document.getElementById("compra-cantidad")?.value)
             const precio = parseFloat(document.getElementById("compra-precio")?.value)
             const comision = parseFloat(document.getElementById("compra-comision")?.value) || 0
-            const divisa = document.getElementById("compra-divisa")?.value
-            const cuentaId = document.getElementById("compra-cuenta")?.value
+            const cuentaEl = document.getElementById("compra-cuenta")
+            const cuentaId = cuentaEl?.value
+            const divisa = cuentaEl?.selectedOptions?.[0]?.dataset?.moneda || "usd"
             const fecha = document.getElementById("compra-fecha")?.value
 
             if (!simbolo) { mostrarNotificacion("error", "El símbolo del activo es obligatorio"); return false }
@@ -363,7 +479,7 @@ export function abrirModalCompra() {
                     precio,
                     comision,
                     divisa,
-                    fechaRealizacion: fecha ? new Date(fecha) : new Date()
+                    fechaRealizacion: fecha ? parseFechaLocal(fecha) : new Date()
                 })
 
                 await registrarPrecio(uid, activo.id, precio)
@@ -397,7 +513,7 @@ export function abrirModalVenta() {
         return `<option value="${p.id}">${activo?.nombre || p.activoId} (${p.cantidad.toFixed(4)} disponibles)</option>`
     }).join("")
 
-    const hoy = new Date().toISOString().split("T")[0]
+    const hoy = getFechaHoy()
 
     const html = `
         <form id="form-vender" class="form-movimiento form-movimiento-grid">
@@ -428,7 +544,23 @@ export function abrirModalVenta() {
             </div>
             <div class="form-group">
                 <label for="venta-fecha">Fecha</label>
-                <input type="date" id="venta-fecha" class="form-input" value="${hoy}">
+                <div class="campo-fecha">
+                    <input type="date" id="venta-fecha" class="form-input" value="${hoy}">
+                    <button type="button" class="btn-calendario" aria-label="Abrir calendario">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days preview-icon">
+                            <path d="M8 2v4"/>
+                            <path d="M16 2v4"/>
+                            <rect width="18" height="18" x="3" y="4" rx="2"/>
+                            <path d="M3 10h18"/>
+                            <path d="M8 14h.01"/>
+                            <path d="M12 14h.01"/>
+                            <path d="M16 14h.01"/>
+                            <path d="M8 18h.01"/>
+                            <path d="M12 18h.01"/>
+                            <path d="M16 18h.01"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </form>
     `
@@ -466,7 +598,7 @@ export function abrirModalVenta() {
                     precio,
                     comision,
                     divisa: posicion.divisa || "usd",
-                    fechaRealizacion: fecha ? new Date(fecha) : new Date()
+                    fechaRealizacion: fecha ? parseFechaLocal(fecha) : new Date()
                 })
 
                 await registrarPrecio(uid, posicion.activoId, precio)
@@ -510,7 +642,7 @@ async function cargarCuentasEnSelect(selectId) {
         select.innerHTML = `
             <option value="">Seleccionar cuenta</option>
             ${activas.map(c => `
-                <option value="${c.id}">${c.nombre} (${c.moneda?.toUpperCase() || "PEN"})</option>
+                <option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (${c.moneda?.toUpperCase() || "PEN"})</option>
             `).join("")}
         `
     } catch (error) {

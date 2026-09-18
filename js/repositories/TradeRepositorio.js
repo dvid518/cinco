@@ -70,6 +70,13 @@ export async function obtenerTrade(uid, tradeId) {
     return Trade.fromFirestore(resultado.id, resultado.data())
 }
 
+export async function actualizarTrade(uid, tradeId, datos) {
+    const referencia = doc(db, "usuarios", uid, "trades", tradeId)
+    const resultado = await updateDoc(referencia, datos)
+    cacheCapa.invalidar(uid, "trades")
+    return resultado
+}
+
 export async function cerrarTrade(uid, tradeId, salida) {
     const referencia = doc(db, "usuarios", uid, "trades", tradeId)
     const resultado = await updateDoc(referencia, {

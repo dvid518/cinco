@@ -5,6 +5,7 @@ import { obtenerPreferencias } from "../../firebase/firestore.js"
 import { initTemaLocal, sincronizarTemaFirestore } from "./tema.js"
 import { initPWA } from "./pwa.js"
 import { configurarDelegacionLastbar } from "./lastbar.js"
+import { configurarColapsoSidebar } from "../ui/colapsoSidebar.js"
 
 let appInicializado = false
 let bootFinalizado = false
@@ -65,6 +66,7 @@ export async function initApp() {
                 initRouter("dashboard")
                 startInactivityTimer()
                 configurarDelegacionLastbar()
+                configurarColapsoSidebar()
             }
 
             await new Promise(resolve => setTimeout(resolve, 50))

@@ -14,7 +14,7 @@ import { db } from "../../firebase/firestore.js"
 // Por eso aquí ya NO se manipulan los <link> del favicon.
 // ============================================
 
-const STORAGE_KEY = "cinco_tema"
+const STORAGE_KEY = "escinco_tema"
 const MEDIA_QUERY = "(prefers-color-scheme: dark)"
 
 let mediaListenerActivo = false

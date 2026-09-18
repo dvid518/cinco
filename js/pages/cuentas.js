@@ -3,10 +3,12 @@ import { icono } from "../core/iconos.js"
 import {
     obtenerCuentas,
     crearCuenta,
-    actualizarCuenta
+    actualizarCuenta,
+    eliminarCuenta
 } from "../../firebase/firestore.js"
-import { abrirModal } from "../ui/modal.js"
+import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
+import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
 let cuentas = []
 let cuentaSeleccionada = null
@@ -34,12 +36,14 @@ function iconoPorTipo(tipo) {
 
 export function render() {
     return `
-        <section id="sidebar">
-            <button name="cta" class="glass act">Cargando...</button>
-        </section>
+        ${envolverSidebar(`
+            <section id="sidebar">
+                <button name="cta" class="glass act"><span class="loading-spinner"></span></button>
+            </section>
+        `)}
         <section id="panel" class="glass">
             <h2>Cuentas</h2>
-            <p class="lista-vacia">Cargando...</p>
+            <div class="lista-vacia"><div class="loading-spinner"></div></div>
         </section>
     `
 }
@@ -113,14 +117,6 @@ function renderizarSidebar() {
         btn.name = "cta"
         btn.dataset.id = cuenta.id
 
-        // Punto de color vía variable CSS (no style inline)
-        if (cuenta.color) {
-            const punto = document.createElement("span")
-            punto.className = "cuenta-color"
-            punto.style.setProperty("--cuenta-color", cuenta.color)
-            btn.appendChild(punto)
-        }
-
         // Ícono según el tipo de cuenta
         btn.insertAdjacentHTML("beforeend", icono(iconoPorTipo(cuenta.tipo), 18))
 
@@ -177,14 +173,6 @@ function mostrarDetalleCuenta() {
     } else {
         mostrarDetalleCuentaNormal(panel, cuentaSeleccionada)
     }
-
-    aplicarColorEncabezado()
-}
-
-function aplicarColorEncabezado() {
-    const punto = document.getElementById("cuenta-color-header")
-    if (!punto || !cuentaSeleccionada?.color) return
-    punto.style.setProperty("--cuenta-color", cuentaSeleccionada.color)
 }
 
 function mostrarDetalleCuentaNormal(panel, c) {
@@ -192,7 +180,6 @@ function mostrarDetalleCuentaNormal(panel, c) {
 
     panel.innerHTML = `
         <div class="cuenta-detalle-header">
-            <span class="cuenta-color" id="cuenta-color-header"></span>
             <h2>${c.nombre}</h2>
         </div>
         <div class="cuenta-detalle">
@@ -238,7 +225,6 @@ function mostrarDetalleTarjeta(panel, c) {
 
     panel.innerHTML = `
         <div class="cuenta-detalle-header">
-            <span class="cuenta-color" id="cuenta-color-header"></span>
             <h2>${c.nombre}</h2>
         </div>
         <div class="cuenta-detalle">
@@ -329,7 +315,31 @@ export function archivarCuentaSeleccionada() {
         mostrarNotificacion("info", "Selecciona una cuenta primero")
         return
     }
-    const saldo = cuentaSeleccionada.saldoInicial || 0
+
+    const cuenta = cuentaSeleccionada
+
+    if (cuenta.estado === "archivada") {
+        abrirModal({
+            titulo: "Desarchivar cuenta",
+            contenido: `
+                <div class="modal-message">
+                    <p class="modal-message-desc">
+                        ¿Volver a activar la cuenta <strong>${cuenta.nombre}</strong>?
+                    </p>
+                </div>
+            `,
+            variante: "confirm",
+            confirmText: "Desarchivar",
+            cancelText: "Cancelar",
+            onConfirm: async () => {
+                await cambiarEstadoCuenta(cuenta.id, "activa")
+                return true
+            }
+        })
+        return
+    }
+
+    const saldo = cuenta.saldoInicial || 0
     if (saldo !== 0) {
         mostrarNotificacion(
             "warning",
@@ -338,7 +348,6 @@ export function archivarCuentaSeleccionada() {
         return
     }
 
-    const cuenta = cuentaSeleccionada
     abrirModal({
         titulo: "Archivar cuenta",
         contenido: `
@@ -352,21 +361,64 @@ export function archivarCuentaSeleccionada() {
         confirmText: "Archivar",
         cancelText: "Cancelar",
         onConfirm: () => {
-            archivarCuenta(cuenta.id)
+            cambiarEstadoCuenta(cuenta.id, "archivada")
             return true
         }
     })
 }
 
-async function archivarCuenta(id) {
+async function cambiarEstadoCuenta(id, estado) {
     try {
-        await actualizarCuenta(uid, id, { estado: "archivada" })
+        await actualizarCuenta(uid, id, { estado })
         await cargarCuentas()
-        mostrarNotificacion("exito", "Cuenta archivada")
+        mostrarNotificacion("exito", estado === "activa" ? "Cuenta desarchivada" : "Cuenta archivada")
     } catch (error) {
-        console.error("Error archivando cuenta:", error)
-        mostrarNotificacion("error", `No se pudo archivar la cuenta: ${error.message}`)
+        console.error(`Error cambiando estado a "${estado}":`, error)
+        mostrarNotificacion("error", `No se pudo cambiar el estado: ${error.message}`)
     }
+}
+
+export function eliminarCuentaSeleccionada() {
+    if (!cuentaSeleccionada) {
+        mostrarNotificacion("info", "Selecciona una cuenta primero")
+        return
+    }
+    const cuenta = cuentaSeleccionada
+    const saldo = cuenta.saldoInicial || 0
+    if (saldo !== 0) {
+        mostrarNotificacion(
+            "warning",
+            `Solo se puede eliminar una cuenta con saldo 0 (saldo actual: ${saldo})`
+        )
+        return
+    }
+
+    abrirModal({
+        titulo: "Eliminar cuenta",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    ¿Eliminar definitivamente la cuenta <strong>${cuenta.nombre}</strong>?
+                    Esta acción no se puede deshacer.
+                </p>
+            </div>
+        `,
+        variante: "confirm",
+        confirmText: "Eliminar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            try {
+                await eliminarCuenta(uid, cuenta.id)
+                await cargarCuentas()
+                mostrarNotificacion("exito", "Cuenta eliminada")
+                return true
+            } catch (error) {
+                console.error("Error eliminando cuenta:", error)
+                mostrarNotificacion("error", `No se pudo eliminar la cuenta: ${error.message}`)
+                return false
+            }
+        }
+    })
 }
 
 function mostrarVacio() {
@@ -473,10 +525,6 @@ function _abrirModalCrearCuenta() {
                 <label for="campo-saldo">Saldo inicial</label>
                 <input type="number" id="campo-saldo" class="form-input" step="0.01" placeholder="0.00">
             </div>
-            <div class="form-group">
-                <label for="campo-color">Color</label>
-                <input type="color" id="campo-color" class="form-input form-input-color" value="#738391">
-            </div>
 
             <div class="form-group credit-only" id="campo-limite-group" hidden>
                 <label for="campo-limite">Límite de crédito</label>
@@ -507,7 +555,6 @@ function _abrirModalCrearCuenta() {
             const tipo = document.getElementById("campo-tipo")?.value
             const moneda = document.getElementById("campo-moneda")?.value
             const saldo = parseFloat(document.getElementById("campo-saldo")?.value) || 0
-            const color = document.getElementById("campo-color")?.value || "#738391"
 
             if (!nombre) {
                 mostrarNotificacion("warning", "El nombre es obligatorio")
@@ -519,7 +566,6 @@ function _abrirModalCrearCuenta() {
                 tipo,
                 moneda,
                 saldoInicial: saldo,
-                color,
                 estado: "activa",
                 esPatrimonio: true
             }
@@ -559,16 +605,27 @@ function _abrirModalCrearCuenta() {
 // ============================================
 
 function _abrirModalEditarCuenta(cuenta) {
+    const moneda = (cuenta.moneda || "pen").toLowerCase()
+    const permisoMoneda = cuenta.tipo !== "credito"
+    const esArchivada = cuenta.estado === "archivada"
+    const saldo = cuenta.saldoInicial || 0
+
     const html = `
         <form id="form-editar-cuenta" class="form-movimiento">
             <div class="form-group">
                 <label for="edit-nombre">Nombre</label>
                 <input type="text" id="edit-nombre" class="form-input" value="${cuenta.nombre || ""}" required>
             </div>
-            <div class="form-group">
-                <label for="edit-color">Color</label>
-                <input type="color" id="edit-color" class="form-input form-input-color" value="${cuenta.color || "#738391"}">
-            </div>
+            ${permisoMoneda ? `
+                <div class="form-group">
+                    <label for="edit-moneda">Moneda</label>
+                    <select id="edit-moneda" class="form-input">
+                        <option value="pen" ${moneda === "pen" ? "selected" : ""}>PEN</option>
+                        <option value="usd" ${moneda === "usd" ? "selected" : ""}>USD</option>
+                        <option value="usdt" ${moneda === "usdt" ? "selected" : ""}>USDT</option>
+                    </select>
+                </div>
+            ` : ""}
             ${cuenta.tipo === "credito" ? `
                 <div class="form-group">
                     <label for="edit-limite">Límite de crédito</label>
@@ -597,6 +654,14 @@ function _abrirModalEditarCuenta(cuenta) {
                     <input type="text" id="edit-cci" class="form-input" value="${cuenta.cci || ""}">
                 </div>
             ` : ""}
+            <div class="cuenta-acciones-secundarias">
+                <button type="button" class="modal-btn modal-btn-secondary" id="btn-editar-estado">
+                    ${esArchivada ? "Desarchivar" : "Archivar"}
+                </button>
+                ${saldo === 0 ? `<button type="button" class="modal-btn modal-btn-secondary modal-btn-danger" id="btn-editar-eliminar">
+                    Eliminar
+                </button>` : ""}
+            </div>
         </form>
     `
 
@@ -607,14 +672,20 @@ function _abrirModalEditarCuenta(cuenta) {
         confirmText: "Guardar cambios",
         onConfirm: async () => {
             const nombre = document.getElementById("edit-nombre")?.value.trim()
-            const color = document.getElementById("edit-color")?.value
 
             if (!nombre) {
                 mostrarNotificacion("warning", "El nombre es obligatorio")
                 return false
             }
 
-            const datos = { nombre, color }
+            const datos = { nombre }
+
+            if (permisoMoneda) {
+                const monedaNueva = document.getElementById("edit-moneda")?.value
+                if (monedaNueva && monedaNueva !== moneda) {
+                    datos.moneda = monedaNueva
+                }
+            }
 
             if (cuenta.tipo === "credito") {
                 datos.limite = parseFloat(document.getElementById("edit-limite")?.value) || 0
@@ -641,5 +712,15 @@ function _abrirModalEditarCuenta(cuenta) {
                 return false
             }
         }
+    })
+
+    // Acciones secundarias: archivar/desarchivar y eliminar
+    document.getElementById("btn-editar-estado")?.addEventListener("click", () => {
+        cerrarModal()
+        archivarCuentaSeleccionada()
+    })
+    document.getElementById("btn-editar-eliminar")?.addEventListener("click", () => {
+        cerrarModal()
+        eliminarCuentaSeleccionada()
     })
 }

@@ -7,8 +7,8 @@ class Sesion {
                 dashboard: true,
                 cuentas: true,
                 movimientos: true,
-                inversiones: true,
-                trading: true,
+                inversiones: false,
+                trading: false,
                 configuracion: true
             }
         }
@@ -23,7 +23,7 @@ class Sesion {
     setUsuario(usuario) {
         this.usuario = usuario
         try {
-            sessionStorage.setItem('cinco_usuario', JSON.stringify(usuario))
+            sessionStorage.setItem('escinco_usuario', JSON.stringify(usuario))
         } catch (e) {
             // Ignorar errores de storage
         }
@@ -32,7 +32,7 @@ class Sesion {
     getUsuario() {
         if (!this.usuario) {
             try {
-                const saved = sessionStorage.getItem('cinco_usuario')
+                const saved = sessionStorage.getItem('escinco_usuario')
                 if (saved) {
                     this.usuario = JSON.parse(saved)
                 }
@@ -72,13 +72,13 @@ class Sesion {
             this.preferencias.tema = preferencias.tema
         }
         try {
-            sessionStorage.setItem('cinco_preferencias', JSON.stringify(this.preferencias))
+            sessionStorage.setItem('escinco_preferencias', JSON.stringify(this.preferencias))
         } catch (e) {}
     }
 
     getPreferencias() {
         try {
-            const saved = sessionStorage.getItem('cinco_preferencias')
+            const saved = sessionStorage.getItem('escinco_preferencias')
             if (saved) {
                 const parsed = JSON.parse(saved)
                 this.preferencias = { ...this.preferencias, ...parsed }
@@ -89,7 +89,7 @@ class Sesion {
 
     recargarPreferencias() {
         try {
-            const saved = sessionStorage.getItem('cinco_preferencias')
+            const saved = sessionStorage.getItem('escinco_preferencias')
             if (saved) {
                 const parsed = JSON.parse(saved)
                 this.preferencias = { ...this.preferencias, ...parsed }
@@ -149,14 +149,14 @@ class Sesion {
                 dashboard: true,
                 cuentas: true,
                 movimientos: true,
-                inversiones: true,
-                trading: true,
+                inversiones: false,
+                trading: false,
                 configuracion: true
             }
         }
         try {
-            sessionStorage.removeItem('cinco_usuario')
-            sessionStorage.removeItem('cinco_preferencias')
+            sessionStorage.removeItem('escinco_usuario')
+            sessionStorage.removeItem('escinco_preferencias')
         } catch (e) {
             // Ignorar errores de storage
         }

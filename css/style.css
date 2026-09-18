@@ -85,10 +85,6 @@
     --font-primary: "Inter", Arial, sans-serif;
     --font-secondary: "Roboto Mono", "Courier New", monospace;
 
-    /* Valores funcionales (overlays, sombras, glows) */
-    --overlay: rgba(0, 0, 0, 0.7);
-    --sombra-modal: rgba(0, 0, 0, 0.5);
-    --sombra-positiva: rgba(0, 230, 149, 0.3);
     --anillo-positivo: rgba(0, 230, 149, 0.1);
 }
 
@@ -100,6 +96,7 @@
     --text: var(--whiteSmoke);
     --textSecondary: var(--paleSky);
     --textAct: var(--whiteSmoke);
+    --textAlt: var(--graphite);
 
     --lightHover: var(--lightSlateGrey);
     --lightBorder: var(--lightWhiteSmoke);
@@ -109,16 +106,18 @@
 
     --border: var(--paleSky);
     --shadow: var(--lightPaleSky);
+    --blurBackground: var(--lightGraphite);
 }
 
 /* Tema claro */
 [data-theme="light"] {
-    --background: var(--smoke);
+    --background: var(--whiteSmoke);
     --surface: var(--paleSky);
 
     --text: var(--onyx);
     --textSecondary: var(--slateGrey);
     --textAct: var(--graphite);
+    --textAlt: var(--whiteSmoke);
 
     --lightHover: var(--lightPaleSky);
     --lightBorder: var(--lightGraphite);
@@ -128,6 +127,7 @@
 
     --border: var(--slateGrey);
     --shadow: var(--lightSlateGrey);
+    --blurBackground: var(--lightPaleSky);
 }
 
 /* ============================================
@@ -232,6 +232,37 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
     visibility: hidden;
 }
 
+/* Ocultar los controles (chevrons) de los inputs numéricos en toda la web */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Inputs con clase .form-input en toda la web (consistentes con el sistema) */
+.form-input {
+    padding: 10px 14px;
+    border-radius: 30px;
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-primary);
+    font-size: 14px;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.form-input::placeholder {
+    color: var(--textSecondary);
+    opacity: 0.5;
+    font-family: var(--font-primary);
+}
+
 /* ============================================
    BUTTONS / SELECTS
    ============================================ */
@@ -270,11 +301,22 @@ select {
     outline: none;
     padding: 8px 12px;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23F3F3F3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 42px;
+}
+
+[data-theme="light"] select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23141414' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
 
 select:hover {
-    color: var(--surface);
-    background-color: var(--border);
+    color: var(--textSecondary);
+    background-color: var(--lightHover);
 }
 
 select:hover option {
@@ -471,7 +513,7 @@ option {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 50px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 32px var(--shadow);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     animation: slideUpBanner 0.3s ease;

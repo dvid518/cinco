@@ -1,4 +1,35 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "pendientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "pendiente",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaRegistro",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    }
+  ],
   "fieldOverrides": []
 }

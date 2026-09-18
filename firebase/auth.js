@@ -12,7 +12,8 @@ import {
     updatePassword,
     reauthenticateWithCredential,
     fetchSignInMethodsForEmail,
-    getAdditionalUserInfo
+    getAdditionalUserInfo,
+    deleteUser
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js"
 import { app } from "./firebaseClient.js"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
@@ -232,4 +233,55 @@ export async function obtenerMetodosDeEmail(email) {
         console.warn("No se pudo consultar métodos de email:", error)
         return []
     }
+}
+
+// ============================================
+// REAUTENTICACIÓN Y ELIMINACIÓN DE CUENTA
+// ============================================
+// Para operaciones sensibles (eliminar cuenta, cambiar email) Firebase exige
+// una reautenticación reciente. Se reautentica con el proveedor disponible:
+// contraseña o Google (popup en contexto de clic).
+
+/**
+ * Reautentica al usuario actual con su contraseña.
+ *
+ * @param {string} password
+ */
+export async function reautenticarConPassword(password) {
+    const user = auth.currentUser
+    if (!user) throw new Error("No hay usuario autenticado")
+    if (!user.email) throw new Error("El usuario no tiene email asociado")
+
+    const credencial = EmailAuthProvider.credential(user.email, password)
+    await reauthenticateWithCredential(user, credencial)
+    return true
+}
+
+/**
+ * Reautentica al usuario actual con Google (popup).
+ * Debe invocarse dentro de un gesto de usuario (clic) para que el popup no
+ * sea bloqueado por el navegador.
+ */
+export async function reautenticarConGoogle() {
+    const user = auth.currentUser
+    if (!user) throw new Error("No hay usuario autenticado")
+
+    const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: "select_account" })
+
+    await signInWithPopup(auth, provider)
+    return true
+}
+
+/**
+ * Elimina definitivamente la cuenta de Firebase Auth.
+ * Debe ejecutarse DESPUÉS de borrar los datos de Firestore: al eliminar la
+ * cuenta, `request.auth` deja de existir y ya no se podría borrar nada más.
+ */
+export async function eliminarCuentaFirebase() {
+    const user = auth.currentUser
+    if (!user) throw new Error("No hay usuario autenticado")
+
+    await deleteUser(user)
+    return true
 }

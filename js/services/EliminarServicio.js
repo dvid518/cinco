@@ -6,6 +6,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
 import { cacheCapa } from "../core/cache.js"
+import { sesion } from "../core/sesion.js"
+import { eliminarCuentaFirebase } from "../../firebase/auth.js"
+import { exportarDVID } from "./ExportarServicio.js"
 
 // ============================================
 // ELIMINAR SERVICIO
@@ -103,4 +106,54 @@ export async function eliminarColeccion(uid, coleccionNombre) {
         console.error(`Error eliminando ${coleccionNombre}:`, error)
         throw error
     }
+}
+
+// ============================================
+// ELIMINAR DOCUMENTO RAÍZ DEL USUARIO
+// ============================================
+
+export async function eliminarDocUsuario(uid) {
+    console.log("[INFO] Eliminando documento raíz de usuario:", uid)
+    await deleteDoc(doc(db, "usuarios", uid))
+    return true
+}
+
+// ============================================
+// ELIMINAR CUENTA COMPLETA
+// ============================================
+// Orden obligatorio:
+//   1. Respaldo .dvid (red de seguridad)
+//   2. Borrar colecciones + document raíz (con request.auth activo)
+//   3. Limpiar estado local (caché, sesión, tema, sidebar)
+//   4. deleteUser() de Firebase Auth (lo último: mata request.auth)
+// ============================================
+
+export async function eliminarCuenta(uid) {
+    console.log("[INFO] Eliminando cuenta completa:", uid)
+
+    // 1. Respaldo de seguridad
+    await exportarDVID(uid)
+
+    // 2. Borrar datos (colecciones)
+    await eliminarTodosLosDatos(uid)
+
+    // 3. Borrar documento raíz
+    await eliminarDocUsuario(uid)
+
+    // 4. Limpiar estado local
+    cacheCapa.limpiar(uid)
+    sesion.limpiar()
+    try {
+        localStorage.removeItem("escinco_tema")
+        localStorage.removeItem("escinco_sidebar_collapsed")
+        localStorage.removeItem("escinco_lastbar_mode")
+    } catch (error) {
+        // Ignorar errores de storage
+    }
+
+    // 5. Eliminar la cuenta de Firebase Auth
+    await eliminarCuentaFirebase()
+
+    console.log("[INFO] Cuenta eliminada correctamente")
+    return true
 }

@@ -1,17 +1,23 @@
-import { logout, tienePassword, configurarPassword, cambiarPassword, actualizarNombre } from "../../firebase/auth.js"
+import { logout, tienePassword, configurarPassword, cambiarPassword, actualizarNombre, reautenticarConPassword, reautenticarConGoogle } from "../../firebase/auth.js"
 import { sesion } from "../core/sesion.js"
 import { obtenerPreferencias, actualizarPreferencias } from "../../firebase/firestore.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { VERSION } from "../../constants/version.js"
+import { TIPO_CAMBIO_DEFAULT } from "../../constants/divisas.js"
 import { getDivisaPrincipal, getTipoCambio } from "../services/DivisaServicio.js"
-import { cambiarTema, nombreModoTema } from "../core/tema.js"
+import { aplicarTema, setTemaLocal } from "../core/tema.js"
 import { icono } from "../core/iconos.js"
 import { accionExportar } from "../ui/exportar.js"
+import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
 let uid = null
 let hayCambios = false
 let temaActual = "dark"
+let lastbarModo = "hide"
+let nombrePendiente = null
+let temaPendiente = false
+let lastbarPendiente = false
 
 // Sincroniza el panel de tema cuando el tema cambia desde el lastbar
 // (u otra fuente), sin recargar la página.
@@ -31,13 +37,14 @@ window.addEventListener("tema-cambiado", (event) => {
 
 export function render() {
     return `
-        <section id="sidebar">
-            <button class="glass act" data-section="apariencia">${icono("palette", 18)}<span>Apariencia</span></button>
-            <button class="glass" data-section="moneda">${icono("coins", 18)}<span>Moneda</span></button>
-            <button class="glass" data-section="cuenta">${icono("circle-user", 18)}<span>Cuenta</span></button>
-            <button class="glass" data-section="datos">${icono("database", 18)}<span>Datos</span></button>
-            <button class="glass" data-section="peligrosa">${icono("triangle-alert", 18)}<span>Peligrosa</span></button>
-        </section>
+        ${envolverSidebar(`
+            <section id="sidebar">
+                <button class="glass act" data-section="apariencia">${icono("palette", 18)}<span>Apariencia</span></button>
+                <button class="glass" data-section="moneda">${icono("coins", 18)}<span>Moneda</span></button>
+                <button class="glass" data-section="cuenta">${icono("circle-user", 18)}<span>Cuenta</span></button>
+                <button class="glass" data-section="datos">${icono("database", 18)}<span>Datos</span></button>
+            </section>
+        `)}
         <section id="panel" class="glass">
 
             <!-- APARIENCIA -->
@@ -54,37 +61,36 @@ export function render() {
                 </div>
 
                 <div class="config-group">
-                    <span class="config-label">Páginas visibles</span>
-                    <p class="config-descripcion">
-                        Selecciona qué páginas quieres ver en el menú de navegación.
-                    </p>
-                    <div class="toggle-row">
-                        <span>Cuentas</span>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-cuentas" checked disabled>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="toggle-row">
-                        <span>Movimientos</span>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-movimientos" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="toggle-row">
-                        <span>Inversiones</span>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-inversiones" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="toggle-row">
-                        <span>Trading</span>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-trading" checked>
-                            <span class="slider"></span>
-                        </label>
+                    <span class="config-label visible-pages">Páginas visibles</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Dashboard</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-dashboard" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Movimientos</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-movimientos" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Inversiones</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-inversiones" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Trading</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-trading" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -106,7 +112,7 @@ export function render() {
 
                 <div class="config-group">
                     <span class="config-label">Divisa principal</span>
-                    <select class="glass-select" id="divisa-principal">
+                    <select class="select" id="divisa-principal">
                         <option value="pen">PEN (S/)</option>
                         <option value="usd">USD ($)</option>
                         <option value="usdt">USDT (₮)</option>
@@ -118,11 +124,10 @@ export function render() {
                     <div class="exchange-rate-inputs">
                         <div class="exchange-input">
                             <label>1 USD =</label>
-                            <input type="number" id="tc-pen-usd" class="form-input" step="0.01" min="0.01" placeholder="3.75">
+                            <input type="number" id="tc-pen-usd" class="form-input" step="0.01" min="0.01" placeholder="${TIPO_CAMBIO_DEFAULT.pen_usd}">
                             <span>PEN</span>
                         </div>
                     </div>
-                    <span class="config-hint">1 USDT = 1 USD (siempre)</span>
                 </div>
             </div>
 
@@ -147,6 +152,11 @@ export function render() {
                     <span class="config-label">Sesión</span>
                     <button class="glass-btn danger" id="logout-btn">Cerrar sesión</button>
                 </div>
+                <div class="config-group danger-zone">
+                    <span class="config-label danger">Eliminar cuenta</span>
+                    <button class="glass-btn danger" id="delete-account">Eliminar cuenta</button>
+                    <span class="config-hint">Se eliminarán todos tus datos permanentemente</span>
+                </div>
             </div>
 
             <!-- DATOS -->
@@ -160,22 +170,12 @@ export function render() {
                 <div class="config-group">
                     <span class="config-label">Importar respaldo</span>
                     <button class="glass-btn" id="import-dvid">Importar .dvid</button>
-                    <span class="config-hint">Solo archivos .dvid generados por cinco</span>
+                    <span class="config-hint">Solo archivos .dvid generados por escinco</span>
                 </div>
-            </div>
-
-            <!-- PELIGROSA -->
-            <div class="panel-section hidden-section" id="section-peligrosa">
-                <h2>Peligrosa</h2>
                 <div class="config-group danger-zone">
                     <span class="config-label danger">Eliminar datos</span>
                     <button class="glass-btn danger" id="delete-data">Eliminar todos los datos</button>
                     <span class="config-hint">Esta acción no se puede deshacer</span>
-                </div>
-                <div class="config-group danger-zone">
-                    <span class="config-label danger">Eliminar cuenta</span>
-                    <button class="glass-btn danger" id="delete-account">Eliminar cuenta</button>
-                    <span class="config-hint">Se eliminarán todos tus datos permanentemente</span>
                 </div>
             </div>
 
@@ -242,21 +242,20 @@ function configurarTema() {
     })
 
     opciones.forEach(opt => {
-        opt.addEventListener("click", async () => {
+        opt.addEventListener("click", () => {
             const tema = opt.dataset.tema
             if (tema === temaActual) return
 
             opciones.forEach(o => o.classList.remove("active"))
             opt.classList.add("active")
 
-            try {
-                await cambiarTema(uid, tema)
-                temaActual = tema
-                mostrarNotificacion("exito", nombreModoTema(tema))
-            } catch (error) {
-                console.error("Error guardando tema:", error)
-                mostrarNotificacion("error", "No se pudo guardar el tema")
-            }
+            // Aplicar visualmente sin persistir (se guarda con el botón Guardar)
+            temaActual = tema
+            temaPendiente = true
+            aplicarTema(tema)
+            window.dispatchEvent(new CustomEvent("tema-cambiado", { detail: { tema } }))
+
+            actualizarEstadoGuardar()
         })
     })
 }
@@ -274,29 +273,19 @@ function configurarCuenta() {
     if (nombreInput) {
         nombreInput.value = usuario?.nombre || "Usuario"
 
-        let guardando = false
-        nombreInput.addEventListener("change", async () => {
-            if (guardando) return
+        nombreInput.addEventListener("input", () => {
+            const base = (usuario?.nombre || "Usuario").trim()
             const nuevo = nombreInput.value.trim()
+
             if (!nuevo) {
                 nombreInput.value = usuario?.nombre || "Usuario"
-                return
+            } else if (nuevo !== base) {
+                nombrePendiente = nuevo
+            } else {
+                nombrePendiente = null
             }
-            if (nuevo === usuario?.nombre) return
 
-            guardando = true
-            try {
-                await actualizarNombre(nuevo)
-                const actualizado = { ...sesion.getUsuario(), nombre: nuevo }
-                sesion.setUsuario(actualizado)
-                mostrarNotificacion("exito", "Nombre actualizado")
-            } catch (error) {
-                console.error("Error actualizando nombre:", error)
-                nombreInput.value = usuario?.nombre || "Usuario"
-                mostrarNotificacion("error", `No se pudo actualizar el nombre: ${error.message}`)
-            } finally {
-                guardando = false
-            }
+            actualizarEstadoGuardar()
         })
     }
     if (emailEl) emailEl.textContent = usuario?.email || "—"
@@ -513,12 +502,13 @@ async function cargarPreferencias() {
         // Tema
         temaActual = prefs?.tema || "dark"
 
-        // Páginas
-        if (prefs?.paginas) {
-            document.getElementById("toggle-movimientos").checked = prefs.paginas.movimientos !== false
-            document.getElementById("toggle-inversiones").checked = prefs.paginas.inversiones !== false
-            document.getElementById("toggle-trading").checked = prefs.paginas.trading !== false
-        }
+        // Páginas: los guardados del servidor tienen prioridad; si no hay,
+        // se usan los valores por defecto de la sesión (cuentas nuevas).
+        const paginas = prefs?.paginas || sesion.getPaginasVisibles() || {}
+        document.getElementById("toggle-dashboard").checked = paginas.dashboard !== false
+        document.getElementById("toggle-movimientos").checked = paginas.movimientos !== false
+        document.getElementById("toggle-inversiones").checked = paginas.inversiones !== false
+        document.getElementById("toggle-trading").checked = paginas.trading !== false
 
         actualizarEstadoGuardar()
     } catch (error) {
@@ -533,12 +523,30 @@ async function cargarPreferencias() {
     const tcUSD = document.getElementById("tc-pen-usd")
     if (tcUSD) {
         const tc = getTipoCambio()
-        tcUSD.value = tc.pen_usd || 3.75
+        tcUSD.value = tc.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd
     }
+}
+
+function hayCambiosEnVivo() {
+    const base = sesion.getPreferencias() || {}
+    const basePaginas = base.paginas || {}
+    const tc = getTipoCambio()
+    const nombreBase = (sesion.getUsuario()?.nombre || "Usuario").trim()
+
+    return (
+        (nombrePendiente !== null && nombrePendiente !== nombreBase) ||
+        (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
+        (document.getElementById("toggle-movimientos")?.checked !== (basePaginas.movimientos !== false)) ||
+        (document.getElementById("toggle-inversiones")?.checked !== (basePaginas.inversiones !== false)) ||
+        (document.getElementById("toggle-trading")?.checked !== (basePaginas.trading !== false)) ||
+        (document.getElementById("divisa-principal")?.value !== getDivisaPrincipal()) ||
+        (parseFloat(document.getElementById("tc-pen-usd")?.value) !== tc.pen_usd)
+    )
 }
 
 function configurarDetectorCambios() {
     const ids = [
+        "toggle-dashboard",
         "toggle-movimientos",
         "toggle-inversiones",
         "toggle-trading",
@@ -550,7 +558,6 @@ function configurarDetectorCambios() {
         const el = document.getElementById(id)
         if (el) {
             el.addEventListener("change", () => {
-                hayCambios = true
                 actualizarEstadoGuardar()
             })
         }
@@ -573,6 +580,8 @@ export function guardarDesdeLastbar() {
 // Solo .desact (sin colores especiales ni clase .activo)
 
 function actualizarEstadoGuardar() {
+    hayCambios = temaPendiente || lastbarPendiente || hayCambiosEnVivo()
+
     const guardarItem = document.querySelector('.lastbar .item[data-accion="guardar"]')
     if (guardarItem) {
         guardarItem.classList.toggle("desact", !hayCambios)
@@ -581,12 +590,12 @@ function actualizarEstadoGuardar() {
 
 async function guardarPreferencias() {
     const divisaPrincipal = document.getElementById("divisa-principal")?.value || "pen"
-    const penUSD = parseFloat(document.getElementById("tc-pen-usd")?.value) || 3.75
+    const penUSD = parseFloat(document.getElementById("tc-pen-usd")?.value) || TIPO_CAMBIO_DEFAULT.pen_usd
 
     const preferencias = {
         tema: temaActual,
         paginas: {
-            dashboard: true,
+            dashboard: document.getElementById("toggle-dashboard").checked,
             cuentas: true,
             movimientos: document.getElementById("toggle-movimientos").checked,
             inversiones: document.getElementById("toggle-inversiones").checked,
@@ -602,15 +611,29 @@ async function guardarPreferencias() {
     }
 
     try {
+        // Nombre pendiente → auth + doc de usuario
+        if (nombrePendiente && nombrePendiente !== sesion.getUsuario()?.nombre) {
+            await actualizarNombre(nombrePendiente)
+            sesion.setUsuario({ ...sesion.getUsuario(), nombre: nombrePendiente })
+            nombrePendiente = null
+        }
+
         await actualizarPreferencias(uid, preferencias)
         sesion.setPreferencias(preferencias)
 
+        // Persistir tema y modo de lastbar en localStorage
+        setTemaLocal(temaActual)
+        localStorage.setItem("escinco_lastbar_mode", lastbarModo)
+
         actualizarNavegacion(preferencias.paginas)
 
+        temaPendiente = false
+        lastbarPendiente = false
+        nombrePendiente = null
         hayCambios = false
         actualizarEstadoGuardar()
 
-        mostrarNotificacion("exito", "Preferencias guardadas")
+        mostrarNotificacion("exito", "Cambios guardados")
     } catch (error) {
         console.error("Error guardando preferencias:", error)
         mostrarNotificacion("error", "No se pudieron guardar las preferencias")
@@ -633,23 +656,26 @@ function actualizarNavegacion(paginas) {
 // ============================================
 
 function configurarLastbar() {
-    const modo = localStorage.getItem("cinco_lastbar_mode") || "hide"
+    lastbarModo = localStorage.getItem("escinco_lastbar_mode") || "hide"
     const opciones = document.querySelectorAll("#toggle-lastbar .toggle-option")
 
     opciones.forEach(opt => {
-        opt.classList.toggle("active", opt.dataset.lastbar === modo)
+        opt.classList.toggle("active", opt.dataset.lastbar === lastbarModo)
     })
 
-    aplicarModoLastbar(modo)
+    aplicarModoLastbar(lastbarModo)
 
     opciones.forEach(opt => {
         opt.addEventListener("click", () => {
             opciones.forEach(o => o.classList.remove("active"))
             opt.classList.add("active")
 
-            const nuevoModo = opt.dataset.lastbar
-            localStorage.setItem("cinco_lastbar_mode", nuevoModo)
-            aplicarModoLastbar(nuevoModo)
+            // Aplicar visualmente sin persistir (se guarda con el botón Guardar)
+            lastbarModo = opt.dataset.lastbar
+            lastbarPendiente = true
+            aplicarModoLastbar(lastbarModo)
+
+            actualizarEstadoGuardar()
         })
     })
 }
@@ -709,7 +735,7 @@ async function exportarDVID() {
 async function importarDVID() {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = ".dvid,application/x-cinco-backup"
+    input.accept = ".dvid,application/x-escinco-backup"
 
     input.onchange = async (e) => {
         const archivo = e.target.files[0]
@@ -728,7 +754,7 @@ async function importarDVID() {
                     <div class="modal-message">
                         <p class="modal-message-error">${error.message}</p>
                         <p class="modal-message-desc">
-                            Asegúrate de que sea un archivo .dvid generado por cinco.
+                            Asegúrate de que sea un archivo .dvid generado por escinco.
                         </p>
                     </div>
                 `,
@@ -773,6 +799,14 @@ function abrirModalPreviewImportacion(archivo, preview) {
                     <div class="preview-item">
                         <span>Pendientes</span>
                         <span class="preview-number">${preview.resumen.pendientes}</span>
+                    </div>
+                    <div class="preview-item">
+                        <span>Inversiones</span>
+                        <span class="preview-number">${preview.resumen.posiciones || 0}</span>
+                    </div>
+                    <div class="preview-item">
+                        <span>Historial precios</span>
+                        <span class="preview-number">${preview.resumen.historial || 0}</span>
                     </div>
                     <div class="preview-item">
                         <span>Snapshots</span>
@@ -869,6 +903,14 @@ function plantillaResultadoImportacion(resultado) {
                     <span class="preview-number">${resultado.pendientes}</span>
                 </div>
                 <div class="preview-item">
+                    <span>Inversiones</span>
+                    <span class="preview-number">${resultado.posiciones || 0}</span>
+                </div>
+                <div class="preview-item">
+                    <span>Historial precios</span>
+                    <span class="preview-number">${resultado.historial || 0}</span>
+                </div>
+                <div class="preview-item">
                     <span>Snapshots</span>
                     <span class="preview-number">${resultado.snapshots}</span>
                 </div>
@@ -892,7 +934,7 @@ function eliminarTodosLosDatos() {
         contenido: `
             <div class="modal-message">
                 <p class="modal-message-title-danger">¿Estás seguro?</p>
-                <p class="modal-message-desc">Se eliminarán <strong>todos</strong> tus datos de cinco:</p>
+                <p class="modal-message-desc">Se eliminarán <strong>todos</strong> tus datos de escinco:</p>
                 <div class="modal-list">
                     • Cuentas<br>
                     • Movimientos<br>
@@ -1029,19 +1071,198 @@ function abrirModalEliminarCuenta() {
             <div class="modal-message">
                 <p class="modal-message-title-danger">¿Estás seguro?</p>
                 <p class="modal-message-desc">
-                    Se eliminará tu cuenta y todos tus datos permanentemente.
+                    Se eliminará tu <strong>cuenta</strong> y <strong>todos tus datos</strong> de escinco permanentemente:
                 </p>
-                <p class="modal-message-warning">
-                    Esta función aún está en desarrollo y se activará próximamente.
+                <div class="modal-list">
+                    • Cuentas<br>
+                    • Movimientos<br>
+                    • Inversiones<br>
+                    • Pendientes<br>
+                    • Snapshots<br>
+                    • Trades
+                </div>
+                <p class="modal-message-desc">
+                    Antes de borrar se descargará automáticamente un respaldo <strong>.dvid</strong>.
                 </p>
+                <p class="modal-message-error">Esta acción no se puede deshacer.</p>
+            </div>
+        `,
+        variante: "confirm",
+        confirmText: "Continuar",
+        cancelText: "Cancelar",
+        onConfirm: () => {
+            cerrarModal()
+            setTimeout(iniciarReautenticacion, 100)
+            return false
+        }
+    })
+}
+
+function iniciarReautenticacion() {
+    if (tienePassword()) {
+        abrirModalReauthPassword()
+    } else {
+        abrirModalReauthGoogle()
+    }
+}
+
+function abrirModalReauthPassword() {
+    abrirModal({
+        titulo: "Reautenticación requerida",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    Por seguridad, confirma tu contraseña antes de continuar:
+                </p>
+                <input type="password" id="reauth-password"
+                       class="form-input modal-input-confirm"
+                       placeholder="Tu contraseña"
+                       autocomplete="current-password">
+                <p class="modal-message-error" id="reauth-error" hidden></p>
+            </div>
+        `,
+        variante: "confirm",
+        confirmText: "Verificar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            const input = document.getElementById("reauth-password")
+            const password = input?.value || ""
+
+            if (!password) {
+                input.classList.add("input-error")
+                input.focus()
+                return false
+            }
+
+            try {
+                await reautenticarConPassword(password)
+            } catch (error) {
+                const msg = document.getElementById("reauth-error")
+                input.classList.add("input-error")
+                if (msg) {
+                    msg.textContent = error.message || "Contraseña incorrecta"
+                    msg.hidden = false
+                }
+                input.focus()
+                return false
+            }
+
+            cerrarModal()
+            setTimeout(abrirModalConfirmacionFinal, 100)
+            return false
+        }
+    })
+}
+
+function abrirModalReauthGoogle() {
+    abrirModal({
+        titulo: "Reautenticación requerida",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    Por seguridad, vuelve a iniciar sesión con Google para continuar.
+                </p>
+            </div>
+        `,
+        variante: "confirm",
+        confirmText: "Continuar con Google",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            // El popup se dispara aquí, en contexto de clic (onConfirm se
+            // ejecuta de forma síncrona desde el botón), para que el
+            // navegador no lo bloquee.
+            try {
+                await reautenticarConGoogle()
+            } catch (error) {
+                cerrarModal()
+                await new Promise(resolve => setTimeout(resolve, 100))
+                abrirModalErrorEliminar(error)
+                return false
+            }
+
+            cerrarModal()
+            setTimeout(abrirModalConfirmacionFinal, 100)
+            return false
+        }
+    })
+}
+
+function abrirModalConfirmacionFinal() {
+    abrirModal({
+        titulo: "Confirmación final",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-title-danger">Última oportunidad</p>
+                <p class="modal-message-desc">
+                    Para confirmar, escribe <strong class="text-danger">ELIMINAR</strong> a continuación:
+                </p>
+                <input type="text" id="confirmar-eliminar-cuenta"
+                       class="form-input modal-input-confirm"
+                       placeholder="Escribe ELIMINAR"
+                       autocomplete="off">
             </div>
         `,
         variante: "confirm",
         confirmText: "Eliminar cuenta",
         cancelText: "Cancelar",
-        onConfirm: () => {
-            mostrarNotificacion("info", "La eliminación de cuenta estará disponible pronto")
+        onConfirm: async () => {
+            const input = document.getElementById("confirmar-eliminar-cuenta")
+            const valor = input?.value.trim().toUpperCase()
+
+            if (valor !== "ELIMINAR") {
+                input.classList.add("input-error")
+                input.focus()
+                return false
+            }
+
+            cerrarModal()
+            await new Promise(resolve => setTimeout(resolve, 100))
+
+            abrirModal({
+                titulo: "Eliminando cuenta",
+                contenido: `
+                    <div class="modal-loading">
+                        <div class="loading-spinner"></div>
+                        <p class="modal-loading-text" id="eliminar-cuenta-status">Descargando respaldo...</p>
+                    </div>
+                `,
+                variante: "narrow",
+                confirmText: null,
+                cancelText: null
+            })
+
+            try {
+                const status = document.getElementById("eliminar-cuenta-status")
+
+                const { eliminarCuenta } = await import("../services/EliminarServicio.js")
+                await eliminarCuenta(uid)
+
+                if (status) status.textContent = "Cuenta eliminada. Redirigiendo..."
+
+                await new Promise(resolve => setTimeout(resolve, 600))
+                window.location.replace("/login")
+            } catch (error) {
+                console.error("Error eliminando cuenta:", error)
+                cerrarModal()
+                await new Promise(resolve => setTimeout(resolve, 100))
+                abrirModalErrorEliminar(error)
+            }
+
             return false
         }
+    })
+}
+
+function abrirModalErrorEliminar(error) {
+    abrirModal({
+        titulo: "Error al eliminar la cuenta",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-error">${error.message}</p>
+            </div>
+        `,
+        variante: "info",
+        confirmText: "Cerrar",
+        onConfirm: () => true
     })
 }

@@ -10,16 +10,11 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
+import { getFechaHoy } from "../core/fechas.js"
 
 // ============================================
 // SNAPSHOT REPOSITORIO
 // ============================================
-
-// Obtener fecha de hoy (YYYY-MM-DD)
-function getFechaHoy() {
-    const hoy = new Date()
-    return hoy.toISOString().split('T')[0]
-}
 
 // ============================================
 // GUARDAR SNAPSHOT DEL DÍA (crea o actualiza)
@@ -36,14 +31,12 @@ export async function guardarSnapshotDelDia(uid, datos) {
             ...datos,
             actualizacion: serverTimestamp()
         }, { merge: true })
-        console.log(`[INFO] Snapshot actualizado: ${fecha}`)
     } else {
         await setDoc(referencia, {
             ...datos,
             cerrado: false,
             actualizacion: serverTimestamp()
         })
-        console.log(`[INFO] Snapshot creado: ${fecha}`)
     }
     
     return fecha

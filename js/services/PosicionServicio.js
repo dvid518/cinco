@@ -4,10 +4,7 @@ import {
     obtenerPosiciones,
     actualizarPosicion
 } from "../repositories/PosicionRepositorio.js"
-import {
-    obtenerActivo,
-    actualizarPrecioActivo
-} from "../repositories/ActivoRepositorio.js"
+import { obtenerOCrearActivo } from "./ActivoServicio.js"
 import { convertirMonto, getDivisaPrincipal } from "./DivisaServicio.js"
 
 // ============================================
@@ -16,6 +13,9 @@ import { convertirMonto, getDivisaPrincipal } from "./DivisaServicio.js"
 
 /**
  * Aplica el efecto de un movimiento de compra/venta a la posición del activo.
+ * Resuelve el activo por SÍMBOLO (creándolo si no existe todavía), de modo
+ * que comprar un activo nuevo funciona a la primera.
+ *
  * @param {string} uid
  * @param {Object} movimiento - { tipo, activo, cuenta, cantidad, precio, comision, divisa }
  */
@@ -24,12 +24,16 @@ export async function actualizarPosicionPorMovimiento(uid, movimiento) {
 
     console.log("[INFO] Actualizando posición por movimiento:", movimiento)
 
-    const activoDoc = await obtenerActivo(uid, activo)
-    if (!activoDoc) {
-        throw new Error(`Activo no encontrado: ${activo}`)
+    // Busca por símbolo; si no existe, lo crea. También actualiza el precio.
+    const activoDoc = await obtenerOCrearActivo(uid, {
+        simbolo: activo,
+        nombre: activo,
+        tipo: "accion",
+        ultimoPrecio: precio
+    })
+    if (!activoDoc?.id) {
+        throw new Error(`No se pudo obtener o crear el activo: ${activo}`)
     }
-
-    await actualizarPrecioActivo(uid, activoDoc.id, precio)
 
     const esCompra =
         tipo === "compraActivo" ||

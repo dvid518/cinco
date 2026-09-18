@@ -1,4 +1,3 @@
-@import url("style.css");
 
 /* ============================================
    NAVBAR
@@ -82,6 +81,10 @@
     transition: all 0.3s ease;
 }
 
+.tab:hover {
+    box-shadow: 0 0 20px var(--shadow);
+}
+
 #conf-icon,
 #exis {
     color: var(--text);
@@ -139,11 +142,13 @@
     width: 15%;
     min-width: 180px;
     gap: 6px;
-    border-radius: 25px;
-    padding: 8px;
     flex-shrink: 0;
     max-height: 100%;
-    overflow-y: auto;
+    transition: all 0.3s ease;
+}
+
+#sidebar:hover {
+    gap: 10px;
 }
 
 #sidebar button {
@@ -151,28 +156,23 @@
     text-align: start;
     justify-content: start;
     padding: 12px 16px;
-    border-radius: 50px;
-    background: transparent;
-    border: none;
     color: var(--textSecondary);
     font-family: var(--font-primary);
     font-size: 14px;
     cursor: pointer;
-    transition: all 0.3s ease;
     flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+#sidebar button:hover, #sidebar button.act {
+    color: var(--border);
+    background-color: var(--lightHover);
 }
 
 #sidebar button:hover {
-    color: var(--border);
-    background-color: var(--lightHover);
-    padding-left: 20px;
-}
-
-#sidebar button.act {
-    color: var(--border);
-    background-color: var(--lightHover);
-    font-weight: 500;
-    padding-left: 20px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    box-shadow: 0 0 20px var(--shadow);
 }
 
 #sidebar button.selected {
@@ -192,6 +192,124 @@
 #sidebar::-webkit-scrollbar-thumb {
     background: var(--border);
     border-radius: 10px;
+}
+
+/* ============================================
+   SIDEBAR WRAP · COLAPSO (riel de solo íconos)
+   ============================================ */
+
+.sidebar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 15%;
+    min-width: 180px;
+    flex-shrink: 0;
+    max-height: 100%;
+    --sidebar-btn: 44px;
+    transition: width 0.3s ease, min-width 0.3s ease;
+}
+
+.sidebar-wrap #sidebar {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    min-height: 0;
+}
+
+.sidebar-wrap #sidebar button {
+    min-height: var(--sidebar-btn);
+    gap: 10px;
+    transition: all 0.3s ease;
+}
+
+/* Padding-left SOLO cuando el sidebar está extendido.
+   Ojo: .sidebar-colapsado vive en el .sidebar-wrap, no en el botón. */
+.sidebar-wrap:not(.sidebar-colapsado) #sidebar button:hover,
+.sidebar-wrap:not(.sidebar-colapsado) #sidebar button.act {
+    padding-left: 20px;
+}
+
+.sidebar-wrap #sidebar button span {
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 22ch;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+
+/* Botón chevron circular (mismo diámetro que la altura de cada botón) */
+.sidebar-wrap .sidebar-toggle {
+    width: var(--sidebar-btn);
+    height: var(--sidebar-btn);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    color: var(--textSecondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.sidebar-wrap .sidebar-toggle:hover {
+    color: var(--text);
+    background-color: var(--lightHover);
+    transform: scale(1.02);
+    box-shadow: 0 0 20px var(--shadow);
+}
+
+.sidebar-wrap .sidebar-toggle svg {
+    transition: transform 0.3s ease;
+}
+
+.sidebar-wrap.sidebar-colapsado .sidebar-toggle svg {
+    transform: rotate(180deg);
+}
+
+/* Modo colapsado: riel de solo íconos */
+.sidebar-wrap.sidebar-colapsado {
+    width: var(--sidebar-btn);
+    min-width: var(--sidebar-btn);
+}
+
+.sidebar-wrap.sidebar-colapsado #sidebar {
+    padding: 0;
+    align-items: center;
+    overflow: visible;
+}
+
+.sidebar-wrap.sidebar-colapsado #sidebar button {
+    transition: all 0.3s ease;
+}
+
+.sidebar-wrap.sidebar-colapsado #sidebar button,
+.sidebar-wrap.sidebar-colapsado #sidebar button:hover,
+.sidebar-wrap.sidebar-colapsado #sidebar button.act {
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    text-align: center;
+}
+
+.sidebar-wrap.sidebar-colapsado #sidebar button svg {
+    margin: auto;
+}
+
+.sidebar-wrap.sidebar-colapsado #sidebar button span {
+    opacity: 0;
+    max-width: 0;
+}
+
+/* Spinner pequeño dentro de un botón del sidebar */
+.sidebar-wrap #sidebar button .loading-spinner {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    border-width: 2px;
 }
 
 /* ============================================
@@ -305,6 +423,7 @@
 .lastbar .item:hover {
     background-color: var(--lightHover);
     width: 45px;
+    box-shadow: 0 0 10px var(--shadow);
     transform: scale(1.05);
 }
 
@@ -338,6 +457,9 @@
     padding: 3px 8px;
     border-radius: 30px;
     margin-bottom: 80px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 0 10px var(--shadow);
     animation: shake 1.5s infinite;
 }
 
@@ -482,4 +604,142 @@
 
 .lastbar .item.activo svg {
     color: var(--positive);
+}
+
+/* ============================================
+   RESPONSIVE MÓVIL
+   ============================================ */
+
+@media (max-width: 768px) {
+    .nav-section {
+        width: 96%;
+        margin-top: 12px;
+        height: 44px;
+    }
+
+    .nav-container {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .nav-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-container a {
+        padding: 0 12px;
+        font-size: 13px;
+        flex-shrink: 0;
+    }
+
+    .nav-container a:hover,
+    .nav-container a.act {
+        padding: 0 13px;
+    }
+
+    main {
+        width: 96%;
+        gap: 12px;
+    }
+
+    /* Sidebar → franja horizontal con scroll */
+    #sidebar,
+    .sidebar-wrap {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .sidebar-wrap {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .sidebar-wrap #sidebar {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 2px 0 6px;
+        gap: 6px;
+        max-width: 100%;
+    }
+
+    .sidebar-wrap #sidebar button {
+        min-width: 96px;
+        min-height: 42px;
+        justify-content: center;
+        text-align: center;
+        padding: 8px 12px;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+
+    .sidebar-wrap:not(.sidebar-colapsado) #sidebar button:hover,
+    .sidebar-wrap:not(.sidebar-colapsado) #sidebar button.act {
+        padding-left: 12px;
+    }
+
+    .sidebar-wrap.sidebar-colapsado {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .sidebar-wrap.sidebar-colapsado #sidebar button {
+        min-width: 46px;
+    }
+
+    .sidebar-wrap .sidebar-toggle {
+        flex-shrink: 0;
+    }
+
+    #panel {
+        padding: 20px 16px;
+        border-radius: 20px;
+    }
+
+    #panel h2 {
+        font-size: 22px;
+    }
+
+    /* Lastbar: siempre operativo sin hover */
+    .lastbar {
+        width: 94%;
+    }
+
+    .lastbar .item {
+        width: 40px;
+        height: 40px;
+        margin: 0;
+    }
+
+    .lastbar .item svg {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .lastbar .desact {
+        opacity: 0.45;
+    }
+}
+
+@media (max-width: 420px) {
+    .logo-container,
+    .user-container {
+        width: 40px;
+        flex-shrink: 0;
+    }
+
+    .nav-container {
+        gap: 4px;
+    }
+
+    .nav-container a {
+        padding: 0 8px;
+        font-size: 12px;
+    }
+
+    .nav-container a:hover,
+    .nav-container a.act {
+        padding: 0 9px;
+    }
 }

@@ -117,8 +117,6 @@ export async function eliminarPosicion(uid, posicionId) {
 // ============================================
 
 export async function crearOActualizarPosicion(uid, activoId, cantidad, precio, divisa = 'usd') {
-    console.log(`[INFO] Crear/actualizar posición: activo=${activoId}, cantidad=${cantidad}, precio=${precio}`)
-    
     const posicionExistente = await obtenerPosicionPorActivo(uid, activoId)
     
     if (posicionExistente) {
@@ -141,7 +139,6 @@ export async function crearOActualizarPosicion(uid, activoId, cantidad, precio, 
         }
         
         if (nuevaCantidad <= 0) {
-            console.log(`[INFO] Cantidad final <= 0, eliminando posición`)
             await eliminarPosicion(uid, posicionExistente.id)
             return null
         }
@@ -152,7 +149,6 @@ export async function crearOActualizarPosicion(uid, activoId, cantidad, precio, 
             divisa: divisa
         })
         
-        console.log(`[INFO] Posición actualizada: cantidad=${nuevaCantidad}, precioPromedio=${nuevoPrecioPromedio}`)
         return posicionExistente.id
     } else {
         if (cantidad <= 0) {
@@ -166,7 +162,6 @@ export async function crearOActualizarPosicion(uid, activoId, cantidad, precio, 
             precioPromedio: precio
         })
         
-        console.log(`[INFO] Posición creada: ${id}`)
         return id
     }
 }

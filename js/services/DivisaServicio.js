@@ -28,7 +28,7 @@ export function convertirMonto(monto, desde, hacia) {
     if (desde === hacia) return monto
 
     const tc = getTipoCambio()
-    const penUSD = tc.pen_usd || 3.75
+    const penUSD = tc.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd
 
     // USDT = USD siempre
     const normalizar = (div) => (div === DIVISAS.USDT ? DIVISAS.USD : div)

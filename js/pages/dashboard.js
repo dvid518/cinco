@@ -1,6 +1,6 @@
 import { sesion } from "../core/sesion.js"
 import { cacheCapa } from "../core/cache.js"
-import { activarSpinLogo, desactivarSpinLogo } from "../core/router.js"
+import { activarSpinLogo, desactivarSpinLogo, navigateTo } from "../core/router.js"
 import { obtenerCuentas } from "../../firebase/firestore.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 import {
@@ -18,6 +18,8 @@ import {
 } from "../services/DivisaServicio.js"
 import { obtenerPosicionesConValor } from "../services/PosicionServicio.js"
 import { obtenerPendientes } from "../repositories/PendienteRepositorio.js"
+import { abrirModal } from "../ui/modal.js"
+import { mostrarNotificacion } from "../ui/notificaciones.js"
 
 // ============================================
 // ESTADO
@@ -50,25 +52,25 @@ export function render() {
                     </select>
                 </div>
                 <div class="card-value" id="patrimonio-valor">—</div>
-                <div class="card-sub" id="patrimonio-detalle">Cargando...</div>
+                <div class="card-sub" id="patrimonio-detalle">—</div>
             </div>
 
-            <div class="card positive">
+            <div class="card card-navegable positive" id="card-cuentas" role="button" tabindex="0" title="Ver cuentas">
                 <div class="card-title">Cuentas</div>
                 <div class="card-value" id="total-cuentas">0</div>
-                <div class="card-sub">Activas</div>
+                <div class="card-sub">Activas y tarjetas</div>
             </div>
 
-            <div class="card" id="card-inversiones">
+            <div class="card card-navegable" id="card-inversiones" role="button" tabindex="0" title="Ver inversiones">
                 <div class="card-title">Inversiones</div>
                 <div class="card-value" id="inversiones-valor">—</div>
-                <div class="card-sub" id="inversiones-detalle">Cargando...</div>
+                <div class="card-sub" id="inversiones-detalle">—</div>
             </div>
 
-            <div class="card" id="card-vencimientos">
+            <div class="card card-navegable" id="card-vencimientos" role="button" tabindex="0" title="Ver pendientes">
                 <div class="card-title">Próximos vencimientos</div>
                 <div class="card-value" id="vencimientos-cantidad">—</div>
-                <div class="card-sub" id="vencimientos-detalle">Cargando...</div>
+                <div class="card-sub" id="vencimientos-detalle">—</div>
             </div>
 
             <div class="card grafico-patrimonio-card">
@@ -90,9 +92,12 @@ export function render() {
 
 export async function init() {
     uid = sesion.uid
+    // Divisiva reactiva: se relee al entrar, no solo al importar el módulo.
+    divisaActual = getDivisaPrincipal()
     console.log("[INFO] Dashboard iniciado para UID:", uid)
 
     configurarDivisa()
+    configurarCardsNavegacion()
 
     await cargarTodo()
 
@@ -139,11 +144,13 @@ export async function recargarDatos() {
 
 async function cargarTodo() {
     try {
-        // Cargar en paralelo todo lo que no depende entre sí
-        const [cuentasResp, inversionesResp, vencimientosResp] = await Promise.all([
-            obtenerCuentas(uid),
+        // Las tarjetas para vencimientos dependen de `cuentas`; se cargan
+        // primero para evitar la carrera con el estado del módulo.
+        const cuentasResp = await obtenerCuentas(uid)
+
+        const [inversionesResp, vencimientosResp] = await Promise.all([
             cargarInversiones(),
-            cargarVencimientos()
+            cargarVencimientos(cuentasResp)
         ])
 
         cuentas = cuentasResp
@@ -164,19 +171,20 @@ async function cargarInversiones() {
             valorTotal: data.valorTotal || 0,
             gananciaTotal: data.gananciaTotal || 0,
             cantidad: data.cantidad || 0,
-            divisa: data.posiciones?.[0]?.divisa || "usd"
+            // La divisa a la que ya fueron convertidos los totales
+            divisa: data.divisa || "pen"
         }
     } catch (error) {
         console.error("Error cargando inversiones:", error)
-        return { valorTotal: 0, gananciaTotal: 0, cantidad: 0, divisa: "usd" }
+        return { valorTotal: 0, gananciaTotal: 0, cantidad: 0, divisa: "pen" }
     }
 }
 
-async function cargarVencimientos() {
+async function cargarVencimientos(cuentasDeUsuario) {
     try {
         const [pendientes, tarjetas] = await Promise.all([
             obtenerPendientesConVencimiento(),
-            obtenerTarjetasConPagoProximo()
+            obtenerTarjetasConPagoProximo(cuentasDeUsuario)
         ])
 
         // Combinar y ordenar por días restantes ascendente
@@ -206,6 +214,7 @@ async function obtenerPendientesConVencimiento() {
                 id: p.id,
                 titulo: p.concepto,
                 subtitulo: p.tipo ? "Cobrar" : "Pagar",
+                esCobrar: p.tipo,
                 monto: p.monto,
                 divisa: p.divisa,
                 diasRestantes: dias,
@@ -216,8 +225,8 @@ async function obtenerPendientesConVencimiento() {
         .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
 }
 
-async function obtenerTarjetasConPagoProximo() {
-    const tarjetas = cuentas.filter(
+function obtenerTarjetasConPagoProximo(listaCuentas) {
+    const tarjetas = (listaCuentas || []).filter(
         c => c.tipo === "credito" && c.estado !== "archivada" && c.diaPago
     )
 
@@ -271,7 +280,7 @@ function diasHastaDiaDelMes(diaMes) {
 }
 
 // ============================================
-// PATRIMONIO
+// PATRIMONIO (todo se normaliza a PEN)
 // ============================================
 
 function calcularPatrimonio() {
@@ -282,14 +291,16 @@ function calcularPatrimonio() {
     cuentas.forEach(c => {
         if (c.estado === "archivada") return
 
+        // El contador incluye tarjetas de crédito activas
+        totalCuentas++
+
         if (c.tipo === "credito") {
-            totalDeuda += c.deuda || 0
+            totalDeuda += convertirMonto(c.deuda || 0, c.moneda || "pen", "pen")
             return
         }
 
         if (c.esPatrimonio !== false) {
-            totalActivos += c.saldoInicial || 0
-            totalCuentas++
+            totalActivos += convertirMonto(c.saldoInicial || 0, c.moneda || "pen", "pen")
         }
     })
 
@@ -323,17 +334,22 @@ function actualizarCuentas() {
 
     const detalleEl = document.getElementById("patrimonio-detalle")
     if (detalleEl) {
-        let detalle = `Activos: ${stats.totalActivos.toFixed(2)}`
+        const simbolo = simbologDe(divisaActual)
+        let detalle = `Activos: ${simbolo} ${convertirMonto(stats.totalActivos, "pen", divisaActual).toFixed(2)}`
         if (stats.tieneDeuda) {
-            detalle += ` | Deuda: -${stats.totalDeuda.toFixed(2)}`
+            detalle += ` | Deuda: -${simbolo} ${convertirMonto(stats.totalDeuda, "pen", divisaActual).toFixed(2)}`
         }
         detalleEl.textContent = detalle
     }
 }
 
+function simbologDe(divisa) {
+    return DIVISAS_SYMBOLS[divisa] || "S/"
+}
+
 function actualizarPatrimonio() {
     const stats = calcularPatrimonio()
-    const simbolo = DIVISAS_SYMBOLS[divisaActual] || "S/"
+    const simbolo = simbologDe(divisaActual)
     const valorEl = document.getElementById("patrimonio-valor")
 
     if (!valorEl) return
@@ -360,26 +376,25 @@ function actualizarInversiones() {
         return
     }
 
-    // Convertir el valor total (viene en la divisa base de las posiciones)
+    // `valorTotal` ya viene convertido a `inversionesData.divisa`; una sola
+    // conversión hasta la divisa elegida en el selector (nada de doble).
     const valorConvertido = convertirMonto(
         inversionesData.valorTotal,
         inversionesData.divisa,
         divisaActual
     )
 
-    const simbolo = DIVISAS_SYMBOLS[divisaActual] || "S/"
+    const simbolo = simbologDe(divisaActual)
     valorEl.textContent = `${simbolo} ${valorConvertido.toFixed(2)}`
 
-    // Detalle: rendimiento + nº de posiciones
     if (detalleEl) {
         const signo = inversionesData.gananciaTotal >= 0 ? "+" : ""
-        const divisaU = (inversionesData.divisa || "usd").toUpperCase()
+        const divisaU = (inversionesData.divisa || "pen").toUpperCase()
         detalleEl.textContent =
             `${signo}${inversionesData.gananciaTotal.toFixed(2)} ${divisaU}` +
             ` · ${inversionesData.cantidad} posici${inversionesData.cantidad === 1 ? "ón" : "ones"}`
     }
 
-    // Color de la card según ganancia
     cardEl?.classList.remove("positive", "negative")
     if (inversionesData.gananciaTotal > 0) cardEl?.classList.add("positive")
     else if (inversionesData.gananciaTotal < 0) cardEl?.classList.add("negative")
@@ -394,7 +409,6 @@ function actualizarVencimientos() {
 
     cantidadEl.textContent = vencimientosData.total
 
-    // Detalle: texto resumen + lista de los 3 primeros
     if (detalleEl) {
         if (vencimientosData.total === 0) {
             detalleEl.textContent = `Sin vencimientos en los próximos ${DIAS_VENCIMIENTO} días`
@@ -408,7 +422,6 @@ function actualizarVencimientos() {
         }
     }
 
-    // Card destacada si hay vencidos
     cardEl?.classList.remove("positive", "negative")
     if (vencimientosData.vencidos > 0) cardEl?.classList.add("negative")
 }
@@ -416,6 +429,106 @@ function actualizarVencimientos() {
 function mostrarErrorCarga() {
     const detalleEl = document.getElementById("patrimonio-detalle")
     if (detalleEl) detalleEl.textContent = "Error al cargar datos"
+}
+
+// ============================================
+// CARDS NAVEGABLES
+// ============================================
+
+function configurarCardsNavegacion() {
+    const bindNavegacion = (id, ruta) => {
+        const el = document.getElementById(id)
+        if (!el) return
+        const ir = () => navigateTo(ruta)
+        el.addEventListener("click", ir)
+        el.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                ir()
+            }
+        })
+    }
+
+    bindNavegacion("card-cuentas", "/cuentas")
+    bindNavegacion("card-inversiones", "/inversiones")
+
+    const vencimientos = document.getElementById("card-vencimientos")
+    vencimientos?.addEventListener("click", abrirModalVencimientos)
+    vencimientos?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            abrirModalVencimientos()
+        }
+    })
+}
+
+async function abrirModalVencimientos() {
+    const items = vencimientosData?.items || []
+
+    let contenido
+    if (items.length === 0) {
+        contenido = `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    Sin vencimientos en los próximos ${DIAS_VENCIMIENTO} días.
+                </p>
+            </div>
+        `
+    } else {
+        contenido = `<div class="lista-cards vencimientos-lista">
+            ${items.map(v => `
+                <div class="card-item ${v.vencido ? "vencido" : ""}">
+                    <div class="card-item-info">
+                        <span class="card-item-titulo">${v.titulo} ${v.vencido ? "· VENCIDO" : ""}</span>
+                        <span class="card-item-detalle">
+                            ${v.subtitulo} · ${textoDias(v.diasRestantes)}
+                        </span>
+                    </div>
+                    <span class="card-item-valor ${v.vencido ? "negative" : ""}">
+                        ${v.monto.toFixed(2)} ${(v.divisa || "PEN").toUpperCase()}
+                    </span>
+                    ${v.tipo === "pendiente" ? `
+                        <button class="btn-sm btn-consolidar-vencimiento" data-id="${v.id}" type="button">
+                            ${v.esCobrar ? "Cobrar" : "Pagar"}
+                        </button>
+                    ` : ""}
+                </div>
+            `).join("")}
+        </div>`
+    }
+
+    abrirModal({
+        titulo: "Próximos vencimientos",
+        contenido,
+        variante: "info",
+        confirmText: "Cerrar",
+        onConfirm: () => true
+    })
+
+    document.querySelectorAll(".btn-consolidar-vencimiento").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const opcion = vencimientosData.items.find(v => v.id === btn.dataset.id)
+            if (!opcion) return
+
+            const pendiente = {
+                id: opcion.id,
+                concepto: opcion.titulo,
+                tipo: opcion.esCobrar,
+                monto: opcion.monto,
+                divisa: opcion.divisa
+            }
+
+            const { abrirConsolidacionPendiente } = await import("../ui/pendientes.js")
+            abrirConsolidacionPendiente(pendiente, uid)
+        })
+    })
+}
+
+function textoDias(dias) {
+    if (dias < 0) return "vencido"
+    if (dias === 0) return "hoy"
+    if (dias === 1) return "mañana"
+    return `en ${dias} días`
 }
 
 // ============================================

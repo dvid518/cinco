@@ -1,5 +1,6 @@
 import { obtenerPendiente, consolidarPendiente } from "../repositories/PendienteRepositorio.js"
 import { registrarMovimiento } from "./MovimientoServicio.js"
+import { getFechaHoy } from "../core/fechas.js"
 import { TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 
 // ============================================
@@ -41,7 +42,7 @@ export async function consolidarPendienteAMovimiento(
     }
 
     if (!datosMovimiento.fechaRealizacion) {
-        datosMovimiento.fechaRealizacion = new Date().toISOString().split("T")[0]
+        datosMovimiento.fechaRealizacion = getFechaHoy()
     }
 
     const movimiento = await registrarMovimiento(uid, tipoMovimiento, datosMovimiento)

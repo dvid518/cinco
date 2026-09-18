@@ -11,7 +11,17 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/firebase/firestore.rules",
+      "**/firebase/firestore.indexes.json",
+      "firebase-debug.log",
+      "test-cache.html",
+      "package.json",
+      "package-lock.json",
+      "vite.config.mjs",
+      "skills-lock.json",
+      "*.md",
+      "docs/**"
     ],
     "rewrites": [
       { "source": "/login", "destination": "/login.html" },

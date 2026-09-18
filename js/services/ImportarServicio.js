@@ -1,14 +1,47 @@
-import { crearCuenta, crearMovimiento } from "../../firebase/firestore.js"
 import {
-    crearActivo,
-    buscarActivoPorSimbolo
-} from "../repositories/ActivoRepositorio.js"
-import { crearPendiente } from "../repositories/PendienteRepositorio.js"
-import { guardarSnapshotDelDia } from "../repositories/SnapshotRepositorio.js"
+    addDoc,
+    collection,
+    doc,
+    setDoc,
+    serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+import {
+    db,
+    actualizarPreferencias
+} from "../../firebase/firestore.js"
+import { buscarActivoPorSimbolo } from "../repositories/ActivoRepositorio.js"
+import { cacheCapa } from "../core/cache.js"
 
 // ============================================
 // IMPORTAR SERVICIO
 // ============================================
+
+// Versión mínima del formato aceptado. La 3.x agrega posiciones,
+// trades, historial y preferencias; la 2.x sigue siendo compatible.
+const VERSION_MINIMA = [2, 0, 0]
+
+/**
+ * Convierte de vuelta a Date los campos que fueron exportados como
+ * ISO string (ver ExportarServicio.serializarFechas).
+ */
+function deserializarFechas(valor, camposFecha = []) {
+    if (Array.isArray(valor)) {
+        return valor.map(v => deserializarFechas(v, camposFecha))
+    }
+    if (valor === null || typeof valor !== "object") {
+        return valor
+    }
+
+    const resultado = {}
+    for (const [clave, item] of Object.entries(valor)) {
+        if (camposFecha.includes(clave) && typeof item === "string" && !isNaN(Date.parse(item))) {
+            resultado[clave] = new Date(item)
+        } else {
+            resultado[clave] = item
+        }
+    }
+    return resultado
+}
 
 /**
  * Importa un archivo .dvid en la cuenta del usuario.
@@ -25,9 +58,11 @@ export async function importarDVID(uid, archivo) {
         const texto = await leerArchivo(archivo)
         const datos = JSON.parse(texto)
 
-        if (datos.formato !== "CINCO") {
-            throw new Error("El archivo no es un respaldo válido de CINCO")
+        if (datos.formato !== "ESCINCO") {
+            throw new Error("El archivo no es un respaldo válido de ESCINCO")
         }
+
+        validarVersion(datos.version)
 
         console.log("[INFO] Datos a importar:", {
             formato: datos.formato,
@@ -36,6 +71,9 @@ export async function importarDVID(uid, archivo) {
             movimientos: datos.movimientos?.length || 0,
             activos: datos.activos?.length || 0,
             pendientes: datos.pendientes?.length || 0,
+            posiciones: datos.posiciones?.length || 0,
+            trades: datos.trades?.length || 0,
+            historial: datos.historial?.length || 0,
             snapshots: datos.snapshots?.length || 0
         })
 
@@ -44,12 +82,15 @@ export async function importarDVID(uid, archivo) {
             movimientos: 0,
             activos: 0,
             pendientes: 0,
+            posiciones: 0,
+            trades: 0,
+            historial: 0,
             snapshots: 0,
             errores: []
         }
 
         // --------------------------------------
-        // 1. ACTIVOS
+        // 1. ACTIVOS (las posiciones/historial los referencian)
         // --------------------------------------
         await importarActivos(uid, datos.activos, resultado)
 
@@ -69,9 +110,31 @@ export async function importarDVID(uid, archivo) {
         await importarPendientes(uid, datos.pendientes, resultado)
 
         // --------------------------------------
-        // 5. SNAPSHOTS
+        // 5. POSICIONES (necesita activos ya importados)
+        // --------------------------------------
+        await importarPosiciones(uid, datos.posiciones, resultado)
+
+        // --------------------------------------
+        // 6. TRADES
+        // --------------------------------------
+        await importarTrades(uid, datos.trades, resultado)
+
+        // --------------------------------------
+        // 7. HISTORIAL DE PRECIOS (por símbolo)
+        // --------------------------------------
+        await importarHistorial(uid, datos.historial, resultado)
+
+        // --------------------------------------
+        // 8. SNAPSHOTS
         // --------------------------------------
         await importarSnapshots(uid, datos.snapshots, resultado)
+
+        // --------------------------------------
+        // 9. PREFERENCIAS
+        // --------------------------------------
+        await importarPreferencias(uid, datos.preferencias, resultado)
+
+        invalidarCaches(uid)
 
         console.log("[INFO] Importación completada:", resultado)
         return resultado
@@ -82,19 +145,42 @@ export async function importarDVID(uid, archivo) {
 }
 
 // ============================================
+// VALIDAR VERSIÓN
+// ============================================
+
+function validarVersion(version) {
+    const partes = String(version || "").split(".").map(n => parseInt(n, 10) || 0)
+
+    if (partes.length < 2) {
+        throw new Error("Versión de respaldo inválida o ausente")
+    }
+
+    for (let i = 0; i < VERSION_MINIMA.length; i++) {
+        const requerida = VERSION_MINIMA[i]
+        const actual = partes[i]
+        if (actual > requerida) return
+        if (actual < requerida) {
+            throw new Error(`Versión de respaldo no compatible (${version}). Exporta de nuevo desde ESCINCO.`)
+        }
+    }
+}
+
+// ============================================
 // IMPORTADORES POR COLECCIÓN
 // ============================================
 
 async function importarActivos(uid, activos, resultado) {
     if (!activos || activos.length === 0) return
 
+    const CAMPOS_FECHA = ["fechaCreacion", "ultimaActualizacion"]
+
     for (const activo of activos) {
         try {
             const existente = await buscarActivoPorSimbolo(uid, activo.simbolo)
 
             if (!existente) {
-                const { id, creadoPor, ...datosLimpios } = activo
-                await crearActivo(uid, datosLimpios)
+                const { id, ...datosLimpios } = activo
+                await crearActivo(uid, deserializarFechas(datosLimpios, CAMPOS_FECHA))
                 resultado.activos++
             }
         } catch (error) {
@@ -103,13 +189,30 @@ async function importarActivos(uid, activos, resultado) {
     }
 }
 
+async function crearActivo(uid, datos) {
+    const referencia = collection(db, "usuarios", uid, "activos")
+    const resultado = await addDoc(referencia, {
+        ...datos,
+        fechaCreacion: datos.fechaCreacion || serverTimestamp()
+    })
+    cacheCapa.invalidar(uid, "activos")
+    return resultado.id
+}
+
 async function importarCuentas(uid, cuentas, resultado) {
     if (!cuentas || cuentas.length === 0) return
+
+    const CAMPOS_FECHA = ["fechaCreacion"]
 
     for (const cuenta of cuentas) {
         try {
             const { id, ...datosLimpios } = cuenta
-            await crearCuenta(uid, datosLimpios)
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "cuentas")
+            await addDoc(referencia, {
+                ...datos,
+                fechaCreacion: datos.fechaCreacion || serverTimestamp()
+            })
             resultado.cuentas++
         } catch (error) {
             resultado.errores.push(`Cuenta ${cuenta.nombre}: ${error.message}`)
@@ -120,10 +223,17 @@ async function importarCuentas(uid, cuentas, resultado) {
 async function importarMovimientos(uid, movimientos, resultado) {
     if (!movimientos || movimientos.length === 0) return
 
+    const CAMPOS_FECHA = ["fechaRegistro"]
+
     for (const movimiento of movimientos) {
         try {
             const { id, ...datosLimpios } = movimiento
-            await crearMovimiento(uid, datosLimpios)
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "movimientos")
+            await addDoc(referencia, {
+                ...datos,
+                fechaRegistro: datos.fechaRegistro || serverTimestamp()
+            })
             resultado.movimientos++
         } catch (error) {
             resultado.errores.push(`Movimiento: ${error.message}`)
@@ -134,13 +244,118 @@ async function importarMovimientos(uid, movimientos, resultado) {
 async function importarPendientes(uid, pendientes, resultado) {
     if (!pendientes || pendientes.length === 0) return
 
+    const CAMPOS_FECHA = ["fechaRegistro", "fechaVencimiento", "fechaConsolidacion"]
+
     for (const pendiente of pendientes) {
         try {
             const { id, ...datosLimpios } = pendiente
-            await crearPendiente(uid, datosLimpios)
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "pendientes")
+            await addDoc(referencia, {
+                ...datos,
+                fechaRegistro: datos.fechaRegistro || serverTimestamp()
+            })
             resultado.pendientes++
         } catch (error) {
             resultado.errores.push(`Pendiente: ${error.message}`)
+        }
+    }
+}
+
+async function importarPosiciones(uid, posiciones, resultado) {
+    if (!posiciones || posiciones.length === 0) return
+
+    for (const posicion of posiciones) {
+        try {
+            if (!posicion.activoSimbolo) {
+                resultado.errores.push("Posición sin símbolo de activo, omitida")
+                continue
+            }
+
+            const activo = await buscarActivoPorSimbolo(uid, posicion.activoSimbolo)
+
+            if (!activo) {
+                resultado.errores.push(
+                    `Posición de ${posicion.activoSimbolo}: activo no encontrado, omitida`
+                )
+                continue
+            }
+
+            const { id, activoSimbolo, ...datosPosicion } = posicion
+            const datos = deserializarFechas(datosPosicion, ["ultimaActualizacion"])
+
+            const referencia = collection(db, "usuarios", uid, "posiciones")
+            await addDoc(referencia, {
+                ...datos,
+                activoId: activo.id
+            })
+            resultado.posiciones++
+        } catch (error) {
+            resultado.errores.push(`Posición: ${error.message}`)
+        }
+    }
+}
+
+async function importarTrades(uid, trades, resultado) {
+    if (!trades || trades.length === 0) return
+
+    const CAMPOS_FECHA = ["fechaRegistro", "fechaCierre"]
+
+    for (const trade of trades) {
+        try {
+            const { id, ...datosLimpios } = trade
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "trades")
+            await addDoc(referencia, {
+                ...datos,
+                fechaRegistro: datos.fechaRegistro || serverTimestamp()
+            })
+            resultado.trades++
+        } catch (error) {
+            resultado.errores.push(`Trade: ${error.message}`)
+        }
+    }
+}
+
+async function importarHistorial(uid, historial, resultado) {
+    if (!historial || historial.length === 0) return
+
+    const activosImportados = new Map()
+
+    for (const grupo of historial) {
+        try {
+            if (!grupo.activoSimbolo || !grupo.registros?.length) {
+                resultado.errores.push("Grupo de historial sin símbolo o sin registros, omitido")
+                continue
+            }
+
+            let activo = activosImportados.get(grupo.activoSimbolo)
+            if (!activo) {
+                activo = await buscarActivoPorSimbolo(uid, grupo.activoSimbolo)
+                if (!activo) {
+                    resultado.errores.push(
+                        `Historial de ${grupo.activoSimbolo}: activo no encontrado, omitido`
+                    )
+                    continue
+                }
+                activosImportados.set(grupo.activoSimbolo, activo)
+            }
+
+            for (const registro of grupo.registros) {
+                const fecha = registro.fecha || registro.id
+                if (!fecha) continue
+
+                const datos = deserializarFechas(registro, ["actualizacion"])
+                const referencia = doc(db, "usuarios", uid, "activos", activo.id, "historial", fecha)
+                await setDoc(referencia, {
+                    ...datos,
+                    fecha: fecha,
+                    actualizacion: datos.actualizacion || serverTimestamp()
+                }, { merge: true })
+                resultado.historial++
+            }
+        } catch (error) {
+            resultado.errores.push(`Historial: ${error.message}`)
         }
     }
 }
@@ -150,9 +365,6 @@ async function importarSnapshots(uid, snapshots, resultado) {
 
     for (const snapshot of snapshots) {
         try {
-            // El snapshot viene con { fecha, patrimonioPEN, patrimonioUSD, patrimonioUSDT, ... }
-            // El repositorio guarda por id = fecha (YYYY-MM-DD) y hace merge,
-            // pero para importar fechas históricas necesitamos forzar el id.
             const { fecha, id, ...datosLimpios } = snapshot
             const fechaFinal = fecha || id
 
@@ -161,7 +373,11 @@ async function importarSnapshots(uid, snapshots, resultado) {
                 continue
             }
 
-            await guardarSnapshotPorFecha(uid, fechaFinal, datosLimpios)
+            const referencia = doc(db, "usuarios", uid, "snapshots", fechaFinal)
+            await setDoc(referencia, {
+                ...datosLimpios,
+                actualizacion: serverTimestamp()
+            }, { merge: true })
             resultado.snapshots++
         } catch (error) {
             resultado.errores.push(`Snapshot ${snapshot.fecha}: ${error.message}`)
@@ -169,25 +385,36 @@ async function importarSnapshots(uid, snapshots, resultado) {
     }
 }
 
-// ============================================
-// GUARDAR SNAPSHOT EN FECHA ESPECÍFICA
-// ============================================
-// Nota: importamos setDoc directamente aquí para no sobrecargar el repo
-// con una función específica de importación.
+async function importarPreferencias(uid, preferencias, resultado) {
+    if (!preferencias || typeof preferencias !== "object") return
 
-import {
-    doc,
-    setDoc,
-    serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
-import { db } from "../../firebase/firestore.js"
+    // Merge por dot-notation: nunca se borran preferencias existentes.
+    try {
+        await actualizarPreferencias(uid, preferencias)
+    } catch (error) {
+        resultado.errores.push(`Preferencias: ${error.message}`)
+    }
+}
 
-async function guardarSnapshotPorFecha(uid, fecha, datos) {
-    const referencia = doc(db, "usuarios", uid, "snapshots", fecha)
-    await setDoc(referencia, {
-        ...datos,
-        actualizacion: serverTimestamp()
-    }, { merge: true })
+// ============================================
+// CACHES
+// ============================================
+
+function invalidarCaches(uid) {
+    for (const prefijo of [
+        "cuentas", "movimientos", "activos", "posiciones",
+        "trades", "pendientes", "snapshots", "historial"
+    ]) {
+        try {
+            if (prefijo === "historial") {
+                cacheCapa.invalidarPrefijo(uid, "historial")
+            } else {
+                cacheCapa.invalidar(uid, prefijo)
+            }
+        } catch (error) {
+            console.warn("[WARN] No se pudo invalidar caché:", prefijo, error)
+        }
+    }
 }
 
 // ============================================
@@ -211,9 +438,11 @@ export async function previsualizarImportacion(archivo) {
     const texto = await leerArchivo(archivo)
     const datos = JSON.parse(texto)
 
-    if (datos.formato !== "CINCO") {
-        throw new Error("El archivo no es un respaldo válido de CINCO")
+    if (datos.formato !== "ESCINCO") {
+        throw new Error("El archivo no es un respaldo válido de ESCINCO")
     }
+
+    validarVersion(datos.version)
 
     return {
         formato: datos.formato,
@@ -224,6 +453,9 @@ export async function previsualizarImportacion(archivo) {
             movimientos: datos.movimientos?.length || 0,
             activos: datos.activos?.length || 0,
             pendientes: datos.pendientes?.length || 0,
+            posiciones: datos.posiciones?.length || 0,
+            trades: datos.trades?.length || 0,
+            historial: datos.historial?.length || 0,
             snapshots: datos.snapshots?.length || 0
         }
     }

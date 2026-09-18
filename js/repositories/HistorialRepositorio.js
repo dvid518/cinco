@@ -12,6 +12,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
 import { cacheCapa } from "../core/cache.js"
+import { getFechaHoy } from "../core/fechas.js"
 
 // ============================================
 // HISTORIAL REPOSITORIO (por usuario)
@@ -19,12 +20,6 @@ import { cacheCapa } from "../core/cache.js"
 // Ruta: usuarios/{uid}/activos/{activoId}/historial/{fecha}
 // donde {fecha} es un string "YYYY-MM-DD"
 // ============================================
-
-// Obtener la fecha de hoy en formato YYYY-MM-DD
-function getFechaHoy() {
-    const hoy = new Date()
-    return hoy.toISOString().split('T')[0]
-}
 
 // --------------------------------------------
 // REFERENCIAS

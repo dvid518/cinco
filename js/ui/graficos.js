@@ -79,7 +79,7 @@ function leerColores() {
         text: estilos.getPropertyValue('--text').trim() || '#F3F3F3',
         textSecondary: estilos.getPropertyValue('--textSecondary').trim() || '#738391',
         border: estilos.getPropertyValue('--border').trim() || '#D0DCE8',
-        lavenderVeil: estilos.getPropertyValue('--lavenderVeil').trim() || '#ECDAF3',
+        textAct: estilos.getPropertyValue('--textAct').trim() || '#F3F3F3',
         paleSky: estilos.getPropertyValue('--paleSky').trim() || '#D0DCE8'
     }
 }
@@ -227,7 +227,7 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
         const colorText = colores.text
         const colorTextSecondary = colores.textSecondary
         const colorBorder = colores.border
-        const colorLavender = colores.lavenderVeil
+        const colorTextAct = colores.textAct
         const colorPaleSky = colores.paleSky
 
         const divisa = opciones.divisa || 'PEN'
@@ -240,7 +240,7 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
             color = colorPositive
         } else if (divisa === 'USD') {
             data = datos.dataUSD
-            color = colorLavender
+            color = colorTextAct
         } else {
             data = datos.dataUSDT
             color = colorPaleSky
