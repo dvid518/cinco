@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test de caché · cinco</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #141414; color: #eee; padding: 24px; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 20px; }
+  p  { color: #aaa; font-size: 13px; line-height: 1.5; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+  .card { flex: 1; min-width: 140px; padding: 14px; border-radius: 12px; background: #1e1e1e; border: 1px solid #333; }
+  .card b { display: block; font-size: 26px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #2a2a2a; }
+  th { color: #888; font-weight: 600; }
+  .PASS  { color: #22c55e; font-weight: 700; }
+  .FAIL  { color: #ef4444; font-weight: 700; }
+  pre { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px; font-size: 11px; overflow: auto; max-height: 340px; }
+  .hint { border-left: 3px solid #22c55e; padding-left: 10px; }
+</style>
+</head>
+<body>
+<h1>Prueba de la caché de datos (cinco)</h1>
+<p class="hint">Esta página ejecuta escenarios de navegación contra un &quot;backend&quot; simulado.
+Al terminar descarga <b>resultados-cache.json</b>. Si tu navegador bloquea la descarga,
+copia el contenido del bloque JSON y guarda el archivo tú mismo.</p>
+
+<div class="cards" id="cards"></div>
+
+<h2>Escenarios</h2>
+<table id="tabla"><thead><tr><th>Escenario</th><th>Estado</th><th>Detalle</th></tr></thead><tbody></tbody></table>
+
+<h2>Uso por clave (detalle ahorro)</h2>
+<table id="tabla-claves"><thead><tr><th>Clave</th><th>Solicitud</th><th>Caché</th><th>En vuelo</th><th>Red</th><th>Ahorro %</th></tr></thead><tbody></tbody></table>
+
+<h2>Coherencia interna</h2>
+<p id="coherencia">—</p>
+
+<h2>Reporte JSON (para entregar)</h2>
+<pre id="json">ejecutando...</pre>
+
+<script>
+// ============================================
+// MÓDULO CACHÉ INLINEADO (js/core/cache.js)
+// ============================================
+// ============================================
+// CACHÉ DE DATOS EN MEMORIA (por usuario)
+// ============================================
+// Evita repetir lecturas de Firestore en cada
+// navegación (dashboard, cuentas, movimientos...).
+//
+// - TTL por defecto: 5 minutos.
+// - Los repositorios invalidan al escribir.
+// - Deduplica peticiones concurrentes.
+// - Estadísticas integradas (medición + reportes).
+//
+// Uso:
+//   const cuentas = await cacheCapa.obtener(uid, "cuentas", fetchFn)
+//   cacheCapa.invalidar(uid, "cuentas")        // tras escribir
+//   cacheCapa.invalidarPrefijo(uid, "activos") // varias claves
+//   cacheCapa.limpiar(uid)                     // logout / borrado total
+//
+// Medición:
+//   cacheCapa.estadisticas()          // resumen en memoria
+//   cacheCapa.reiniciarEstadisticas() // limpiar contadores
+//   cacheCapa.guardarReporte()        // descarga JSON en el navegador
+// ============================================
+
+const TTL_DEFAULT = 5 * 60 * 1000
+
+const entradas = new Map() // `${uid}::${clave}` -> { datos, expira }
+const enVuelo = new Map()  // `${uid}::${clave}` -> Promise (dedupe)
+
+// ---- Estadísticas (aciertos vs lecturas de red) ----
+const stats = {
+    iniciado: Date.now(),
+    solicitadas: 0,      // llamadas a obtener()
+    aciertos: 0,         // servidas desde caché válida
+    aciertosEnVuelo: 0,  // servidas reutilizando una petición en curso
+    red: 0,              // lecturas que realmente tocaron la fuente
+    invalidaciones: 0,
+    porClave: new Map()  // clave -> { solicitadas, aciertos, aciertosEnVuelo, red }
+}
+
+function claveCompuesta(uid, clave) {
+    return `${uid}::${clave}`
+}
+
+function registrarIngresoClave(clave, campo) {
+    const entradaClave = stats.porClave.get(clave) ||
+        { solicitadas: 0, aciertos: 0, aciertosEnVuelo: 0, red: 0 }
+    entradaClave[campo]++
+    stats.porClave.set(clave, entradaClave)
+}
+
+const cacheCapa = {
+    async obtener(uid, clave, fn, opciones = {}) {
+        if (!uid) {
+            stats.solicitadas++
+            stats.red++
+            return await fn()
+        }
+
+        const ttl = opciones.ttl ?? TTL_DEFAULT
+        const k = claveCompuesta(uid, clave)
+        const ahora = Date.now()
+
+        stats.solicitadas++
+        registrarIngresoClave(clave, "solicitadas")
+
+        const entrada = entradas.get(k)
+        if (entrada && entrada.expira > ahora) {
+            stats.aciertos++
+            registrarIngresoClave(clave, "aciertos")
+            return entrada.datos
+        }
+
+        // Reutilizar la petición si hay una en vuelo
+        if (enVuelo.has(k)) {
+            stats.aciertosEnVuelo++
+            registrarIngresoClave(clave, "aciertosEnVuelo")
+            return enVuelo.get(k)
+        }
+
+        stats.red++
+        registrarIngresoClave(clave, "red")
+
+        const promesa = Promise.resolve()
+            .then(fn)
+            .then(datos => {
+                entradas.set(k, { datos, expira: Date.now() + ttl })
+                return datos
+            })
+            .finally(() => {
+                enVuelo.delete(k)
+            })
+
+        enVuelo.set(k, promesa)
+        return promesa
+    },
+
+    invalidar(uid, clave) {
+        if (!uid) return
+        const k = claveCompuesta(uid, clave)
+        if (entradas.has(k)) {
+            entradas.delete(k)
+            stats.invalidaciones++
+        }
+    },
+
+    invalidarPrefijo(uid, prefijo) {
+        if (!uid) return
+        const p = claveCompuesta(uid, prefijo)
+        for (const k of entradas.keys()) {
+            if (k.startsWith(p)) {
+                entradas.delete(k)
+                stats.invalidaciones++
+            }
+        }
+    },
+
+    limpiar(uid) {
+        if (!uid) return
+        const p = `${uid}::`
+        for (const k of entradas.keys()) {
+            if (k.startsWith(p)) {
+                entradas.delete(k)
+                stats.invalidaciones++
+            }
+        }
+    },
+
+    // --------------------------------------------
+    // MEDICIÓN / REPORTES
+    // --------------------------------------------
+
+    estadisticas() {
+        const solicitadas = stats.solicitadas
+        const red = stats.red
+        return {
+            generado: new Date().toISOString(),
+            iniciado: stats.iniciado,
+            solicitadas,
+            red,
+            aciertos: stats.aciertos,
+            aciertosEnVuelo: stats.aciertosEnVuelo,
+            invalidaciones: stats.invalidaciones,
+            ahorroPorcentual: solicitadas
+                ? Math.round(((solicitadas - red) / solicitadas) * 100)
+                : 0,
+            porClave: [...stats.porClave.entries()]
+                .map(([clave, valores]) => ({ clave, ...valores }))
+                .sort((a, b) => b.solicitadas - a.solicitadas || b.red - a.red)
+        }
+    },
+
+    reiniciarEstadisticas() {
+        stats.iniciado = Date.now()
+        stats.solicitadas = 0
+        stats.aciertos = 0
+        stats.aciertosEnVuelo = 0
+        stats.red = 0
+        stats.invalidaciones = 0
+        stats.porClave.clear()
+    },
+
+    guardarReporte() {
+        const reporte = {
+            tipo: "reporte-cache",
+            navegador: typeof navigator !== "undefined" ? navigator.userAgent : "node",
+            cacheCapa: this.estadisticas()
+        }
+
+        console.log("[caché] Resumen de estadísticas:")
+        console.log(`  solicitadas: ${reporte.cacheCapa.solicitadas}`)
+        console.log(`  red:         ${reporte.cacheCapa.red}`)
+        console.log(`  ahorro:      ${reporte.cacheCapa.ahorroPorcentual}%`)
+        console.table(reporte.cacheCapa.porClave)
+
+        if (typeof document !== "undefined" && document.createElement) {
+            const blob = new Blob(
+                [JSON.stringify(reporte, null, 2)],
+                { type: "application/json" }
+            )
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `reporte-cache-${new Date().toISOString().slice(0, 10)}.json`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+        }
+
+        return reporte
+    }
+}
+
+// ============================================
+// BACKEND SIMULADO (cuenta lecturas "de red")
+// ============================================
+var redGlobal = {}
+
+function demora(ms) { return new Promise(function (r) { setTimeout(r, ms) }) }
+
+function crearFuente(nombre) {
+  redGlobal[nombre] = 0
+  return function () {
+    redGlobal[nombre]++
+    return demora(12).then(function () {
+      return [{ id: nombre + '-' + redGlobal[nombre], n: redGlobal[nombre] }]
+    })
+  }
+}
+
+var fCuentas   = crearFuente('cuentas')
+var fPosiciones= crearFuente('posiciones')
+var fPendT     = crearFuente('pendientesT')
+var fPendF     = crearFuente('pendientesF')
+var fTtl       = crearFuente('ttl')
+var fDedupe    = crearFuente('dedupe')
+
+// ============================================
+// ESCENARIOS
+// ============================================
+var resultados = []
+
+async function escenario(nombre, fn) {
+  try {
+    var detalle = await fn()
+    resultados.push({ nombre: nombre, estado: 'PASS', detalle: detalle || {} })
+  } catch (e) {
+    resultados.push({ nombre: nombre, estado: 'FAIL', detalle: { error: String(e && e.message || e) } })
+  }
+}
+
+async function ejecutarEscenarios() {
+  cacheCapa.reiniciarEstadisticas()
+
+  // 1. Primera lectura → toca la red
+  await escenario('Primera lectura toca la red', async function () {
+    var d = await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 })
+    if (redGlobal.cuentas !== 1) throw new Error('red.cuentas=' + redGlobal.cuentas)
+    return { redReal: redGlobal.cuentas, datoLeido: d[0].n }
+  })
+
+  // 2. Segunda lectura → caché, sin red
+  await escenario('Segunda lectura usa caché', async function () {
+    var antes = redGlobal.cuentas
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 })
+    if (redGlobal.cuentas !== antes) throw new Error('red.cuentas=' + redGlobal.cuentas)
+    return { redEsperada: antes, redReal: redGlobal.cuentas }
+  })
+
+  // 3. Navegación tipo app: dashboard → cuentas → dashboard
+  await escenario('Navegación (dashboard→cuentas→dashboard) solo lee una vez', async function () {
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 })       // hit (de S1)
+    await cacheCapa.obtener('u1', 'posiciones', fPosiciones, { ttl: 60000 }) // miss
+    await cacheCapa.obtener('u1', 'pendientes:true', fPendT, { ttl: 60000 }) // miss
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 })       // hit
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 })       // hit
+    await cacheCapa.obtener('u1', 'posiciones', fPosiciones, { ttl: 60000 }) // hit
+    await cacheCapa.obtener('u1', 'pendientes:true', fPendT, { ttl: 60000 }) // hit
+    var ok = redGlobal.cuentas === 1 && redGlobal.posiciones === 1 && redGlobal.pendientesT === 1
+    if (!ok) throw new Error('cuentas=' + redGlobal.cuentas + ' posiciones=' + redGlobal.posiciones + ' pendT=' + redGlobal.pendientesT)
+    return { redFinal: { cuentas: redGlobal.cuentas, posiciones: redGlobal.posiciones, pendientesT: redGlobal.pendientesT } }
+  })
+
+  // 4. Escritura → invalidar → vuelve a la red
+  await escenario('Invalidar tras escribir fuerza relectura', async function () {
+    var antes = redGlobal.cuentas
+    cacheCapa.invalidar('u1', 'cuentas')
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 })
+    if (redGlobal.cuentas !== antes + 1) throw new Error('red.cuentas=' + redGlobal.cuentas)
+    return { redEsperada: antes + 1, redReal: redGlobal.cuentas }
+  })
+
+  // 5. Prefijo invalida varias claves (pendientes:true/false)
+  await escenario('Invalidar por prefijo (pendientes)', async function () {
+    var fPT = crearFuente('p5T'), fPF = crearFuente('p5F')
+    await cacheCapa.obtener('u5', 'pendientes:true', fPT, { ttl: 60000 })
+    await cacheCapa.obtener('u5', 'pendientes:false', fPF, { ttl: 60000 })
+    var okInicial = redGlobal.p5T === 1 && redGlobal.p5F === 1
+    cacheCapa.invalidarPrefijo('u5', 'pendientes')
+    await cacheCapa.obtener('u5', 'pendientes:true', fPT, { ttl: 60000 })
+    await cacheCapa.obtener('u5', 'pendientes:false', fPF, { ttl: 60000 })
+    var okFinal = redGlobal.p5T === 2 && redGlobal.p5F === 2
+    if (!okInicial || !okFinal) throw new Error('p5T=' + redGlobal.p5T + ' p5F=' + redGlobal.p5F)
+    return { redFinal: { p5T: redGlobal.p5T, p5F: redGlobal.p5F } }
+  })
+
+  // 6. TTL vencido → nueva red
+  await escenario('TTL vencido re-consulta', async function () {
+    await cacheCapa.obtener('u1', 'claveTtl', fTtl, { ttl: 40 })
+    await demora(90)
+    await cacheCapa.obtener('u1', 'claveTtl', fTtl, { ttl: 40 })
+    if (redGlobal.ttl !== 2) throw new Error('red.ttl=' + redGlobal.ttl)
+    return { redReal: redGlobal.ttl }
+  })
+
+  // 7. Dedupe de peticiones concurrentes
+  await escenario('Lecturas concurrentes = 1 sola red', async function () {
+    var promesas = []
+    for (var i = 0; i < 5; i++) {
+      promesas.push(cacheCapa.obtener('u1', 'dedupe', fDedupe, { ttl: 60000 }))
+    }
+    var datos = await Promise.all(promesas)
+    if (redGlobal.dedupe !== 1) throw new Error('red.dedupe=' + redGlobal.dedupe)
+    var unico = datos.every(function (d) { return d[0].n === datos[0][0].n })
+    if (!unico) throw new Error('resultados divergentes')
+    return { redReal: redGlobal.dedupe, resultadosIguales: unico }
+  })
+
+  // 8. Aislamiento entre usuarios
+  await escenario('Aislamiento entre usuarios', async function () {
+    var antes = redGlobal.cuentas
+    await cacheCapa.obtener('u2', 'cuentas', fCuentas, { ttl: 60000 }) // u2 miss
+    await cacheCapa.obtener('u2', 'cuentas', fCuentas, { ttl: 60000 }) // u2 hit
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 }) // u1 hit (su caché sigue viva desde S4)
+    await cacheCapa.obtener('u1', 'cuentas', fCuentas, { ttl: 60000 }) // u1 hit
+    var esperado = antes + 1
+    if (redGlobal.cuentas !== esperado) throw new Error('red.cuentas=' + redGlobal.cuentas + ' esperado=' + esperado)
+    return { redReal: redGlobal.cuentas, esperado: esperado, detalle: 'la caché de u1 no se contaminó con la de u2' }
+  })
+
+  // 9. Sin uid → siempre red directa (passthrough)
+  await escenario('Sin uid (fallback directo)', async function () {
+    var f = crearFuente('noid')
+    await cacheCapa.obtener(null, 'cuentas', f, { ttl: 60000 })
+    await cacheCapa.obtener('', 'cuentas', f, { ttl: 60000 })
+    if (redGlobal.noid !== 2) throw new Error('red.noid=' + redGlobal.noid)
+    return { redReal: redGlobal.noid }
+  })
+
+  // 10. Coherencia de contadores
+  var est = cacheCapa.estadisticas()
+  var coherente = (est.aciertos + est.aciertosEnVuelo + est.red) === est.solicitadas
+  resultados.push({
+    nombre: 'Coherencia de contadores (aciertos+vuelo+red = solicitadas)',
+    estado: coherente ? 'PASS' : 'FAIL',
+    detalle: coherente ? {} : {
+      solicitadas: est.solicitadas,
+      aciertos: est.aciertos,
+      enVuelo: est.aciertosEnVuelo,
+      red: est.red
+    }
+  })
+
+  renderizar(resumenGeneral())
+  descargarJSON()
+}
+
+function resumenGeneral() {
+  var est = cacheCapa.estadisticas()
+  var pasados = resultados.filter(function (r) { return r.estado === 'PASS' }).length
+  return {
+    generado: new Date().toISOString(),
+    navegador: (navigator.userAgent || 'desconocido'),
+    escenariosTotales: resultados.length,
+    escenariosPasados: pasados,
+    escenariosFallidos: resultados.length - pasados,
+    ahorroPorcentual: est.ahorroPorcentual,
+    solicitadas: est.solicitadas,
+    red: est.red,
+    aciertos: est.aciertos,
+    aciertosEnVuelo: est.aciertosEnVuelo,
+    invalidaciones: est.invalidaciones,
+    estadisticas: est
+  }
+}
+
+function renderizar(resumen) {
+  // Cards
+  var cards = document.getElementById('cards')
+  cards.innerHTML =
+    '<div class="card"><b>' + resumen.escenariosPasados + '/' + resumen.escenariosTotales + '</b>escenarios OK</div>' +
+    '<div class="card"><b>' + resumen.solicitadas + '</b>lecturas solicitadas</div>' +
+    '<div class="card"><b>' + resumen.red + '</b>lecturas de red</div>' +
+    '<div class="card"><b>' + resumen.ahorroPorcentual + '%</b>ahorro</div>' +
+    '<div class="card"><b>' + resumen.invalidaciones + '</b>invalidaciones</div>'
+
+  // Tabla de escenarios
+  var tb = document.querySelector('#tabla tbody')
+  tb.innerHTML = ''
+  resumen.estadisticas && resumen.estadisticas.solicitadas
+  resultados.forEach(function (r) {
+    var tr = document.createElement('tr')
+    tr.innerHTML = '<td>' + r.nombre + '</td><td class="' + r.estado + '">' + r.estado + '</td><td>' + JSON.stringify(r.detalle) + '</td>'
+    tb.appendChild(tr)
+  })
+
+  // Tabla por clave
+  var tc = document.querySelector('#tabla-claves tbody')
+  tc.innerHTML = ''
+  resumen.estadisticas.porClave.forEach(function (k) {
+    var ahorro = k.solicitadas ? Math.round(((k.solicitadas - k.red) / k.solicitadas) * 100) : 0
+    var tr = document.createElement('tr')
+    tr.innerHTML = '<td>' + k.clave + '</td><td>' + k.solicitadas + '</td><td>' + k.aciertos + '</td><td>' + k.aciertosEnVuelo + '</td><td>' + k.red + '</td><td>' + ahorro + '%</td>'
+    tc.appendChild(tr)
+  })
+
+  // Coherencia
+  var ok = resumen.escenariosFallidos === 0
+  document.getElementById('coherencia').textContent = ok
+    ? 'Todos los escenarios pasaron sin errores.'
+    : 'Hay escenarios fallidos, revisar detalle.'
+
+  // JSON
+  document.getElementById('json').textContent = JSON.stringify(resumen, null, 2)
+}
+
+function descargarJSON() {
+  var resumen = resumenGeneral()
+  var blob = new Blob([JSON.stringify(resumen, null, 2)], { type: 'application/json' })
+  var url = URL.createObjectURL(blob)
+  var a = document.createElement('a')
+  a.href = url
+  a.download = 'resultados-cache.json'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  console.log('[test-cache] Descargando resultados-cache.json')
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  ejecutarEscenarios()
+})
+</script>
+</body>
+</html>

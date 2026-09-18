@@ -1,14 +1,29 @@
-import { logout, tienePassword, configurarPassword, cambiarPassword } from "../../firebase/auth.js"
+import { logout, tienePassword, configurarPassword, cambiarPassword, actualizarNombre } from "../../firebase/auth.js"
 import { sesion } from "../core/sesion.js"
 import { obtenerPreferencias, actualizarPreferencias } from "../../firebase/firestore.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
+import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { VERSION } from "../../constants/version.js"
 import { getDivisaPrincipal, getTipoCambio } from "../services/DivisaServicio.js"
-import { cambiarTema } from "../core/tema.js"
+import { cambiarTema, nombreModoTema } from "../core/tema.js"
+import { icono } from "../core/iconos.js"
+import { accionExportar } from "../ui/exportar.js"
 
 let uid = null
 let hayCambios = false
 let temaActual = "dark"
+
+// Sincroniza el panel de tema cuando el tema cambia desde el lastbar
+// (u otra fuente), sin recargar la página.
+window.addEventListener("tema-cambiado", (event) => {
+    const tema = event.detail?.tema
+    if (!tema) return
+
+    temaActual = tema
+    document.querySelectorAll("#toggle-tema .toggle-option").forEach(opt => {
+        opt.classList.toggle("active", opt.dataset.tema === tema)
+    })
+})
 
 // ============================================
 // RENDER
@@ -17,18 +32,18 @@ let temaActual = "dark"
 export function render() {
     return `
         <section id="sidebar">
-            <button class="glass act" data-section="apariencia">Apariencia</button>
-            <button class="glass" data-section="moneda">Moneda</button>
-            <button class="glass" data-section="paginas">Páginas</button>
-            <button class="glass" data-section="lastbar">Lastbar</button>
-            <button class="glass" data-section="datos">Datos</button>
-            <button class="glass" data-section="cuenta">Cuenta</button>
+            <button class="glass act" data-section="apariencia">${icono("palette", 18)}<span>Apariencia</span></button>
+            <button class="glass" data-section="moneda">${icono("coins", 18)}<span>Moneda</span></button>
+            <button class="glass" data-section="cuenta">${icono("circle-user", 18)}<span>Cuenta</span></button>
+            <button class="glass" data-section="datos">${icono("database", 18)}<span>Datos</span></button>
+            <button class="glass" data-section="peligrosa">${icono("triangle-alert", 18)}<span>Peligrosa</span></button>
         </section>
         <section id="panel" class="glass">
 
             <!-- APARIENCIA -->
             <div class="panel-section" id="section-apariencia">
                 <h2>Apariencia</h2>
+
                 <div class="config-group">
                     <span class="config-label">Tema</span>
                     <div class="toggle-group" id="toggle-tema">
@@ -37,7 +52,52 @@ export function render() {
                         <span class="toggle-option" data-tema="system">Sistema</span>
                     </div>
                 </div>
-                <span class="config-status" id="tema-status"></span>
+
+                <div class="config-group">
+                    <span class="config-label">Páginas visibles</span>
+                    <p class="config-descripcion">
+                        Selecciona qué páginas quieres ver en el menú de navegación.
+                    </p>
+                    <div class="toggle-row">
+                        <span>Cuentas</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-cuentas" checked disabled>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Movimientos</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-movimientos" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Inversiones</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-inversiones" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Trading</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-trading" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Lastbar auto-hide</span>
+                    <div class="toggle-group" id="toggle-lastbar">
+                        <span class="toggle-option" data-lastbar="hide">Ocultar</span>
+                        <span class="toggle-option" data-lastbar="show">Siempre visible</span>
+                    </div>
+                    <span class="config-hint">
+                        Ocultar: los botones aparecen al pasar el mouse. Siempre visible: los botones se muestran siempre.
+                    </span>
+                </div>
             </div>
 
             <!-- MONEDA -->
@@ -66,87 +126,13 @@ export function render() {
                 </div>
             </div>
 
-            <!-- PÁGINAS VISIBLES -->
-            <div class="panel-section hidden-section" id="section-paginas">
-                <h2>Páginas visibles</h2>
-                <p class="config-descripcion">
-                    Selecciona qué páginas quieres ver en el menú de navegación.
-                </p>
-
-                <div class="toggle-row">
-                    <span>🏦 Cuentas</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-cuentas" checked disabled>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="toggle-row">
-                    <span>💰 Movimientos</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-movimientos" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="toggle-row">
-                    <span>📈 Inversiones</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-inversiones" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="toggle-row">
-                    <span>📉 Trading</span>
-                    <label class="switch">
-                        <input type="checkbox" id="toggle-trading" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <span id="paginas-status" class="config-status"></span>
-            </div>
-
-            <!-- LASTRAR -->
-            <div class="panel-section hidden-section" id="section-lastbar">
-                <h2>Lastbar</h2>
-                <div class="config-group">
-                    <span class="config-label">Auto-hide</span>
-                    <div class="toggle-group" id="toggle-lastbar">
-                        <span class="toggle-option" data-lastbar="hide">Ocultar</span>
-                        <span class="toggle-option" data-lastbar="show">Siempre visible</span>
-                    </div>
-                    <span class="config-hint">
-                        Ocultar: los botones aparecen al pasar el mouse. Siempre visible: los botones se muestran siempre.
-                    </span>
-                </div>
-            </div>
-
-            <!-- DATOS -->
-            <div class="panel-section hidden-section" id="section-datos">
-                <h2>Datos</h2>
-                <div class="config-group">
-                    <span class="config-label">Exportar respaldo</span>
-                    <button class="glass-btn" id="export-dvid">📥 Exportar .dvid</button>
-                    <span class="config-hint">Respaldo completo de todos tus datos</span>
-                </div>
-                <div class="config-group">
-                    <span class="config-label">Importar respaldo</span>
-                    <button class="glass-btn" id="import-dvid">📤 Importar .dvid</button>
-                    <span class="config-hint">Solo archivos .dvid generados por cinco</span>
-                </div>
-                <div class="config-group danger-zone">
-                    <span class="config-label danger">Eliminar datos</span>
-                    <button class="glass-btn danger" id="delete-data">🗑️ Eliminar todos los datos</button>
-                    <span class="config-hint">Esta acción no se puede deshacer</span>
-                </div>
-            </div>
-
             <!-- CUENTA -->
             <div class="panel-section hidden-section" id="section-cuenta">
                 <h2>Cuenta</h2>
 
                 <div class="config-group">
                     <span class="config-label">Usuario</span>
-                    <span class="config-value" id="cuenta-nombre">—</span>
+                    <input type="text" id="cuenta-nombre" class="form-input" placeholder="Tu nombre" maxlength="50">
                 </div>
                 <div class="config-group">
                     <span class="config-label">Correo</span>
@@ -161,10 +147,34 @@ export function render() {
                     <span class="config-label">Sesión</span>
                     <button class="glass-btn danger" id="logout-btn">Cerrar sesión</button>
                 </div>
+            </div>
 
-                <div class="config-group danger-zone no-border">
+            <!-- DATOS -->
+            <div class="panel-section hidden-section" id="section-datos">
+                <h2>Datos</h2>
+                <div class="config-group">
+                    <span class="config-label">Exportar respaldo</span>
+                    <button class="glass-btn" id="export-dvid">Exportar .dvid</button>
+                    <span class="config-hint">Respaldo completo de todos tus datos</span>
+                </div>
+                <div class="config-group">
+                    <span class="config-label">Importar respaldo</span>
+                    <button class="glass-btn" id="import-dvid">Importar .dvid</button>
+                    <span class="config-hint">Solo archivos .dvid generados por cinco</span>
+                </div>
+            </div>
+
+            <!-- PELIGROSA -->
+            <div class="panel-section hidden-section" id="section-peligrosa">
+                <h2>Peligrosa</h2>
+                <div class="config-group danger-zone">
+                    <span class="config-label danger">Eliminar datos</span>
+                    <button class="glass-btn danger" id="delete-data">Eliminar todos los datos</button>
+                    <span class="config-hint">Esta acción no se puede deshacer</span>
+                </div>
+                <div class="config-group danger-zone">
                     <span class="config-label danger">Eliminar cuenta</span>
-                    <button class="glass-btn danger" id="delete-account">🗑️ Eliminar cuenta</button>
+                    <button class="glass-btn danger" id="delete-account">Eliminar cuenta</button>
                     <span class="config-hint">Se eliminarán todos tus datos permanentemente</span>
                 </div>
             </div>
@@ -225,7 +235,6 @@ function configurarSidebar() {
 
 function configurarTema() {
     const opciones = document.querySelectorAll("#toggle-tema .toggle-option")
-    const status = document.getElementById("tema-status")
 
     // Marcar la activa según el tema actual
     opciones.forEach(opt => {
@@ -243,20 +252,10 @@ function configurarTema() {
             try {
                 await cambiarTema(uid, tema)
                 temaActual = tema
-                if (status) {
-                    status.textContent = "✅ Tema guardado"
-                    status.className = "config-status success"
-                    setTimeout(() => {
-                        status.textContent = ""
-                        status.className = "config-status"
-                    }, 2000)
-                }
+                mostrarNotificacion("exito", nombreModoTema(tema))
             } catch (error) {
                 console.error("Error guardando tema:", error)
-                if (status) {
-                    status.textContent = "❌ No se pudo guardar el tema"
-                    status.className = "config-status error"
-                }
+                mostrarNotificacion("error", "No se pudo guardar el tema")
             }
         })
     })
@@ -268,11 +267,38 @@ function configurarTema() {
 
 function configurarCuenta() {
     const usuario = sesion.getUsuario()
-    const nombreEl = document.getElementById("cuenta-nombre")
+    const nombreInput = document.getElementById("cuenta-nombre")
     const emailEl = document.getElementById("cuenta-email")
     const botonPassword = document.getElementById("password-btn")
 
-    if (nombreEl) nombreEl.textContent = usuario?.nombre || "Usuario"
+    if (nombreInput) {
+        nombreInput.value = usuario?.nombre || "Usuario"
+
+        let guardando = false
+        nombreInput.addEventListener("change", async () => {
+            if (guardando) return
+            const nuevo = nombreInput.value.trim()
+            if (!nuevo) {
+                nombreInput.value = usuario?.nombre || "Usuario"
+                return
+            }
+            if (nuevo === usuario?.nombre) return
+
+            guardando = true
+            try {
+                await actualizarNombre(nuevo)
+                const actualizado = { ...sesion.getUsuario(), nombre: nuevo }
+                sesion.setUsuario(actualizado)
+                mostrarNotificacion("exito", "Nombre actualizado")
+            } catch (error) {
+                console.error("Error actualizando nombre:", error)
+                nombreInput.value = usuario?.nombre || "Usuario"
+                mostrarNotificacion("error", `No se pudo actualizar el nombre: ${error.message}`)
+            } finally {
+                guardando = false
+            }
+        })
+    }
     if (emailEl) emailEl.textContent = usuario?.email || "—"
 
     // Cambiar texto del botón según si ya tiene contraseña
@@ -312,7 +338,7 @@ function abrirModalConfigurarPassword() {
     `
 
     abrirModal({
-        titulo: "🔐 Configurar contraseña",
+        titulo: "Configurar contraseña",
         contenido: html,
         variante: "narrow",
         confirmText: "Guardar",
@@ -372,7 +398,7 @@ function abrirModalCambiarPassword() {
     `
 
     abrirModal({
-        titulo: "🔐 Cambiar contraseña",
+        titulo: "Cambiar contraseña",
         contenido: html,
         variante: "narrow",
         confirmText: "Cambiar",
@@ -454,7 +480,6 @@ function cerrarSesionConAviso(titulo, mensaje) {
                 titulo,
                 contenido: `
                     <div class="modal-message">
-                        <div class="modal-message-icon">🔐</div>
                         <p class="modal-message-desc">${mensaje}</p>
                     </div>
                 `,
@@ -464,13 +489,12 @@ function cerrarSesionConAviso(titulo, mensaje) {
                 cerrarConEsc: false,
                 onConfirm: async () => {
                     await logout()
-                    window.location.replace("/login.html")
+                    window.location.replace("/login")
                     return true
                 },
                 onCancel: async () => {
-                    // Si cierra por ✕, igual forzamos logout
                     await logout()
-                    window.location.replace("/login.html")
+                    window.location.replace("/login")
                     resolve()
                 }
             })
@@ -534,7 +558,7 @@ function configurarDetectorCambios() {
 }
 
 // ============================================
-// LASTRAR · ACCIONES EXPORTADAS (delegación en app.js)
+// LASTRAR · ACCIONES EXPORTADAS (delegación en lastbar.js)
 // ============================================
 
 export function guardarDesdeLastbar() {
@@ -543,41 +567,19 @@ export function guardarDesdeLastbar() {
     }
 }
 
-export function restaurarDesdeLastbar() {
-    // Descarta los cambios sin guardar y recarga las preferencias
-    hayCambios = false
-    actualizarEstadoGuardar()
-    cargarPreferencias()
-}
-
 // ============================================
 // ESTADO DEL BOTÓN GUARDAR
 // ============================================
+// Solo .desact (sin colores especiales ni clase .activo)
 
 function actualizarEstadoGuardar() {
-    const items = document.querySelectorAll(".lastbar .item")
-    let guardarItem = null
-
-    items.forEach(item => {
-        const span = item.querySelector("span")
-        if (span && span.textContent.trim() === "Guardar") {
-            guardarItem = item
-        }
-    })
-
+    const guardarItem = document.querySelector('.lastbar .item[data-accion="guardar"]')
     if (guardarItem) {
         guardarItem.classList.toggle("desact", !hayCambios)
-        guardarItem.classList.toggle("activo", hayCambios)
     }
 }
 
 async function guardarPreferencias() {
-    const status = document.getElementById("paginas-status")
-    if (status) {
-        status.textContent = "Guardando..."
-        status.className = "config-status"
-    }
-
     const divisaPrincipal = document.getElementById("divisa-principal")?.value || "pen"
     const penUSD = parseFloat(document.getElementById("tc-pen-usd")?.value) || 3.75
 
@@ -608,20 +610,10 @@ async function guardarPreferencias() {
         hayCambios = false
         actualizarEstadoGuardar()
 
-        if (status) {
-            status.textContent = "✅ Preferencias guardadas"
-            status.className = "config-status success"
-            setTimeout(() => {
-                status.textContent = ""
-                status.className = "config-status"
-            }, 3000)
-        }
+        mostrarNotificacion("exito", "Preferencias guardadas")
     } catch (error) {
         console.error("Error guardando preferencias:", error)
-        if (status) {
-            status.textContent = "❌ Error al guardar"
-            status.className = "config-status error"
-        }
+        mostrarNotificacion("error", "No se pudieron guardar las preferencias")
     }
 }
 
@@ -683,10 +675,9 @@ function configurarBotones() {
 
 export function abrirModalLogout() {
     abrirModal({
-        titulo: "🔒 Cerrar sesión",
+        titulo: "Cerrar sesión",
         contenido: `
             <div class="modal-message">
-                <div class="modal-message-icon">🔒</div>
                 <p class="modal-message-desc">
                     ¿Estás seguro de que quieres cerrar sesión?
                 </p>
@@ -697,71 +688,18 @@ export function abrirModalLogout() {
         cancelText: "Cancelar",
         onConfirm: async () => {
             await logout()
-            window.location.replace("/login.html")
+            window.location.replace("/login")
             return true
         }
     })
 }
 
 // ============================================
-// EXPORTAR
+// EXPORTAR (reutiliza js/ui/exportar.js)
 // ============================================
 
 async function exportarDVID() {
-    abrirModal({
-        titulo: "📥 Exportando respaldo",
-        contenido: `
-            <div class="modal-loading">
-                <div class="loading-spinner"></div>
-                <p class="modal-loading-text">Preparando archivo .dvid...</p>
-            </div>
-        `,
-        variante: "narrow",
-        confirmText: null,
-        cancelText: null
-    })
-
-    try {
-        const { exportarDVID: exportar } = await import("../services/ExportarServicio.js")
-        const resultado = await exportar(uid)
-        cerrarModal()
-
-        setTimeout(() => {
-            abrirModal({
-                titulo: "✅ Respaldo exportado",
-                contenido: `
-                    <div class="modal-message">
-                        <div class="modal-message-icon">📦</div>
-                        <p class="modal-message-title">${resultado.archivo}</p>
-                        <p class="modal-message-desc">
-                            El archivo se ha descargado correctamente.<br>
-                            Guárdalo en un lugar seguro.
-                        </p>
-                    </div>
-                `,
-                variante: "info",
-                confirmText: "Entendido",
-                onConfirm: () => true
-            })
-        }, 100)
-    } catch (error) {
-        console.error("Error exportando:", error)
-        cerrarModal()
-        setTimeout(() => {
-            abrirModal({
-                titulo: "❌ Error al exportar",
-                contenido: `
-                    <div class="modal-message">
-                        <div class="modal-message-icon">⚠️</div>
-                        <p class="modal-message-error">${error.message}</p>
-                    </div>
-                `,
-                variante: "info",
-                confirmText: "Cerrar",
-                onConfirm: () => true
-            })
-        }, 100)
-    }
+    await accionExportar()
 }
 
 // ============================================
@@ -785,10 +723,9 @@ async function importarDVID() {
         } catch (error) {
             console.error("Error previsualizando:", error)
             abrirModal({
-                titulo: "❌ Archivo inválido",
+                titulo: "Archivo inválido",
                 contenido: `
                     <div class="modal-message">
-                        <div class="modal-message-icon">⚠️</div>
                         <p class="modal-message-error">${error.message}</p>
                         <p class="modal-message-desc">
                             Asegúrate de que sea un archivo .dvid generado por cinco.
@@ -807,7 +744,7 @@ async function importarDVID() {
 
 function abrirModalPreviewImportacion(archivo, preview) {
     abrirModal({
-        titulo: "📦 Previsualización",
+        titulo: "Previsualización",
         contenido: `
             <div class="modal-preview">
                 <div class="preview-row">
@@ -822,29 +759,29 @@ function abrirModalPreviewImportacion(archivo, preview) {
                 <div class="preview-content">
                     <div class="preview-content-title">CONTENIDO</div>
                     <div class="preview-item">
-                        <span>🏦 Cuentas</span>
+                        <span>Cuentas</span>
                         <span class="preview-number">${preview.resumen.cuentas}</span>
                     </div>
                     <div class="preview-item">
-                        <span>💰 Movimientos</span>
+                        <span>Movimientos</span>
                         <span class="preview-number">${preview.resumen.movimientos}</span>
                     </div>
                     <div class="preview-item">
-                        <span>📈 Activos</span>
+                        <span>Activos</span>
                         <span class="preview-number">${preview.resumen.activos}</span>
                     </div>
                     <div class="preview-item">
-                        <span>📎 Pendientes</span>
+                        <span>Pendientes</span>
                         <span class="preview-number">${preview.resumen.pendientes}</span>
                     </div>
                     <div class="preview-item">
-                        <span>📸 Snapshots</span>
+                        <span>Snapshots</span>
                         <span class="preview-number">${preview.resumen.snapshots}</span>
                     </div>
                 </div>
 
                 <div class="modal-warning">
-                    ⚠️ Los datos se <strong>agregarán</strong> a los existentes. No se eliminará nada.
+                    Los datos se <strong>agregarán</strong> a los existentes. No se eliminará nada.
                 </div>
             </div>
         `,
@@ -856,7 +793,7 @@ function abrirModalPreviewImportacion(archivo, preview) {
 
             setTimeout(() => {
                 abrirModal({
-                    titulo: "📤 Importando...",
+                    titulo: "Importando...",
                     contenido: `
                         <div class="modal-loading">
                             <div class="loading-spinner"></div>
@@ -877,7 +814,7 @@ function abrirModalPreviewImportacion(archivo, preview) {
 
                 setTimeout(() => {
                     abrirModal({
-                        titulo: "✅ Importación completada",
+                        titulo: "Importación completada",
                         contenido: plantillaResultadoImportacion(resultado),
                         variante: "info",
                         confirmText: "Recargar",
@@ -892,10 +829,9 @@ function abrirModalPreviewImportacion(archivo, preview) {
                 cerrarModal()
                 setTimeout(() => {
                     abrirModal({
-                        titulo: "❌ Error al importar",
+                        titulo: "Error al importar",
                         contenido: `
                             <div class="modal-message">
-                                <div class="modal-message-icon">⚠️</div>
                                 <p class="modal-message-error">${error.message}</p>
                             </div>
                         `,
@@ -915,32 +851,31 @@ function plantillaResultadoImportacion(resultado) {
     const errores = resultado.errores?.length || 0
     return `
         <div class="modal-message">
-            <div class="modal-message-icon">✅</div>
             <div class="modal-resultado">
                 <div class="preview-item">
-                    <span>🏦 Cuentas</span>
+                    <span>Cuentas</span>
                     <span class="preview-number">${resultado.cuentas}</span>
                 </div>
                 <div class="preview-item">
-                    <span>💰 Movimientos</span>
+                    <span>Movimientos</span>
                     <span class="preview-number">${resultado.movimientos}</span>
                 </div>
                 <div class="preview-item">
-                    <span>📈 Activos</span>
+                    <span>Activos</span>
                     <span class="preview-number">${resultado.activos}</span>
                 </div>
                 <div class="preview-item">
-                    <span>📎 Pendientes</span>
+                    <span>Pendientes</span>
                     <span class="preview-number">${resultado.pendientes}</span>
                 </div>
                 <div class="preview-item">
-                    <span>📸 Snapshots</span>
+                    <span>Snapshots</span>
                     <span class="preview-number">${resultado.snapshots}</span>
                 </div>
             </div>
             ${errores > 0 ? `
                 <p class="modal-message-warning">
-                    ⚠️ ${errores} errores menores
+                    ${errores} errores menores
                 </p>
             ` : ""}
         </div>
@@ -953,10 +888,9 @@ function plantillaResultadoImportacion(resultado) {
 
 function eliminarTodosLosDatos() {
     abrirModal({
-        titulo: "⚠️ Eliminar todos los datos",
+        titulo: "Eliminar todos los datos",
         contenido: `
             <div class="modal-message">
-                <div class="modal-message-icon">⚠️</div>
                 <p class="modal-message-title-danger">¿Estás seguro?</p>
                 <p class="modal-message-desc">Se eliminarán <strong>todos</strong> tus datos de cinco:</p>
                 <div class="modal-list">
@@ -983,10 +917,9 @@ function eliminarTodosLosDatos() {
 
 function confirmarEliminacionFinal() {
     abrirModal({
-        titulo: "🚨 Confirmación final",
+        titulo: "Confirmación final",
         contenido: `
             <div class="modal-message">
-                <div class="modal-message-icon">🗑️</div>
                 <p class="modal-message-title-danger">Última oportunidad</p>
                 <p class="modal-message-desc">
                     Para confirmar, escribe <strong class="text-danger">ELIMINAR</strong> a continuación:
@@ -1014,7 +947,7 @@ function confirmarEliminacionFinal() {
             await new Promise(resolve => setTimeout(resolve, 100))
 
             abrirModal({
-                titulo: "🗑️ Eliminando datos",
+                titulo: "Eliminando datos",
                 contenido: `
                     <div class="modal-loading">
                         <div class="loading-spinner"></div>
@@ -1043,14 +976,13 @@ function confirmarEliminacionFinal() {
                 const total = Object.values(resultado).reduce((a, b) => a + b, 0)
 
                 abrirModal({
-                    titulo: "✅ Datos eliminados",
+                    titulo: "Datos eliminados",
                     contenido: `
                         <div class="modal-message">
-                            <div class="modal-message-icon">✅</div>
                             <p class="modal-message-desc">Todos los datos han sido eliminados.</p>
                             <div class="modal-resultado">
                                 <div class="preview-item">
-                                    <span>🗑️ Total eliminados</span>
+                                    <span>Total eliminados</span>
                                     <span class="preview-number">${total}</span>
                                 </div>
                             </div>
@@ -1069,10 +1001,9 @@ function confirmarEliminacionFinal() {
                 await new Promise(resolve => setTimeout(resolve, 100))
 
                 abrirModal({
-                    titulo: "❌ Error al eliminar",
+                    titulo: "Error al eliminar",
                     contenido: `
                         <div class="modal-message">
-                            <div class="modal-message-icon">⚠️</div>
                             <p class="modal-message-error">${error.message}</p>
                         </div>
                     `,
@@ -1093,13 +1024,15 @@ function confirmarEliminacionFinal() {
 
 function abrirModalEliminarCuenta() {
     abrirModal({
-        titulo: "⚠️ Eliminar cuenta",
+        titulo: "Eliminar cuenta",
         contenido: `
             <div class="modal-message">
-                <div class="modal-message-icon">⚠️</div>
                 <p class="modal-message-title-danger">¿Estás seguro?</p>
                 <p class="modal-message-desc">
                     Se eliminará tu cuenta y todos tus datos permanentemente.
+                </p>
+                <p class="modal-message-warning">
+                    Esta función aún está en desarrollo y se activará próximamente.
                 </p>
             </div>
         `,
@@ -1107,8 +1040,8 @@ function abrirModalEliminarCuenta() {
         confirmText: "Eliminar cuenta",
         cancelText: "Cancelar",
         onConfirm: () => {
-            alert("Eliminar cuenta (en desarrollo)")
-            return true
+            mostrarNotificacion("info", "La eliminación de cuenta estará disponible pronto")
+            return false
         }
     })
 }

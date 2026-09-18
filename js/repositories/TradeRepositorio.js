@@ -12,6 +12,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
 import { Trade } from "../models/Trade.js"
+import { cacheCapa } from "../core/cache.js"
 
 // ============================================
 // TRADE REPOSITORIO
@@ -26,32 +27,29 @@ export async function crearTrade(uid, datos) {
         ...trade.toFirestore(),
         fechaRegistro: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "trades")
 
     return resultado.id
 }
 
 export async function obtenerTrades(uid, filtros = {}) {
-    const referencia = collection(db, "usuarios", uid, "trades")
-    let q = referencia
+    const trades = await cacheCapa.obtener(uid, "trades", async () => {
+        const referencia = collection(db, "usuarios", uid, "trades")
+        const resultado = await getDocs(referencia)
 
-    if (filtros.tipo) {
-        q = query(referencia, where("tipo", "==", filtros.tipo))
-    } else if (filtros.estado) {
-        q = query(referencia, where("estado", "==", filtros.estado))
-    }
+        const trades = resultado.docs.map(doc => Trade.fromFirestore(doc.id, doc.data()))
 
-    const resultado = await getDocs(q)
+        // Ordenar en JS por fecha descendente
+        trades.sort((a, b) => {
+            const fechaA = a.fechaRegistro?.getTime?.() || 0
+            const fechaB = b.fechaRegistro?.getTime?.() || 0
+            return fechaB - fechaA
+        })
 
-    const trades = resultado.docs.map(doc => Trade.fromFirestore(doc.id, doc.data()))
-
-    // Ordenar en JS por fecha descendente
-    trades.sort((a, b) => {
-        const fechaA = a.fechaRegistro?.getTime?.() || 0
-        const fechaB = b.fechaRegistro?.getTime?.() || 0
-        return fechaB - fechaA
+        return trades
     })
 
-    // Aplicar filtros adicionales en JS
+    // Aplicar filtros en cada lectura (no se cachea la consulta filtrada)
     let filtrados = trades
     if (filtros.tipo) {
         filtrados = filtrados.filter(t => t.tipo === filtros.tipo)
@@ -74,14 +72,38 @@ export async function obtenerTrade(uid, tradeId) {
 
 export async function cerrarTrade(uid, tradeId, salida) {
     const referencia = doc(db, "usuarios", uid, "trades", tradeId)
-    return await updateDoc(referencia, {
+    const resultado = await updateDoc(referencia, {
         salida: salida,
         estado: 'cerrado',
         fechaCierre: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "trades")
+    return resultado
+}
+
+export async function reabrirTrade(uid, tradeId) {
+    const referencia = doc(db, "usuarios", uid, "trades", tradeId)
+    const resultado = await updateDoc(referencia, {
+        salida: null,
+        estado: 'abierto',
+        fechaCierre: null
+    })
+    cacheCapa.invalidar(uid, "trades")
+    return resultado
+}
+
+export async function actualizarNotaTrade(uid, tradeId, nota) {
+    const referencia = doc(db, "usuarios", uid, "trades", tradeId)
+    const resultado = await updateDoc(referencia, {
+        nota: (nota || "").slice(0, 1500)
+    })
+    cacheCapa.invalidar(uid, "trades")
+    return resultado
 }
 
 export async function eliminarTrade(uid, tradeId) {
     const referencia = doc(db, "usuarios", uid, "trades", tradeId)
-    return await deleteDoc(referencia)
+    const resultado = await deleteDoc(referencia)
+    cacheCapa.invalidar(uid, "trades")
+    return resultado
 }

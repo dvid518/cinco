@@ -1,0 +1,366 @@
+@import url("style.css");
+
+.pass-field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 50px;
+}
+
+.pass-field input {
+    width: 100%;
+    height: 100%;
+    padding-right: 46px;
+}
+
+.pass-field .pass-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    color: var(--textSecondary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    z-index: 1;
+}
+
+.pass-field .pass-toggle:hover {
+    background: var(--lightHover);
+    color: var(--text);
+}
+
+.pass-field .pass-toggle svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* --------------------------------------------
+   NOTIFICACIONES
+   -------------------------------------------- */
+
+.notificaciones-container {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: min(360px, calc(100vw - 32px));
+    pointer-events: none;
+}
+
+.notificacion {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    transform: translateY(-16px);
+    transition: all 0.3s ease;
+}
+
+.notificacion.notificacion-activa {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.notificacion.notificacion-saliendo {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.notificacion-icono {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--textSecondary);
+}
+
+.notificacion.notificacion-exito .notificacion-icono {
+    color: var(--positive);
+}
+
+.notificacion.notificacion-error .notificacion-icono {
+    color: var(--negative);
+}
+
+.notificacion-mensaje {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.4;
+    min-width: 0;
+}
+
+.notificacion-cerrar {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--textSecondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.notificacion-cerrar:hover {
+    background: var(--lightHover);
+    color: var(--text);
+}
+
+.notificacion-accion {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: var(--lightHover);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--font-primary, inherit);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.notificacion-accion:hover {
+    background: var(--positive);
+    border-color: var(--positive);
+    color: #ffffff;
+}
+
+/* --------------------------------------------
+   LASTRAR · ITEM PENDIENTES
+   -------------------------------------------- */
+
+.lastbar .item-pendientes {
+    color: var(--text);
+}
+
+.lastbar .item-pendientes.activo svg {
+    color: var(--positive);
+}
+
+/* --------------------------------------------
+   PANEL HEADER
+   -------------------------------------------- */
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.panel-header h2 {
+    color: var(--border);
+    font-size: 28px;
+    margin: 0;
+    font-weight: 600;
+}
+
+/* --------------------------------------------
+   FILTROS
+   -------------------------------------------- */
+
+.filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface);
+    border-radius: 25px;
+    border: 1px solid var(--border);
+}
+
+.filtros input,
+.filtros select {
+    padding: 8px 16px;
+    border-radius: 50px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-primary);
+    font-size: 13px;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.filtros input:hover,
+.filtros select:hover {
+    border-color: var(--text);
+}
+
+.filtros input:focus,
+.filtros select:focus {
+    border-color: var(--positive);
+    box-shadow: 0 0 0 3px var(--anillo-positivo);
+}
+
+/* --------------------------------------------
+   LISTA DE CARDS
+   -------------------------------------------- */
+
+.lista-cards {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-height: 0;
+    padding: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.lista-cards::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    pointer-events: none;
+}
+
+.card-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.card-item:hover {
+    background: var(--lightHover);
+    border-color: var(--text);
+}
+
+.card-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.card-item-titulo {
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.card-item-detalle {
+    font-size: 12px;
+    color: var(--textSecondary);
+}
+
+.card-item-valor {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    margin-left: 12px;
+    text-align: right;
+}
+
+.card-item-valor.positive {
+    color: var(--positive);
+}
+
+.card-item-valor.negative {
+    color: var(--negative);
+}
+
+/* --------------------------------------------
+   FORMULARIO MOVIMIENTO · GRID
+   -------------------------------------------- */
+
+.form-movimiento-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.form-movimiento-grid .form-group.full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 520px) {
+    .form-movimiento-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --------------------------------------------
+   HINT
+   -------------------------------------------- */
+
+.hint {
+    font-size: 12px;
+    color: var(--textSecondary);
+    opacity: 0.7;
+}
+
+/* --------------------------------------------
+   PUNTO DE COLOR DE CUENTA
+   -------------------------------------------- */
+
+#sidebar button .cuenta-color,
+.cuenta-detalle-header .cuenta-color {
+    background: var(--cuenta-color, var(--slateGrey));
+}
+
+/* --------------------------------------------
+   DESACTIVADO
+   -------------------------------------------- */
+
+.desact {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* --------------------------------------------
+   SECCIONES DE PANEL
+   -------------------------------------------- */
+
+[data-panel-section] {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+[data-panel-section][data-hidden="true"] {
+    display: none;
+}

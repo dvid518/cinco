@@ -1,4 +1,4 @@
-import { login, loginConGoogle, observeAuth, obtenerMetodosDeEmail } from "../../firebase/auth.js"
+import { registrarConEmail, registrarConGoogle, observeAuth } from "../../firebase/auth.js"
 import { initTemaLocal } from "../core/tema.js"
 import { initPWA } from "../core/pwa.js"
 import { icono } from "../core/iconos.js"
@@ -8,10 +8,12 @@ import { mostrarNotificacion } from "../ui/notificaciones.js"
 // REFERENCIAS DOM
 // ============================================
 
+const inputNombre = document.getElementById("nombre")
 const inputEmail = document.getElementById("email")
 const inputClave = document.getElementById("clave")
-const botonSubmit = document.getElementById("login-submit")
-const botonGoogle = document.getElementById("login-google")
+const inputConfirmarClave = document.getElementById("confirmar-clave")
+const botonSubmit = document.getElementById("register-submit")
+const botonGoogle = document.getElementById("register-google")
 
 // ============================================
 // INIT
@@ -21,37 +23,39 @@ initTemaLocal()
 initPWA()
 
 // ============================================
-// LOGIN CON EMAIL + CONTRASEÑA
+// REGISTRO CON EMAIL + CONTRASEÑA
 // ============================================
 
-async function iniciarSesionConPassword() {
+async function registrarConPassword() {
+    const nombre = inputNombre.value.trim()
     const email = inputEmail.value.trim()
     const password = inputClave.value
+    const confirmar = inputConfirmarClave.value
 
-    if (!email) {
-        mostrarNotificacion("error", "Escribe tu correo electrónico.")
-        return
-    }
-    if (!password) {
-        mostrarNotificacion("error", "Escribe tu contraseña.")
+    const errorValidacion = validarDatos(nombre, email, password, confirmar)
+    if (errorValidacion) {
+        mostrarNotificacion("error", errorValidacion)
         return
     }
 
     try {
-        await login(email, password)
+        await registrarConEmail(nombre, email, password)
         window.location.href = "/"
     } catch (error) {
-        await manejarErrorLogin(error, email, password)
+        mostrarNotificacion("error", mensajeDeError(error))
+        inputClave.value = ""
+        inputConfirmarClave.value = ""
+        inputClave.focus()
     }
 }
 
 // ============================================
-// LOGIN CON GOOGLE
+// REGISTRO CON GOOGLE
 // ============================================
 
-async function iniciarSesionConGoogle() {
+async function registrarConGoogleHandler() {
     try {
-        await loginConGoogle()
+        await registrarConGoogle()
         window.location.href = "/"
     } catch (error) {
         console.error("Error Google:", error)
@@ -60,69 +64,40 @@ async function iniciarSesionConGoogle() {
 }
 
 // ============================================
-// MANEJO DE ERRORES
+// MENSAJES DE ERROR
 // ============================================
 
-async function manejarErrorLogin(error, email, password) {
-    console.error(error)
-
-    // Detectar cuenta que existe solo con Google
-    try {
-        if (
-            error.code === "auth/invalid-credential" ||
-            error.code === "auth/wrong-password" ||
-            error.code === "auth/user-not-found"
-        ) {
-            const metodos = await obtenerMetodosDeEmail(email)
-            const tienePassword = metodos.includes("password")
-            const tieneGoogle = metodos.includes("google.com")
-
-            if (tieneGoogle && !tienePassword) {
-                mostrarNotificacion(
-                    "info",
-                    "Esta cuenta usa Google. Inicia sesión con Google."
-                )
-                resaltarGoogle()
-                return
-            }
-        }
-    } catch (e) {
-        console.error("Error al consultar métodos de autenticación:", e)
-    }
-
-    mostrarNotificacion("error", mensajeDeError(error))
-    inputClave.value = ""
-    inputClave.focus()
+function validarDatos(nombre, email, password, confirmar) {
+    if (!nombre) return "Escribe tu nombre."
+    if (nombre.length < 2) return "El nombre es demasiado corto."
+    if (!email) return "Escribe tu correo electrónico."
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "El correo no es válido."
+    if (!password) return "Escribe una contraseña."
+    if (password.length < 6) return "La contraseña debe tener al menos 6 caracteres."
+    if (!confirmar) return "Confirma tu contraseña."
+    if (password !== confirmar) return "Las contraseñas no coinciden."
+    return null
 }
 
 function mensajeDeError(error) {
     switch (error.code) {
+        case "auth/email-already-in-use":
+            return "Ya existe una cuenta con ese correo."
         case "auth/invalid-email":
             return "El correo no es válido."
-        case "auth/user-disabled":
-            return "Esta cuenta está deshabilitada."
-        case "auth/user-not-found":
-            return "No existe una cuenta con ese correo."
-        case "auth/wrong-password":
-        case "auth/invalid-credential":
-            return "Correo o contraseña incorrectos."
-        case "auth/too-many-requests":
-            return "Demasiados intentos. Prueba más tarde."
+        case "auth/weak-password":
+            return "La contraseña es demasiado débil."
+        case "auth/operation-not-allowed":
+            return "El registro con correo está deshabilitado."
         case "auth/popup-closed-by-user":
-            return "Cancelaste el inicio de sesión con Google."
+            return "Cancelaste el registro con Google."
         case "auth/popup-blocked":
             return "El navegador bloqueó la ventana emergente de Google."
         case "auth/network-request-failed":
             return "Sin conexión. Revisa tu red."
         default:
-            return "No se pudo iniciar sesión. Inténtalo de nuevo."
+            return "No se pudo crear la cuenta. Inténtalo de nuevo."
     }
-}
-
-function resaltarGoogle() {
-    if (!botonGoogle) return
-    botonGoogle.classList.add("destacado")
-    setTimeout(() => botonGoogle.classList.remove("destacado"), 2000)
 }
 
 // ============================================
@@ -156,20 +131,34 @@ async function bodyVisibility(opacity, ms) {
 // EVENTOS
 // ============================================
 
-botonSubmit?.addEventListener("click", iniciarSesionConPassword)
-botonGoogle?.addEventListener("click", iniciarSesionConGoogle)
-
-inputClave?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-        event.preventDefault()
-        iniciarSesionConPassword()
-    }
-})
+botonSubmit?.addEventListener("click", registrarConPassword)
+botonGoogle?.addEventListener("click", registrarConGoogleHandler)
 
 inputEmail?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
         event.preventDefault()
         inputClave?.focus()
+    }
+})
+
+inputClave?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+        event.preventDefault()
+        inputConfirmarClave?.focus()
+    }
+})
+
+inputConfirmarClave?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+        event.preventDefault()
+        registrarConPassword()
+    }
+})
+
+inputNombre?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+        event.preventDefault()
+        inputEmail?.focus()
     }
 })
 

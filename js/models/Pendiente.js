@@ -56,10 +56,6 @@ export class Pendiente {
         return this.tipo ? 'Cobrar' : 'Pagar'
     }
 
-    get tipoIcono() {
-        return this.tipo ? '📥' : '📤'
-    }
-
     get tipoClase() {
         return this.tipo ? 'cobrar' : 'pagar'
     }

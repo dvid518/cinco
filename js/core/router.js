@@ -13,13 +13,62 @@ const routes = {
 
 let pageModules = {}
 let currentPage = 'dashboard'
-let navId = 0  // ✅ Token de navegación
-let navReady = false  // ✅ Evita duplicar listeners del menú
-let fallosPorPagina = {}  // ✅ Contador de fallos por página (evita bucles)
+let navId = 0 
+let navReady = false
+let fallosPorPagina = {} 
+
+// ============================================
+// INDICADOR DE CARGA · LOGO DEL NAVBAR
+// ============================================
+// Mientras se carga información, el logo del navbar
+// gira en su propio espacio (sin overlay ni copias).
+// ============================================
+
+function logoNavbar() {
+    return document.querySelector(".logo-container #logo") ||
+        document.querySelector(".nav-section #logo") ||
+        document.querySelector("#logo")
+}
+
+export function activarSpinLogo() {
+    const logo = logoNavbar()
+    if (logo) logo.classList.add("spin")
+}
+
+export function desactivarSpinLogo() {
+    const logo = logoNavbar()
+    if (logo) logo.classList.remove("spin")
+}
+
+function mostrarOverlayCarga() {
+    const container = document.getElementById("app-content")
+    if (!container) return null
+
+    const overlay = document.createElement("div")
+    overlay.className = "loading-overlay"
+
+    // Indicador de carga: el logo del navbar gira en su sitio
+    activarSpinLogo()
+
+    container.appendChild(overlay)
+    return overlay
+}
+
+function ocultarOverlayCarga(overlay) {
+    desactivarSpinLogo()
+    if (!overlay || !overlay.isConnected) return
+    overlay.classList.add("loading")
+    setTimeout(() => {
+        if (overlay.parentNode) overlay.remove()
+    }, 300)
+}
 
 export async function loadPage(page) {
-    const id = ++navId  // ✅ Capturar token al inicio
+    const id = ++navId  // Token capturado al inicio
     console.log("[INFO] Cargando página:", page)
+
+    // Mostrar overlay con logo girando mientras se carga
+    const overlay = mostrarOverlayCarga()
 
     const paginasVisibles = sesion.getPaginasVisibles()
     console.log("[INFO] Páginas visibles:", paginasVisibles)
@@ -27,6 +76,7 @@ export async function loadPage(page) {
 
     if (page !== 'dashboard' && paginasVisibles[page] === false) {
         console.warn(`[WARN] Página "${page}" desactivada por el usuario → redirigiendo a dashboard`)
+        ocultarOverlayCarga(overlay)
         navigateTo('/')
         return
     }
@@ -35,39 +85,45 @@ export async function loadPage(page) {
         renderPage(page)
         if (pageModules[page].init) {
             await pageModules[page].init()
-            // ✅ Abortar si otra navegación ganó
+            // Abortar si otra navegación ganó
             if (id !== navId) {
                 console.log(`[INFO] Navegación ${id} abortada (ganó ${navId})`)
+                ocultarOverlayCarga(overlay)
                 return
             }
         }
-        return
+        ocultarOverlayCarga(overlay)
+        return 
     }
 
     try {
         const module = await import(`../pages/${page}.js`)
-        // ✅ Abortar si otra navegación ganó mientras importábamos
+        // Abortar si otra navegación ganó mientras importábamos
         if (id !== navId) {
             console.log(`[INFO] Import ${id} abortado (ganó ${navId})`)
+            ocultarOverlayCarga(overlay)
             return
         }
 
         console.log(`[INFO] Módulo "${page}" cargado correctamente`)
         pageModules[page] = module
-        delete fallosPorPagina[page]  // ✅ Éxito → reiniciar contador
+        delete fallosPorPagina[page]  // Éxito → reiniciar contador
         renderPage(page)
 
         if (module.init) {
             await module.init()
-            // ✅ Abortar si otra navegación ganó después del init
             if (id !== navId) {
                 console.log(`[INFO] Init ${id} abortado (ganó ${navId})`)
+                ocultarOverlayCarga(overlay)
                 return
             }
         }
+
+        ocultarOverlayCarga(overlay)
     } catch (error) {
         console.error(`[ERROR] Error cargando página ${page}:`, error)
         manejarErrorPagina(page, error)
+        ocultarOverlayCarga(overlay)
     }
 }
 
@@ -76,8 +132,7 @@ export async function loadPage(page) {
 // ============================================
 // - SyntaxError (módulo roto) → NO se reintenta jamás.
 // - Otros fallos → se muestra el mensaje en #app-content.
-// - No hay redirección automática en bucle:
-//   se eliminó el `navigateTo('/')` automático tras un fallo.
+// - No hay redirección automática en bucle.
 // ============================================
 
 function manejarErrorPagina(page, error) {
@@ -117,7 +172,6 @@ function mostrarErrorPagina(page, error) {
 
     container.innerHTML = `
         <div class="lista-vacia error">
-            <span class="lista-vacia-icon">⚠️</span>
             <p>No se pudo cargar la página "${page}".</p>
             <p class="lista-vacia-hint">${detalle}</p>
             <button class="btn-sm" id="btn-reintentar-pagina" type="button">Reintentar</button>
@@ -133,6 +187,20 @@ function mostrarErrorPagina(page, error) {
     })
 }
 
+// ============================================
+// LASTRAR · MODO PERSISTIDO (bug de recarga)
+// ============================================
+// Se aplica en cada render para que sobreviva a la recarga:
+// localStorage "cinco_lastbar_mode" → clase .lastbar-always-visible.
+
+function aplicarModoLastbarPersistido() {
+    const modo = localStorage.getItem("cinco_lastbar_mode") || "hide"
+    const lastbar = document.querySelector(".lastbar")
+    if (lastbar) {
+        lastbar.classList.toggle("lastbar-always-visible", modo === "show")
+    }
+}
+
 function renderPage(page) {
     const module = pageModules[page]
     if (!module) {
@@ -146,15 +214,17 @@ function renderPage(page) {
         return
     }
 
-    if (module.render) {
-        container.innerHTML = module.render()
-    } else {
-        container.innerHTML = `<p>Cargando ${page}...</p>`
-    }
+    // Preservar el overlay de carga a través del innerHTML (sigue visible
+    // durante el render y el init del módulo, hasta ocultarOverlayCarga).
+    const overlay = container.querySelector(".loading-overlay")
+    const html = module.render ? module.render() : `<p>Cargando ${page}...</p>`
+    container.innerHTML = html
+    if (overlay) container.appendChild(overlay)
 
     const footer = document.getElementById('app-footer')
     if (footer) {
         footer.innerHTML = getLastbar(page)
+        aplicarModoLastbarPersistido()
     }
 
     currentPage = page

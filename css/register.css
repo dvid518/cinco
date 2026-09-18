@@ -1,0 +1,31 @@
+@import url("style.css");
+
+/* ============================================
+   REGISTRO
+   ============================================ */
+
+.register-section {
+    gap: 20px;
+}
+
+.register-link {
+    color: var(--textSecondary);
+    font-size: 14px;
+    margin: 0;
+}
+
+.register-link a {
+    color: var(--text);
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.register-link a:hover {
+    color: var(--positive);
+}
+
+/* Ajuste del formulario para tres campos */
+.register-section .login-form {
+    gap: 8px;
+}

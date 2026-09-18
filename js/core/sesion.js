@@ -68,6 +68,9 @@ class Sesion {
         if (preferencias?.tipoCambio) {
             this.preferencias.tipoCambio = preferencias.tipoCambio
         }
+        if (preferencias?.tema) {
+            this.preferencias.tema = preferencias.tema
+        }
         try {
             sessionStorage.setItem('cinco_preferencias', JSON.stringify(this.preferencias))
         } catch (e) {}

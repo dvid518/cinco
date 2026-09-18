@@ -1,10 +1,10 @@
 import { observeAuth, startInactivityTimer } from "../../firebase/auth.js"
 import { sesion } from "./sesion.js"
-import { initRouter, getPaginaActual } from "./router.js"
+import { initRouter } from "./router.js"
 import { obtenerPreferencias } from "../../firebase/firestore.js"
 import { initTemaLocal, sincronizarTemaFirestore } from "./tema.js"
 import { initPWA } from "./pwa.js"
-import { abrirModal, cerrarModal } from "../ui/modal.js"
+import { configurarDelegacionLastbar } from "./lastbar.js"
 
 let appInicializado = false
 let bootFinalizado = false
@@ -19,7 +19,7 @@ export async function initApp() {
     if (bootEnProgreso) return
     bootEnProgreso = true
 
-    // ⏰ Timeout de seguridad: si en 5 s el arranque no termina,
+    // Timeout de seguridad: si en 5 s el arranque no termina,
     // se quita el .loading igualmente (evita pantalla negra).
     setTimeout(mostrarAvisoTimeout, 5000)
 
@@ -28,7 +28,7 @@ export async function initApp() {
 
         if (!user) {
             quitarCarga()
-            window.location.replace("/login.html")
+            window.location.replace("/login")
             return
         }
 
@@ -53,7 +53,7 @@ export async function initApp() {
                 await sincronizarTemaFirestore(user.uid, null)
             }
         } catch (error) {
-            // ❌ Si cargar preferencias falla, continuar con los valores por defecto
+            // Si cargar preferencias falla, continuar con los valores por defecto
             console.warn("[WARN] Error cargando preferencias:", error)
             sesion.setPreferencias({})
         }
@@ -61,6 +61,7 @@ export async function initApp() {
         try {
             if (!appInicializado) {
                 appInicializado = true
+                aplicarAparienciaInicial()
                 initRouter("dashboard")
                 startInactivityTimer()
                 configurarDelegacionLastbar()
@@ -74,6 +75,29 @@ export async function initApp() {
             mostrarErrorBoot(error)
         }
     })
+}
+
+// ============================================
+// APARIENCIA INICIAL (lastbar + navegación)
+// ============================================
+// Se aplica en cada arranque según preferencias, no solo al guardar.
+
+function aplicarAparienciaInicial() {
+    const prefs = sesion.getPreferencias()
+
+    // Páginas visibles en el menú (bug de persistencia)
+    const paginas = prefs.paginas || {}
+    document.querySelectorAll(".nav-container a").forEach(link => {
+        const page = link.dataset.page
+        if (page && paginas[page] === false) {
+            link.classList.add("nav-oculto")
+        } else {
+            link.classList.remove("nav-oculto")
+        }
+    })
+
+    // El modo de la lastbar (siempre visible / auto-hide) se aplica en
+    // router.js tras renderizar cada lastbar, leyendo localStorage.
 }
 
 // ============================================
@@ -104,7 +128,6 @@ function mostrarAvisoBoot(mensaje) {
     avisoBootVisible = true
     contenido.innerHTML = `
         <div class="lista-vacia" id="aviso-boot">
-            <span class="lista-vacia-icon">⏳</span>
             <p>${mensaje}</p>
         </div>
     `
@@ -121,227 +144,10 @@ function mostrarErrorBoot(error) {
     if (!contenido) return
     contenido.innerHTML = `
         <div class="lista-vacia error">
-            <span class="lista-vacia-icon">⚠️</span>
             <p>No se pudo cargar la aplicación.</p>
             <p class="lista-vacia-hint">${error?.message || "Error desconocido"}</p>
         </div>
     `
-}
-
-// ============================================
-// DELEGACIÓN CENTRAL DE LA LASTBAR
-// ============================================
-// Un único listener delegado en #app-footer que sobrevive a los re-renders
-// de footer.innerHTML al navegar. Usa el texto del <span> para identificar
-// el botón y `getPaginaActual()` para el contexto de la página activa.
-// ============================================
-
-function configurarDelegacionLastbar() {
-    const footer = document.getElementById("app-footer")
-    if (!footer) return
-
-    footer.addEventListener("click", async (e) => {
-        const item = e.target.closest(".lastbar .item")
-        if (!item) return
-
-        const span = item.querySelector("span")
-        if (!span) return
-
-        const texto = span.textContent.trim()
-        const pagina = getPaginaActual()
-        const manejador = MAPA_ACCIONES[texto]
-
-        if (!manejador) {
-            console.warn(`[WARN] Sin manejador para lastbar: "${texto}"`)
-            return
-        }
-
-        try {
-            await manejador(pagina)
-        } catch (error) {
-            console.error(`[ERROR] Error en lastbar "${texto}":`, error)
-        }
-    })
-}
-
-// ============================================
-// MAPA DE ACCIONES POR TEXTO
-// ============================================
-// Cada función recibe `pagina` (string) como argumento opcional.
-// La importación dinámica cachea el módulo para no re-descargar.
-// ============================================
-
-const MAPA_ACCIONES = {
-    // ── GLOBAL ──
-    "Pendientes": async () => {
-        const { mostrarPendientes } = await import("../ui/pendientes.js")
-        await mostrarPendientes()
-    },
-
-    "Cerrar sesión": async () => {
-        const { abrirModalLogout } = await import("../pages/configuracion.js")
-        abrirModalLogout()
-    },
-
-    // ── DASHBOARD / MOVIMIENTOS ──
-    "Movimiento": async () => {
-        const { abrirSelectorTipoMovimiento } = await import("../pages/movimientos.js")
-        abrirSelectorTipoMovimiento()
-    },
-
-    "Extracto": async () => {
-        await accionExportar()
-    },
-
-    // ── DASHBOARD (Actualizar) ──
-    "Actualizar": async (pagina) => {
-        switch (pagina) {
-            case "dashboard": {
-                const m = await import("../pages/dashboard.js")
-                await m.recargarDatos()
-                break
-            }
-            case "inversiones": {
-                const m = await import("../pages/inversiones.js")
-                await m.cargarPosiciones()
-                break
-            }
-            case "trading": {
-                const m = await import("../pages/trading.js")
-                await m.cargarTrades()
-                break
-            }
-            default:
-                console.warn(`"Actualizar" no implementado para la página "${pagina}"`)
-        }
-    },
-
-    // ── CUENTAS ──
-    "Cuenta": async () => {
-        const { abrirModalCrearCuenta } = await import("../pages/cuentas.js")
-        abrirModalCrearCuenta()
-    },
-
-    "Editar": async () => {
-        const { editarCuentaSeleccionada } = await import("../pages/cuentas.js")
-        editarCuentaSeleccionada()
-    },
-
-    "Archivar": async () => {
-        const { archivarCuentaSeleccionada } = await import("../pages/cuentas.js")
-        archivarCuentaSeleccionada()
-    },
-
-    // ── INVERSIONES ──
-    "Comprar": async () => {
-        const { abrirModalCompra } = await import("../pages/inversiones.js")
-        abrirModalCompra()
-    },
-
-    "Vender": async () => {
-        const { abrirModalVenta } = await import("../pages/inversiones.js")
-        abrirModalVenta()
-    },
-
-    "Broker": async (pagina) => {
-        const modulo = await import(
-            pagina === "trading"
-                ? "../pages/trading.js"
-                : "../pages/inversiones.js"
-        )
-        modulo.abrirModalBroker()
-    },
-
-    "Exportar": async () => {
-        await accionExportar()
-    },
-
-    // ── TRADING ──
-    "Largo": async () => {
-        const { abrirModalNuevoTrade } = await import("../pages/trading.js")
-        abrirModalNuevoTrade("long")
-    },
-
-    "Corto": async () => {
-        const { abrirModalNuevoTrade } = await import("../pages/trading.js")
-        abrirModalNuevoTrade("short")
-    },
-
-    // ── CONFIGURACIÓN ──
-    "Guardar": async () => {
-        const { guardarDesdeLastbar } = await import("../pages/configuracion.js")
-        guardarDesdeLastbar()
-    },
-
-    "Restaurar": async () => {
-        const { restaurarDesdeLastbar } = await import("../pages/configuracion.js")
-        restaurarDesdeLastbar()
-    }
-}
-
-// ============================================
-// EXPORTAR / EXTRACTO (reutilizable)
-// ============================================
-
-async function accionExportar() {
-    const uid = sesion.uid
-    if (!uid) return
-
-    abrirModal({
-        titulo: "📥 Exportando respaldo",
-        contenido: `
-            <div class="modal-loading">
-                <div class="loading-spinner"></div>
-                <p class="modal-loading-text">Preparando archivo .dvid...</p>
-            </div>
-        `,
-        variante: "narrow",
-        confirmText: null,
-        cancelText: null
-    })
-
-    try {
-        const { exportarDVID } = await import("../services/ExportarServicio.js")
-        const resultado = await exportarDVID(uid)
-        cerrarModal()
-
-        setTimeout(() => {
-            abrirModal({
-                titulo: "✅ Respaldo exportado",
-                contenido: `
-                    <div class="modal-message">
-                        <div class="modal-message-icon">📦</div>
-                        <p class="modal-message-title">${resultado.archivo}</p>
-                        <p class="modal-message-desc">
-                            El archivo se ha descargado correctamente.<br>
-                            Guárdalo en un lugar seguro.
-                        </p>
-                    </div>
-                `,
-                variante: "info",
-                confirmText: "Entendido",
-                onConfirm: () => true
-            })
-        }, 100)
-    } catch (error) {
-        console.error("Error exportando:", error)
-        cerrarModal()
-
-        setTimeout(() => {
-            abrirModal({
-                titulo: "❌ Error al exportar",
-                contenido: `
-                    <div class="modal-message">
-                        <div class="modal-message-icon">⚠️</div>
-                        <p class="modal-message-error">${error.message}</p>
-                    </div>
-                `,
-                variante: "info",
-                confirmText: "Cerrar",
-                onConfirm: () => true
-            })
-        }, 100)
-    }
 }
 
 document.addEventListener("DOMContentLoaded", initApp)

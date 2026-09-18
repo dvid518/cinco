@@ -3,6 +3,12 @@
 // ============================================
 
 let chartInstance = null
+let patrimonioChartInstance = null
+
+// Última configuración usada, para poder redibujar al cambiar el tema
+let ultimoGraficoLinea = null
+let ultimoGraficoPatrimonio = null
+let observadorTema = null
 
 // ============================================
 // CARGA DE CHART.JS (local)
@@ -40,35 +46,74 @@ async function cargarChartJS() {
 }
 
 // ============================================
+// TEMA DINÁMICO
+// ============================================
+// Los colores se leen de las variables CSS con getComputedStyle al
+// crear cada gráfico. Un único MutationObserver sobre data-theme
+// redibuja los gráficos existentes con los colores del nuevo tema.
+
+function configurarObservadorTema() {
+    if (observadorTema) return
+
+    observadorTema = new MutationObserver(() => {
+        if (ultimoGraficoLinea) {
+            const { canvasId, datos, opciones } = ultimoGraficoLinea
+            crearGraficoLinea(canvasId, datos, opciones)
+        }
+        if (ultimoGraficoPatrimonio) {
+            const { canvasId, datos, opciones } = ultimoGraficoPatrimonio
+            crearGraficoPatrimonio(canvasId, datos, opciones)
+        }
+    })
+
+    observadorTema.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"]
+    })
+}
+
+function leerColores() {
+    const estilos = getComputedStyle(document.documentElement)
+    return {
+        positive: estilos.getPropertyValue('--positive').trim() || '#00E695',
+        text: estilos.getPropertyValue('--text').trim() || '#F3F3F3',
+        textSecondary: estilos.getPropertyValue('--textSecondary').trim() || '#738391',
+        border: estilos.getPropertyValue('--border').trim() || '#D0DCE8',
+        lavenderVeil: estilos.getPropertyValue('--lavenderVeil').trim() || '#ECDAF3',
+        paleSky: estilos.getPropertyValue('--paleSky').trim() || '#D0DCE8'
+    }
+}
+
+// ============================================
 // GRÁFICO DE LÍNEA
 // ============================================
 
 export async function crearGraficoLinea(canvasId, datos, opciones = {}) {
     try {
         const Chart = await cargarChartJS()
-        
+
         if (chartInstance) {
             chartInstance.destroy()
         }
-        
+
         const canvas = document.getElementById(canvasId)
         if (!canvas) {
             console.warn(`Canvas no encontrado: ${canvasId}`)
             return null
         }
-        
+
         const ctx = canvas.getContext('2d')
-        
-        const estilos = getComputedStyle(document.documentElement)
-        const colorPositive = estilos.getPropertyValue('--positive').trim() || '#00E695'
-        const colorText = estilos.getPropertyValue('--text').trim() || '#F3F3F3'
-        const colorTextSecondary = estilos.getPropertyValue('--textSecondary').trim() || '#738391'
-        const colorBorder = estilos.getPropertyValue('--border').trim() || '#D0DCE8'
-        
+
+        const colores = leerColores()
+        const colorPositive = colores.positive
+        const colorText = colores.text
+        const colorTextSecondary = colores.textSecondary
+        const colorBorder = colores.border
+
         const gradient = ctx.createLinearGradient(0, 0, 0, 300)
         gradient.addColorStop(0, colorPositive + '40')
         gradient.addColorStop(1, colorPositive + '00')
-        
+
         chartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -133,7 +178,11 @@ export async function crearGraficoLinea(canvasId, datos, opciones = {}) {
                 }
             }
         })
-        
+
+        // Recordar para redibujar al cambiar el tema
+        ultimoGraficoLinea = { canvasId, datos, opciones }
+        configurarObservadorTema()
+
         return chartInstance
     } catch (error) {
         console.error("Error creando gráfico:", error)
@@ -150,40 +199,39 @@ export function destruirGrafico() {
         chartInstance.destroy()
         chartInstance = null
     }
+    ultimoGraficoLinea = null
 }
 
 // ============================================
 // GRÁFICO DE PATRIMONIO (múltiples líneas)
 // ============================================
 
-let patrimonioChartInstance = null
-
 export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
     try {
         const Chart = await cargarChartJS()
-        
+
         if (patrimonioChartInstance) {
             patrimonioChartInstance.destroy()
         }
-        
+
         const canvas = document.getElementById(canvasId)
         if (!canvas) {
             console.warn(`Canvas no encontrado: ${canvasId}`)
             return null
         }
-        
+
         const ctx = canvas.getContext('2d')
-        
-        const estilos = getComputedStyle(document.documentElement)
-        const colorPositive = estilos.getPropertyValue('--positive').trim() || '#00E695'
-        const colorText = estilos.getPropertyValue('--text').trim() || '#F3F3F3'
-        const colorTextSecondary = estilos.getPropertyValue('--textSecondary').trim() || '#738391'
-        const colorBorder = estilos.getPropertyValue('--border').trim() || '#D0DCE8'
-        const colorLavender = estilos.getPropertyValue('--lavenderVeil').trim() || '#ECDAF3'
-        const colorPaleSky = estilos.getPropertyValue('--paleSky').trim() || '#D0DCE8'
-        
+
+        const colores = leerColores()
+        const colorPositive = colores.positive
+        const colorText = colores.text
+        const colorTextSecondary = colores.textSecondary
+        const colorBorder = colores.border
+        const colorLavender = colores.lavenderVeil
+        const colorPaleSky = colores.paleSky
+
         const divisa = opciones.divisa || 'PEN'
-        
+
         // Seleccionar datos según divisa
         let data
         let color
@@ -197,11 +245,11 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
             data = datos.dataUSDT
             color = colorPaleSky
         }
-        
+
         const gradient = ctx.createLinearGradient(0, 0, 0, 300)
         gradient.addColorStop(0, color + '40')
         gradient.addColorStop(1, color + '00')
-        
+
         patrimonioChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -266,7 +314,11 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
                 }
             }
         })
-        
+
+        // Recordar para redibujar al cambiar el tema
+        ultimoGraficoPatrimonio = { canvasId, datos, opciones }
+        configurarObservadorTema()
+
         return patrimonioChartInstance
     } catch (error) {
         console.error("Error creando gráfico de patrimonio:", error)
@@ -279,4 +331,5 @@ export function destruirGraficoPatrimonio() {
         patrimonioChartInstance.destroy()
         patrimonioChartInstance = null
     }
+    ultimoGraficoPatrimonio = null
 }

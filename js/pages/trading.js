@@ -1,7 +1,9 @@
 import { sesion } from "../core/sesion.js"
-import { obtenerTradesConFiltros, registrarTrade, finalizarTrade, borrarTrade } from "../services/TradingServicio.js"
+import { obtenerTradesConFiltros, registrarTrade, finalizarTrade, borrarTrade, reabrirTradeAbierto, actualizarNota } from "../services/TradingServicio.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
-import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
+import { mostrarNotificacion } from "../ui/notificaciones.js"
+import { icono } from "../core/iconos.js"
+import { DIVISAS, DIVISAS_LABELS, DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 
 let uid = null
 let datosTrades = null
@@ -10,10 +12,10 @@ let filtroActual = 'todos'
 export function render() {
     return `
         <section id="sidebar">
-            <button class="glass act" data-filtro="todos">📊 Todos</button>
-            <button class="glass" data-filtro="long">📈 Long</button>
-            <button class="glass" data-filtro="short">📉 Short</button>
-            <button class="glass" data-filtro="cerrado">✅ Cerrados</button>
+            <button class="glass act" data-filtro="todos">${icono("list", 18)}<span>Todas</span></button>
+            <button class="glass" data-filtro="long">${icono("trending-up", 18)}<span>Long</span></button>
+            <button class="glass" data-filtro="short">${icono("trending-down", 18)}<span>Short</span></button>
+            <button class="glass" data-filtro="cerrado">${icono("circle-check", 18)}<span>Cerrados</span></button>
         </section>
         <section id="panel" class="glass">
             <div class="panel-header">
@@ -95,7 +97,7 @@ function renderizarTrades() {
             <div class="posicion-item trade-item" data-trade-id="${t.id}">
                 <div class="posicion-info">
                     <div class="posicion-nombre">
-                        ${t.tipoIcono} ${t.activo}
+                        ${t.activo}
                         <span class="posicion-simbolo">${t.tipoLabel}</span>
                     </div>
                     <div class="posicion-detalle">
@@ -107,6 +109,9 @@ function renderizarTrades() {
                         <div class="posicion-detalle">
                             Salida: ${simbolo} ${t.salida.toFixed(2)}
                         </div>
+                    ` : ''}
+                    ${t.nota ? `
+                        <div class="posicion-detalle trade-nota">${t.nota.replace(/</g, "&lt;")}</div>
                     ` : ''}
                 </div>
                 <div class="posicion-valores">
@@ -123,8 +128,11 @@ function renderizarTrades() {
                     <div class="trade-acciones">
                         ${t.estaAbierto ? `
                             <button class="glass-btn trade-cerrar" data-id="${t.id}">Cerrar</button>
-                        ` : ''}
-                        <button class="glass-btn danger trade-eliminar" data-id="${t.id}">✕</button>
+                        ` : `
+                            <button class="glass-btn trade-reabrir" data-id="${t.id}">Reabrir</button>
+                        `}
+                        <button class="glass-btn trade-nota-btn" data-id="${t.id}">Nota</button>
+                        <button class="glass-btn danger trade-eliminar" data-id="${t.id}">Eliminar</button>
                     </div>
                 </div>
             </div>
@@ -136,6 +144,20 @@ function renderizarTrades() {
         btn.addEventListener('click', (e) => {
             e.stopPropagation()
             abrirModalCerrarTrade(btn.dataset.id)
+        })
+    })
+
+    container.querySelectorAll('.trade-reabrir').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation()
+            abrirModalReabrirTrade(btn.dataset.id)
+        })
+    })
+
+    container.querySelectorAll('.trade-nota-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation()
+            abrirModalEditarNota(btn.dataset.id)
         })
     })
 
@@ -189,7 +211,7 @@ function configurarEventos() {
 
 export function abrirModalBroker() {
     abrirModal({
-        titulo: '🏦 Broker',
+        titulo: "Broker",
         contenido: `<div class="modal-message"><p class="modal-message-desc">Configuración de brokers (en desarrollo)</p></div>`,
         confirmText: 'Cerrar'
     })
@@ -199,12 +221,17 @@ export function abrirModalBroker() {
 // ACCIONES EXPORTADAS PARA LASTBAR
 // ============================================
 
+function opcionDivisa(codigo) {
+    const superior = codigo.toUpperCase()
+    return `<option value="${codigo}" ${codigo === DIVISAS.USD ? 'selected' : ''}>${DIVISAS_LABELS[codigo] || superior}</option>`
+}
+
 export function abrirModalNuevoTrade(tipo) {
     const esLong = tipo === 'long'
-    const titulo = esLong ? '📈 Nuevo trade largo' : '📉 Nuevo trade corto'
+    const titulo = esLong ? 'Nuevo trade largo' : 'Nuevo trade corto'
 
     const html = `
-        <form class="form-movimiento">
+        <form class="form-movimiento form-movimiento-grid">
             <div class="form-group">
                 <label>Dirección</label>
                 <span class="form-static">${esLong ? 'Largo (Long)' : 'Corto (Short)'}</span>
@@ -238,10 +265,15 @@ export function abrirModalNuevoTrade(tipo) {
             <div class="form-group">
                 <label for="trade-divisa">Divisa</label>
                 <select id="trade-divisa" class="form-input">
-                    <option value="usd" selected>USD</option>
-                    <option value="pen">PEN</option>
-                    <option value="usdt">USDT</option>
+                    ${opcionDivisa(DIVISAS.USD)}
+                    ${opcionDivisa(DIVISAS.PEN)}
+                    ${opcionDivisa(DIVISAS.USDT)}
                 </select>
+            </div>
+            <div class="form-group span-full">
+                <label for="trade-nota">Nota (opcional)</label>
+                <textarea id="trade-nota" class="form-input form-textarea" rows="3" maxlength="1500" placeholder="Estrategia, contexto del mercado, decisiones..."></textarea>
+                <span class="form-hint">Máximo 1500 caracteres</span>
             </div>
         </form>
     `
@@ -258,11 +290,12 @@ export function abrirModalNuevoTrade(tipo) {
             const sl = parseFloat(document.getElementById('trade-sl')?.value) || null
             const tp = parseFloat(document.getElementById('trade-tp')?.value) || null
             const divisa = document.getElementById('trade-divisa')?.value
+            const nota = document.getElementById('trade-nota')?.value.trim()
 
-            if (!activo) { alert('El activo es obligatorio'); return false }
-            if (!cuenta) { alert('Selecciona una cuenta'); return false }
-            if (!entrada || entrada <= 0) { alert('La entrada debe ser mayor a 0'); return false }
-            if (!lotaje || lotaje <= 0) { alert('El lotaje debe ser mayor a 0'); return false }
+            if (!activo) { mostrarNotificacion("error", "El activo es obligatorio"); return false }
+            if (!cuenta) { mostrarNotificacion("error", "Selecciona una cuenta"); return false }
+            if (!entrada || entrada <= 0) { mostrarNotificacion("error", "La entrada debe ser mayor a 0"); return false }
+            if (!lotaje || lotaje <= 0) { mostrarNotificacion("error", "El lotaje debe ser mayor a 0"); return false }
 
             try {
                 await registrarTrade(uid, {
@@ -273,16 +306,17 @@ export function abrirModalNuevoTrade(tipo) {
                     sl,
                     tp,
                     divisa,
+                    nota,
                     tipo,
                     estado: 'abierto'
                 })
 
                 await cargarTrades()
-                alert('✅ Trade registrado correctamente')
+                mostrarNotificacion("exito", "Trade registrado correctamente")
                 return true
             } catch (error) {
                 console.error('Error creando trade:', error)
-                alert(`❌ Error: ${error.message}`)
+                mostrarNotificacion("error", `Error: ${error.message}`)
                 return false
             }
         }
@@ -300,10 +334,10 @@ function abrirModalCerrarTrade(tradeId) {
     if (!trade) return
 
     const html = `
-        <form class="form-movimiento">
+        <form class="form-movimiento form-movimiento-grid">
             <div class="form-group">
                 <label>Activo</label>
-                <span class="form-static">${trade.tipoIcono} ${trade.activo} (${trade.tipoLabel})</span>
+                <span class="form-static">${trade.activo} (${trade.tipoLabel})</span>
             </div>
             <div class="form-group">
                 <label>Entrada</label>
@@ -313,7 +347,7 @@ function abrirModalCerrarTrade(tradeId) {
                 <label>Lotaje</label>
                 <span class="form-static">${trade.lotaje}</span>
             </div>
-            <div class="form-group">
+            <div class="form-group span-full">
                 <label for="cerrar-salida">Precio de salida *</label>
                 <input type="number" id="cerrar-salida" class="form-input" step="0.01" min="0.01" placeholder="0.00" required>
             </div>
@@ -328,18 +362,95 @@ function abrirModalCerrarTrade(tradeId) {
             const salida = parseFloat(document.getElementById('cerrar-salida')?.value)
 
             if (!salida || salida <= 0) {
-                alert('La salida debe ser mayor a 0')
+                mostrarNotificacion("error", "La salida debe ser mayor a 0")
                 return false
             }
 
             try {
                 await finalizarTrade(uid, tradeId, salida)
                 await cargarTrades()
-                alert('✅ Trade cerrado correctamente')
+                mostrarNotificacion("exito", "Trade cerrado correctamente")
                 return true
             } catch (error) {
                 console.error('Error cerrando trade:', error)
-                alert(`❌ Error: ${error.message}`)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
+}
+
+// ============================================
+// REABRIR TRADE
+// ============================================
+
+function abrirModalReabrirTrade(tradeId) {
+    const trade = datosTrades?.trades.find(t => t.id === tradeId)
+    if (!trade) return
+
+    abrirModal({
+        titulo: "Reabrir trade",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    ¿Reabrir el trade de ${trade.activo} (${trade.tipoLabel})? Se eliminará la salida registrada.
+                </p>
+            </div>
+        `,
+        confirmText: "Reabrir",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            try {
+                await reabrirTradeAbierto(uid, tradeId)
+                await cargarTrades()
+                mostrarNotificacion("exito", "Trade reabierto correctamente")
+                return true
+            } catch (error) {
+                console.error('Error reabriendo trade:', error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
+}
+
+// ============================================
+// EDITAR NOTA
+// ============================================
+
+function abrirModalEditarNota(tradeId) {
+    const trade = datosTrades?.trades.find(t => t.id === tradeId)
+    if (!trade) return
+
+    const html = `
+        <form class="form-movimiento">
+            <div class="form-group">
+                <label>Trade</label>
+                <span class="form-static">${trade.activo} (${trade.tipoLabel})</span>
+            </div>
+            <div class="form-group">
+                <label for="trade-nota-editar">Nota</label>
+                <textarea id="trade-nota-editar" class="form-input form-textarea" rows="6" maxlength="1500">${(trade.nota || "").replace(/</g, "&lt;")}</textarea>
+                <span class="form-hint">Máximo 1500 caracteres</span>
+            </div>
+        </form>
+    `
+
+    abrirModal({
+        titulo: "Nota del trade",
+        contenido: html,
+        confirmText: "Guardar nota",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            const nota = document.getElementById('trade-nota-editar')?.value.trim() || ''
+            try {
+                await actualizarNota(uid, tradeId, nota)
+                await cargarTrades()
+                mostrarNotificacion("exito", "Nota actualizada")
+                return true
+            } catch (error) {
+                console.error('Error guardando nota:', error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
                 return false
             }
         }
@@ -352,10 +463,9 @@ function abrirModalCerrarTrade(tradeId) {
 
 function confirmarEliminarTrade(tradeId) {
     abrirModal({
-        titulo: '🗑️ Eliminar trade',
+        titulo: "Eliminar trade",
         contenido: `
             <div class="modal-message">
-                <div class="modal-message-icon">🗑️</div>
                 <p class="modal-message-desc">¿Estás seguro de que quieres eliminar este trade?</p>
             </div>
         `,
@@ -365,10 +475,11 @@ function confirmarEliminarTrade(tradeId) {
             try {
                 await borrarTrade(uid, tradeId)
                 await cargarTrades()
+                mostrarNotificacion("exito", "Trade eliminado")
                 return true
             } catch (error) {
                 console.error('Error eliminando trade:', error)
-                alert(`❌ Error: ${error.message}`)
+                mostrarNotificacion("error", `Error: ${error.message}`)
                 return false
             }
         }

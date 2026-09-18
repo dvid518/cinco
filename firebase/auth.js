@@ -1,5 +1,7 @@
 import {
     getAuth,
+    createUserWithEmailAndPassword,
+    updateProfile,
     signInWithEmailAndPassword,
     signInWithPopup,
     signOut,
@@ -13,12 +15,78 @@ import {
     getAdditionalUserInfo
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js"
 import { app } from "./firebaseClient.js"
-import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "./firestore.js"
+import { cacheCapa } from "../js/core/cache.js"
 
 const auth = getAuth(app)
 const INACTIVITY_TIME = 30 * 60 * 1000
 let inactivityTimer
+
+// ============================================
+// REGISTRO CON EMAIL Y CONTRASEÑA
+// ============================================
+
+export async function registrarConEmail(nombre, email, password) {
+    const credencial = await createUserWithEmailAndPassword(auth, email, password)
+
+    if (nombre) {
+        await updateProfile(credencial.user, { displayName: nombre })
+    }
+
+    await asegurarDocUsuario(credencial.user, true, nombre)
+
+    return credencial
+}
+
+// ============================================
+// REGISTRO / LOGIN CON GOOGLE
+// ============================================
+// El flujo es el mismo: al aceptar el popup se crea el usuario
+// si no existía. Aquí solo se garantiza su doc en Firestore.
+
+export async function registrarConGoogle() {
+    const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: "select_account" })
+
+    const resultado = await signInWithPopup(auth, provider)
+    const esNuevo = getAdditionalUserInfo(resultado)?.isNewUser || false
+
+    await asegurarDocUsuario(resultado.user, esNuevo)
+
+    return resultado
+}
+
+// ============================================
+// LOGIN CON GOOGLE
+// ============================================
+// Mismo flujo que registrarConGoogle: al aceptar el popup, si la cuenta
+// no existe se crea. Se expone con nombre de login para la página index.
+
+export async function loginConGoogle() {
+    return registrarConGoogle()
+}
+
+// ============================================
+// CAMBIAR NOMBRE DEL USUARIO
+// ============================================
+// Actualiza el displayName del auth y el campo `nombre` del doc.
+
+export async function actualizarNombre(nombre) {
+    const user = auth.currentUser
+    if (!user) throw new Error("No hay usuario autenticado")
+
+    const nombreLimpio = String(nombre || "").trim()
+    if (!nombreLimpio) throw new Error("El nombre no puede estar vacío")
+    if (nombreLimpio.length > 60) throw new Error("El nombre es demasiado largo")
+
+    await updateProfile(user, { displayName: nombreLimpio })
+
+    const referencia = doc(db, "usuarios", user.uid)
+    await updateDoc(referencia, { nombre: nombreLimpio })
+
+    return nombreLimpio
+}
 
 // ============================================
 // LOGIN CON EMAIL Y CONTRASEÑA
@@ -29,43 +97,27 @@ export async function login(email, password) {
 }
 
 // ============================================
-// LOGIN CON GOOGLE
-// ============================================
-
-export async function loginConGoogle() {
-    const provider = new GoogleAuthProvider()
-    provider.setCustomParameters({ prompt: "select_account" })
-
-    const resultado = await signInWithPopup(auth, provider)
-    const esNuevo = getAdditionalUserInfo(resultado)?.isNewUser || false
-
-    // Asegurar doc del usuario en Firestore
-    await asegurarDocUsuario(resultado.user, esNuevo)
-
-    return resultado
-}
-
-// ============================================
 // ASEGURAR DOC DEL USUARIO EN FIRESTORE
 // ============================================
 // Crea usuarios/{uid} si no existe. No sobreescribe si ya existe.
 // ============================================
 
-async function asegurarDocUsuario(user, esNuevo) {
+async function asegurarDocUsuario(user, esNuevo, nombrePersonalizado) {
     const referencia = doc(db, "usuarios", user.uid)
     const existente = await getDoc(referencia)
 
     if (!existente.exists()) {
         await setDoc(referencia, {
             email: user.email || null,
-            nombre: user.displayName || null,
+            nombre: nombrePersonalizado || user.displayName || null,
             foto: user.photoURL || null,
             fechaRegistro: serverTimestamp(),
             preferencias: {}
         })
         console.log("[INFO] Doc de usuario creado en Firestore")
-    } else if (esNuevo) {
-        console.log("[INFO] Doc ya existía (caso raro)")
+    } else if (esNuevo && nombrePersonalizado) {
+        await updateDoc(referencia, { nombre: nombrePersonalizado })
+        console.log("[INFO] Doc ya existía, nombre actualizado (caso raro)")
     }
 }
 
@@ -74,6 +126,7 @@ async function asegurarDocUsuario(user, esNuevo) {
 // ============================================
 
 export async function logout() {
+    cacheCapa.limpiar(auth.currentUser?.uid)
     return await signOut(auth)
 }
 
@@ -94,7 +147,7 @@ function resetInactivityTimer() {
 
     inactivityTimer = setTimeout(async () => {
         await logout()
-        window.location.replace("/login.html")
+        window.location.replace("/login")
     }, INACTIVITY_TIME)
 }
 

@@ -1,4 +1,6 @@
 import { sesion } from "../core/sesion.js"
+import { cacheCapa } from "../core/cache.js"
+import { activarSpinLogo, desactivarSpinLogo } from "../core/router.js"
 import { obtenerCuentas } from "../../firebase/firestore.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 import {
@@ -110,7 +112,11 @@ export async function init() {
 // ============================================
 
 export async function recargarDatos() {
+    activarSpinLogo()
     try {
+        // Forzar lectura fresca: limpiar la caché en memoria
+        cacheCapa.limpiar(uid)
+
         await cargarTodo()
 
         try {
@@ -122,6 +128,8 @@ export async function recargarDatos() {
         await cargarGraficoPatrimonio()
     } catch (error) {
         console.error("Error recargando dashboard:", error)
+    } finally {
+        desactivarSpinLogo()
     }
 }
 
@@ -202,7 +210,7 @@ async function obtenerPendientesConVencimiento() {
                 divisa: p.divisa,
                 diasRestantes: dias,
                 vencido: dias < 0,
-                icono: p.tipo ? "📥" : "📤"
+                icono: ""
             }
         })
         .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
@@ -225,7 +233,7 @@ async function obtenerTarjetasConPagoProximo() {
                 divisa: t.moneda || "pen",
                 diasRestantes: dias,
                 vencido: false,
-                icono: "💳"
+                icono: ""
             }
         })
         .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)

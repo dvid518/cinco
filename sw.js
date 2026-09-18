@@ -1,15 +1,15 @@
-import { VERSION } from "./js/constants/version.js"
+import { VERSION } from "./constants/version.js"
 
-const VERSION = `cinco-v${VERSION.numero}`
-const CACHE_SHELL = `${VERSION}-shell`
-const CACHE_RUNTIME = `${VERSION}-runtime`
+const VERSION_APP = `cinco-v${VERSION.numero}`
+const CACHE_SHELL = `${VERSION_APP}-shell`
+const CACHE_RUNTIME = `${VERSION_APP}-runtime`
 
 // Assets que se precargan al instalar el SW
 const SHELL_ASSETS = [
     "/",
     "/dashboard.html",
     "/login.html",
-    "/404.html",
+    "/register.html",
     "/manifest.webmanifest",
 
     // CSS
@@ -24,6 +24,9 @@ const SHELL_ASSETS = [
     "/css/configuracion.css",
     "/css/pendientes.css",
     "/css/modal.css",
+    "/css/register.css",
+    "/css/componentes.css",
+    "/css/iconos.css",
 
     // JS core
     "/js/core/app.js",
@@ -32,9 +35,12 @@ const SHELL_ASSETS = [
     "/js/core/tema.js",
     "/js/core/lastbar.js",
     "/js/core/pwa.js",
+    "/js/core/iconos.js",
+    "/js/core/cache.js",
 
     // JS pages
     "/js/pages/index.js",
+    "/js/pages/register.js",
     "/js/pages/dashboard.js",
     "/js/pages/cuentas.js",
     "/js/pages/movimientos.js",
@@ -47,6 +53,8 @@ const SHELL_ASSETS = [
     "/js/ui/formularioMovimiento.js",
     "/js/ui/pendientes.js",
     "/js/ui/graficos.js",
+    "/js/ui/notificaciones.js",
+    "/js/ui/exportar.js",
 
     // JS models
     "/js/models/Activo.js",

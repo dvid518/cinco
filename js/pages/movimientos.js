@@ -1,5 +1,6 @@
 import { obtenerMovimientos } from "../../firebase/firestore.js"
 import { sesion } from "../core/sesion.js"
+import { icono } from "../core/iconos.js"
 import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import {
@@ -7,6 +8,7 @@ import {
     recogerDatosFormulario
 } from "../ui/formularioMovimiento.js"
 import { registrarMovimiento } from "../services/MovimientoServicio.js"
+import { mostrarNotificacion } from "../ui/notificaciones.js"
 
 let movimientos = []
 let uid = null
@@ -16,24 +18,37 @@ let filtroActual = "todos"
 // RENDER
 // ============================================
 
+const FILTROS_DISPONIBLES = [
+    { filtro: "todos", label: "Todos", icono: "list" },
+    { filtro: "ingreso", label: "Ingresos", icono: "arrow-down-left" },
+    { filtro: "gasto", label: "Gastos", icono: "arrow-up-right" },
+    { filtro: "transferencia", label: "Transferencias", icono: "arrow-left-right" },
+    { filtro: "compraTarjeta", label: "Tarjetas", icono: "credit-card" }
+]
+
 export function render() {
+    const botones = FILTROS_DISPONIBLES
+        .map(f => `
+            <button class="glass${f.filtro === "todos" ? " act" : ""}" data-filtro="${f.filtro}">
+                ${icono(f.icono, 18)}<span>${f.label}</span>
+            </button>
+        `)
+        .join("")
+
     return `
         <section id="sidebar">
-            <button class="glass act" data-filtro="todos">📋 Todos</button>
-            <button class="glass" data-filtro="ingreso">📥 Ingresos</button>
-            <button class="glass" data-filtro="gasto">📤 Gastos</button>
-            <button class="glass" data-filtro="transferencia">🔄 Transferencias</button>
-            <button class="glass" data-filtro="compraTarjeta">💳 Tarjetas</button>
+            ${botones}
         </section>
         <section id="panel" class="glass">
             <div class="panel-header">
                 <h2>Movimientos</h2>
             </div>
             <div class="filtros">
-                <input type="date" id="filtro-desde" class="glass">
-                <input type="date" id="filtro-hasta" class="glass">
+                <input type="date" id="filtro-desde" aria-label="Desde">
+                <input type="date" id="filtro-hasta" aria-label="Hasta">
+                <button type="button" class="btn-sm" id="filtro-limpiar">Limpiar</button>
             </div>
-            <div id="lista-movimientos" class="lista-movimientos">
+            <div id="lista-movimientos" class="lista-cards">
                 <p class="lista-vacia">Cargando movimientos...</p>
             </div>
         </section>
@@ -60,6 +75,11 @@ export async function init() {
 async function cargarMovimientos() {
     try {
         movimientos = await obtenerMovimientos(uid)
+        movimientos.sort((a, b) => {
+            const fa = (fechaDeMovimiento(a)?.getTime?.()) || 0
+            const fb = (fechaDeMovimiento(b)?.getTime?.()) || 0
+            return fb - fa
+        })
         renderizarMovimientos()
     } catch (error) {
         console.error("Error cargando movimientos:", error)
@@ -111,13 +131,12 @@ function plantillaMovimiento(m) {
     const fecha = formatearFecha(m.fechaRegistro || m.fechaRealizacion)
 
     return `
-        <div class="movimiento-item" data-id="${m.id}">
-            <div class="info">
-                <span class="concepto">${m.concepto || m.tipo || "Sin concepto"}</span>
-                <span class="fecha">${fecha}</span>
-                <span class="tipo">${tipoNombre}</span>
+        <div class="card-item" data-id="${m.id}">
+            <div class="card-item-info">
+                <span class="card-item-titulo">${m.concepto || m.tipo || "Sin concepto"}</span>
+                <span class="card-item-detalle">${fecha} · ${tipoNombre}</span>
             </div>
-            <span class="monto ${clase}">
+            <span class="card-item-valor ${clase}">
                 ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
             </span>
         </div>
@@ -160,9 +179,15 @@ function configurarEventos() {
 
     const desde = document.getElementById("filtro-desde")
     const hasta = document.getElementById("filtro-hasta")
+    const limpiar = document.getElementById("filtro-limpiar")
 
     desde?.addEventListener("change", aplicarFiltro)
     hasta?.addEventListener("change", aplicarFiltro)
+    limpiar?.addEventListener("click", () => {
+        if (desde) desde.value = ""
+        if (hasta) hasta.value = ""
+        aplicarFiltro()
+    })
 }
 
 function aplicarFiltro() {
@@ -263,10 +288,11 @@ async function abrirFormularioMovimiento(tipo) {
             try {
                 await registrarMovimiento(uid, tipo, datos)
                 await cargarMovimientos()
+                mostrarNotificacion("exito", "Movimiento registrado")
                 return true
             } catch (error) {
                 console.error("Error creando movimiento:", error)
-                alert(`❌ Error: ${error.message}`)
+                mostrarNotificacion("error", `No se pudo guardar el movimiento: ${error.message || "error desconocido"}`)
                 return false
             }
         }

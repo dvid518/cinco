@@ -20,6 +20,24 @@ const MEDIA_QUERY = "(prefers-color-scheme: dark)"
 let mediaListenerActivo = false
 
 // --------------------------------------------
+// NOMBRES LEGIBLES (para notificaciones)
+// --------------------------------------------
+
+const NOMBRES_TEMA = {
+    dark: "Modo oscuro",
+    light: "Modo claro",
+    system: "Modo sistema"
+}
+
+export function nombreModoTema(tema) {
+    return NOMBRES_TEMA[tema] || "Modo de color"
+}
+
+function notificarCambioTema(tema) {
+    window.dispatchEvent(new CustomEvent("tema-cambiado", { detail: { tema } }))
+}
+
+// --------------------------------------------
 // APLICAR TEMA EN EL DOM
 // --------------------------------------------
 
@@ -138,6 +156,7 @@ export async function guardarTemaFirestore(uid, tema) {
 export async function cambiarTema(uid, tema) {
     setTemaLocal(tema)
     aplicarTema(tema)
+    notificarCambioTema(tema)
 
     if (uid) {
         try {
@@ -147,5 +166,33 @@ export async function cambiarTema(uid, tema) {
             throw error
         }
     }
+}
+
+// --------------------------------------------
+// CICLO DE TEMA (botón "Tema" de la lastbar)
+// --------------------------------------------
+// Orden: dark → light → system → dark
+
+const ORDEN_TEMAS = ["dark", "light", "system"]
+
+export async function ciclarTema(uid) {
+    const actual = getTemaLocal()
+    const indice = ORDEN_TEMAS.indexOf(actual)
+    const siguiente = ORDEN_TEMAS[(indice + 1) % ORDEN_TEMAS.length]
+
+    if (uid) {
+        try {
+            await cambiarTema(uid, siguiente)
+        } catch (error) {
+            console.warn("[WARN] Tema aplicado localmente, pero falló guardar en Firestore:", error)
+        }
+    } else {
+        setTemaLocal(siguiente)
+        aplicarTema(siguiente)
+        notificarCambioTema(siguiente)
+    }
+
+    console.log("[INFO] Tema →", siguiente)
+    return siguiente
 }
 

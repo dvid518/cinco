@@ -11,6 +11,7 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
+import { cacheCapa } from "../core/cache.js"
 
 // ============================================
 // HISTORIAL REPOSITORIO (por usuario)
@@ -63,6 +64,8 @@ export async function guardarPrecioDelDia(uid, activoId, precio) {
         })
     }
 
+    cacheCapa.invalidarPrefijo(uid, `historial:${activoId}`)
+
     return fecha
 }
 
@@ -73,6 +76,7 @@ export async function guardarPrecioDelDia(uid, activoId, precio) {
 export async function cerrarDia(uid, activoId, fecha) {
     const referencia = refDia(uid, activoId, fecha)
     await setDoc(referencia, { cerrado: true }, { merge: true })
+    cacheCapa.invalidarPrefijo(uid, `historial:${activoId}`)
 }
 
 // --------------------------------------------
@@ -80,17 +84,23 @@ export async function cerrarDia(uid, activoId, fecha) {
 // --------------------------------------------
 
 export async function obtenerHistorial(uid, activoId, dias = 7) {
-    const referencia = refHistorial(uid, activoId)
-    const q = query(referencia, orderBy("fecha", "desc"), limit(dias))
-    const resultado = await getDocs(q)
+    return cacheCapa.obtener(
+        uid,
+        `historial:${activoId}:${dias}`,
+        async () => {
+            const referencia = refHistorial(uid, activoId)
+            const q = query(referencia, orderBy("fecha", "desc"), limit(dias))
+            const resultado = await getDocs(q)
 
-    const historial = resultado.docs.map(documento => ({
-        fecha: documento.id,
-        ...documento.data()
-    }))
+            const historial = resultado.docs.map(documento => ({
+                fecha: documento.id,
+                ...documento.data()
+            }))
 
-    // Devolver del más antiguo al más reciente (para gráficos)
-    return historial.reverse()
+            // Devolver del más antiguo al más reciente (para gráficos)
+            return historial.reverse()
+        }
+    )
 }
 
 // --------------------------------------------
@@ -98,18 +108,24 @@ export async function obtenerHistorial(uid, activoId, dias = 7) {
 // --------------------------------------------
 
 export async function obtenerPrecioHoy(uid, activoId) {
-    const fecha = getFechaHoy()
-    const referencia = refDia(uid, activoId, fecha)
-    const resultado = await getDoc(referencia)
+    return cacheCapa.obtener(
+        uid,
+        `historial:${activoId}:hoy`,
+        async () => {
+            const fecha = getFechaHoy()
+            const referencia = refDia(uid, activoId, fecha)
+            const resultado = await getDoc(referencia)
 
-    if (!resultado.exists()) {
-        return null
-    }
+            if (!resultado.exists()) {
+                return null
+            }
 
-    return {
-        fecha: resultado.id,
-        ...resultado.data()
-    }
+            return {
+                fecha: resultado.id,
+                ...resultado.data()
+            }
+        }
+    )
 }
 
 // --------------------------------------------
@@ -129,4 +145,6 @@ export async function limpiarHistorialAntiguo(uid, activoId) {
             await deleteDoc(documentos[i].ref)
         }
     }
+
+    cacheCapa.invalidarPrefijo(uid, `historial:${activoId}`)
 }

@@ -5,6 +5,7 @@ import {
     doc
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
+import { cacheCapa } from "../core/cache.js"
 
 // ============================================
 // ELIMINAR SERVICIO
@@ -41,6 +42,10 @@ export async function eliminarTodosLosDatos(uid) {
     }
 
     console.log("[INFO] Datos eliminados:", resultado)
+
+    // Limpiar la caché en memoria del usuario
+    cacheCapa.limpiar(uid)
+
     return resultado
 }
 
@@ -91,7 +96,9 @@ async function vaciarSubcoleccion(uid, coleccionPadre, docId, subcoleccion) {
 
 export async function eliminarColeccion(uid, coleccionNombre) {
     try {
-        return await vaciarColeccion(uid, coleccionNombre)
+        const resultado = await vaciarColeccion(uid, coleccionNombre)
+        cacheCapa.limpiar(uid)
+        return resultado
     } catch (error) {
         console.error(`Error eliminando ${coleccionNombre}:`, error)
         throw error

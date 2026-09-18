@@ -1,14 +1,32 @@
 import { sesion } from "../core/sesion.js"
+import { icono } from "../core/iconos.js"
 import {
     obtenerCuentas,
     crearCuenta,
     actualizarCuenta
 } from "../../firebase/firestore.js"
 import { abrirModal } from "../ui/modal.js"
+import { mostrarNotificacion } from "../ui/notificaciones.js"
 
 let cuentas = []
 let cuentaSeleccionada = null
 let uid = null
+
+// ============================================
+// ÍCONOS POR TIPO DE CUENTA
+// ============================================
+
+const ICONOS_POR_TIPO = {
+    banco: "landmark",
+    efectivo: "banknote",
+    broker: "trending-up",
+    exchange: "arrow-left-right",
+    credito: "credit-card"
+}
+
+function iconoPorTipo(tipo) {
+    return ICONOS_POR_TIPO[tipo] || "wallet"
+}
 
 // ============================================
 // RENDER
@@ -57,13 +75,25 @@ async function cargarCuentas() {
         cuentas = await obtenerCuentas(uid)
         renderizarSidebar()
 
-        if (cuentas.length > 0) {
+        // Restaurar selección previa si sigue existiendo
+        if (cuentaSeleccionada) {
+            const vigente = cuentas.find(c => c.id === cuentaSeleccionada.id)
+            if (!vigente) {
+                cuentaSeleccionada = null
+            }
+        }
+
+        if (!cuentaSeleccionada && cuentas.length > 0) {
             seleccionarCuenta(cuentas[0].id)
-        } else {
+        } else if (cuentas.length === 0) {
+            cuentaSeleccionada = null
             mostrarVacio()
+        } else {
+            mostrarDetalleCuenta()
         }
     } catch (error) {
         console.error("Error cargando cuentas:", error)
+        mostrarNotificacion("error", "No se pudieron cargar las cuentas")
     }
 }
 
@@ -83,18 +113,20 @@ function renderizarSidebar() {
         btn.name = "cta"
         btn.dataset.id = cuenta.id
 
-        // Punto de color como span, no como style inline
+        // Punto de color vía variable CSS (no style inline)
         if (cuenta.color) {
             const punto = document.createElement("span")
             punto.className = "cuenta-color"
             punto.style.setProperty("--cuenta-color", cuenta.color)
-            // Se aplica via CSS: .cuenta-color { background: var(--cuenta-color) }
-            punto.style.background = cuenta.color  // Fallback seguro, ver nota
             btn.appendChild(punto)
         }
 
-        const label = cuenta.tipo === "credito" ? `${cuenta.nombre} 💳` : cuenta.nombre
-        btn.appendChild(document.createTextNode(label))
+        // Ícono según el tipo de cuenta
+        btn.insertAdjacentHTML("beforeend", icono(iconoPorTipo(cuenta.tipo), 18))
+
+        const texto = document.createElement("span")
+        texto.textContent = cuenta.nombre
+        btn.appendChild(texto)
 
         if (cuentaSeleccionada && cuenta.id === cuentaSeleccionada.id) {
             btn.classList.add("act")
@@ -145,15 +177,22 @@ function mostrarDetalleCuenta() {
     } else {
         mostrarDetalleCuentaNormal(panel, cuentaSeleccionada)
     }
+
+    aplicarColorEncabezado()
+}
+
+function aplicarColorEncabezado() {
+    const punto = document.getElementById("cuenta-color-header")
+    if (!punto || !cuentaSeleccionada?.color) return
+    punto.style.setProperty("--cuenta-color", cuentaSeleccionada.color)
 }
 
 function mostrarDetalleCuentaNormal(panel, c) {
     const esPositivo = (c.saldoInicial || 0) >= 0
-    const color = c.color || "#738391"
 
     panel.innerHTML = `
         <div class="cuenta-detalle-header">
-            <span class="cuenta-color" style="background:${color}"></span>
+            <span class="cuenta-color" id="cuenta-color-header"></span>
             <h2>${c.nombre}</h2>
         </div>
         <div class="cuenta-detalle">
@@ -183,16 +222,15 @@ function mostrarDetalleTarjeta(panel, c) {
     const limite = c.limite || 0
     const disponible = Math.max(0, limite - deuda)
     const porcentaje = limite > 0 ? (deuda / limite) * 100 : 0
-    const color = c.color || "#738391"
 
     let nivelClase = ""
     let nivelTexto = "Normal"
     if (porcentaje >= 70) {
         nivelClase = "negative"
-        nivelTexto = "⚠️ Crítico"
+        nivelTexto = "Crítico"
     } else if (porcentaje >= 30) {
         nivelClase = "positive"
-        nivelTexto = "⚡ Advertencia"
+        nivelTexto = "Advertencia"
     }
 
     const corteInfo = calcularDiasHasta(c.diaCorte)
@@ -200,8 +238,8 @@ function mostrarDetalleTarjeta(panel, c) {
 
     panel.innerHTML = `
         <div class="cuenta-detalle-header">
-            <span class="cuenta-color" style="background:${color}"></span>
-            <h2>${c.nombre} 💳</h2>
+            <span class="cuenta-color" id="cuenta-color-header"></span>
+            <h2>${c.nombre}</h2>
         </div>
         <div class="cuenta-detalle">
             <div class="saldo ${deuda > 0 ? "negative" : "positive"}">
@@ -261,8 +299,8 @@ function calcularDiasHasta(diaMes) {
 // ============================================
 
 function actualizarLastbar() {
-    const editBtn = document.querySelector(".lastbar .item.desact")
-    const archBtn = document.querySelectorAll(".lastbar .item.desact")[1]
+    const editBtn = document.querySelector('.lastbar .item[data-accion="editar-cuenta"]')
+    const archBtn = document.querySelector('.lastbar .item[data-accion="archivar-cuenta"]')
 
     const activo = !!cuentaSeleccionada
     editBtn?.classList.toggle("desact", !activo)
@@ -282,32 +320,52 @@ export function editarCuentaSeleccionada() {
     if (cuentaSeleccionada) {
         _abrirModalEditarCuenta(cuentaSeleccionada)
     } else {
-        alert("Selecciona una cuenta primero")
+        mostrarNotificacion("info", "Selecciona una cuenta primero")
     }
 }
 
 export function archivarCuentaSeleccionada() {
     if (!cuentaSeleccionada) {
-        alert("Selecciona una cuenta primero")
+        mostrarNotificacion("info", "Selecciona una cuenta primero")
         return
     }
     const saldo = cuentaSeleccionada.saldoInicial || 0
     if (saldo !== 0) {
-        alert(`No se puede archivar una cuenta con saldo diferente de 0 (saldo actual: ${saldo})`)
+        mostrarNotificacion(
+            "warning",
+            `No se puede archivar una cuenta con saldo diferente de 0 (saldo actual: ${saldo})`
+        )
         return
     }
-    if (confirm(`¿Archivar la cuenta "${cuentaSeleccionada.nombre}"?`)) {
-        archivarCuenta(cuentaSeleccionada.id)
-    }
+
+    const cuenta = cuentaSeleccionada
+    abrirModal({
+        titulo: "Archivar cuenta",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    ¿Archivar la cuenta <strong>${cuenta.nombre}</strong>?
+                </p>
+            </div>
+        `,
+        variante: "confirm",
+        confirmText: "Archivar",
+        cancelText: "Cancelar",
+        onConfirm: () => {
+            archivarCuenta(cuenta.id)
+            return true
+        }
+    })
 }
 
 async function archivarCuenta(id) {
     try {
         await actualizarCuenta(uid, id, { estado: "archivada" })
         await cargarCuentas()
+        mostrarNotificacion("exito", "Cuenta archivada")
     } catch (error) {
         console.error("Error archivando cuenta:", error)
-        alert(`❌ Error: ${error.message}`)
+        mostrarNotificacion("error", `No se pudo archivar la cuenta: ${error.message}`)
     }
 }
 
@@ -374,9 +432,10 @@ function configurarEventos() {
         if (!btn) return
         const btnId = btn.dataset.id
 
-        seleccionarCuenta(btnId)
-        if (cuentaSeleccionada) {
-            _abrirModalEditarCuenta(cuentaSeleccionada)
+        // Abrir el editor directamente, sin togglear la selección
+        const cuenta = cuentas.find(c => c.id === btnId)
+        if (cuenta) {
+            _abrirModalEditarCuenta(cuenta)
         }
     })
 }
@@ -451,7 +510,7 @@ function _abrirModalCrearCuenta() {
             const color = document.getElementById("campo-color")?.value || "#738391"
 
             if (!nombre) {
-                alert("El nombre es obligatorio")
+                mostrarNotificacion("warning", "El nombre es obligatorio")
                 return false
             }
 
@@ -476,10 +535,11 @@ function _abrirModalCrearCuenta() {
             try {
                 await crearCuenta(uid, datos)
                 await cargarCuentas()
+                mostrarNotificacion("exito", "Cuenta creada")
                 return true
             } catch (error) {
                 console.error("Error creando cuenta:", error)
-                alert(`❌ Error: ${error.message}`)
+                mostrarNotificacion("error", `No se pudo crear la cuenta: ${error.message}`)
                 return false
             }
         }
@@ -550,7 +610,7 @@ function _abrirModalEditarCuenta(cuenta) {
             const color = document.getElementById("edit-color")?.value
 
             if (!nombre) {
-                alert("El nombre es obligatorio")
+                mostrarNotificacion("warning", "El nombre es obligatorio")
                 return false
             }
 
@@ -573,10 +633,11 @@ function _abrirModalEditarCuenta(cuenta) {
             try {
                 await actualizarCuenta(uid, cuenta.id, datos)
                 await cargarCuentas()
+                mostrarNotificacion("exito", "Cuenta actualizada")
                 return true
             } catch (error) {
                 console.error("Error actualizando cuenta:", error)
-                alert(`❌ Error: ${error.message}`)
+                mostrarNotificacion("error", `No se pudo guardar: ${error.message}`)
                 return false
             }
         }

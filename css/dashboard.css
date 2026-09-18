@@ -45,9 +45,10 @@
 
 /* Hover */
 .dashboard .card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-2px);
+    transform: scale(1.02);
     border-color: var(--text);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 5px 25px var(--shadow);
 }
 
 .dashboard .card:hover::before {
@@ -131,6 +132,7 @@
 .divisa-select:hover {
     border-color: var(--text);
     background-color: var(--lightHover);
+    color: var(--textSecondary);
 }
 
 .divisa-select:focus {

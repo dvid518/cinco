@@ -13,6 +13,7 @@ import {
 import { db } from "../../firebase/firestore.js"
 import { Posicion } from "../models/Posicion.js"
 import { obtenerActivo } from "./ActivoRepositorio.js"
+import { cacheCapa } from "../core/cache.js"
 
 // ============================================
 // POSICION REPOSITORIO (por usuario)
@@ -27,26 +28,29 @@ export async function crearPosicion(uid, datos) {
         ...posicion.toFirestore(),
         ultimaActualizacion: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "posiciones")
     
     return resultado.id
 }
 
 export async function obtenerPosiciones(uid) {
-    const referencia = collection(db, "usuarios", uid, "posiciones")
-    const resultado = await getDocs(referencia)
-    
-    const posiciones = await Promise.all(resultado.docs.map(async doc => {
-        const pos = Posicion.fromFirestore(doc.id, doc.data())
-        try {
-            const activo = await obtenerActivo(pos.activoId)
-            pos.activo = activo
-        } catch (error) {
-            console.warn(`Activo no encontrado para posición ${pos.id}:`, error)
-        }
-        return pos
-    }))
-    
-    return posiciones
+    return cacheCapa.obtener(uid, "posiciones", async () => {
+        const referencia = collection(db, "usuarios", uid, "posiciones")
+        const resultado = await getDocs(referencia)
+        
+        const posiciones = await Promise.all(resultado.docs.map(async doc => {
+            const pos = Posicion.fromFirestore(doc.id, doc.data())
+            try {
+                const activo = await obtenerActivo(uid, pos.activoId)
+                pos.activo = activo
+            } catch (error) {
+                console.warn(`Activo no encontrado para posición ${pos.id}:`, error)
+            }
+            return pos
+        }))
+        
+        return posiciones
+    })
 }
 
 export async function obtenerPosicion(uid, posicionId) {
@@ -60,7 +64,7 @@ export async function obtenerPosicion(uid, posicionId) {
     const pos = Posicion.fromFirestore(resultado.id, resultado.data())
     
     try {
-        const activo = await obtenerActivo(pos.activoId)
+        const activo = await obtenerActivo(uid, pos.activoId)
         pos.activo = activo
     } catch (error) {
         console.warn(`Activo no encontrado para posición ${pos.id}`)
@@ -82,7 +86,7 @@ export async function obtenerPosicionPorActivo(uid, activoId) {
     const pos = Posicion.fromFirestore(doc.id, doc.data())
     
     try {
-        const activo = await obtenerActivo(pos.activoId)
+        const activo = await obtenerActivo(uid, pos.activoId)
         pos.activo = activo
     } catch (error) {
         console.warn(`Activo no encontrado para posición ${pos.id}`)
@@ -93,15 +97,19 @@ export async function obtenerPosicionPorActivo(uid, activoId) {
 
 export async function actualizarPosicion(uid, posicionId, datos) {
     const referencia = doc(db, "usuarios", uid, "posiciones", posicionId)
-    return await updateDoc(referencia, {
+    const resultado = await updateDoc(referencia, {
         ...datos,
         ultimaActualizacion: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "posiciones")
+    return resultado
 }
 
 export async function eliminarPosicion(uid, posicionId) {
     const referencia = doc(db, "usuarios", uid, "posiciones", posicionId)
-    return await deleteDoc(referencia)
+    const resultado = await deleteDoc(referencia)
+    cacheCapa.invalidar(uid, "posiciones")
+    return resultado
 }
 
 // ============================================

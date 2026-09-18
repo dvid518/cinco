@@ -10,6 +10,7 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { app } from "./firebaseClient.js"
+import { cacheCapa } from "../js/core/cache.js"
 
 const db = getFirestore(app)
 export { db }
@@ -33,19 +34,23 @@ export async function obtenerUsuario(uid) {
 
 export async function crearCuenta(uid, datos) {
     const referencia = collection(db, "usuarios", uid, "cuentas")
-    return await addDoc(referencia, {
+    const resultado = await addDoc(referencia, {
         ...datos,
         fechaCreacion: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "cuentas")
+    return resultado
 }
 
 export async function obtenerCuentas(uid) {
-    const referencia = collection(db, "usuarios", uid, "cuentas")
-    const resultado = await getDocs(referencia)
-    return resultado.docs.map(documento => ({
-        id: documento.id,
-        ...documento.data()
-    }))
+    return cacheCapa.obtener(uid, "cuentas", async () => {
+        const referencia = collection(db, "usuarios", uid, "cuentas")
+        const resultado = await getDocs(referencia)
+        return resultado.docs.map(documento => ({
+            id: documento.id,
+            ...documento.data()
+        }))
+    })
 }
 
 export async function obtenerCuenta(uid, cuentaId) {
@@ -59,12 +64,16 @@ export async function obtenerCuenta(uid, cuentaId) {
 
 export async function actualizarCuenta(uid, cuentaId, datos) {
     const referencia = doc(db, "usuarios", uid, "cuentas", cuentaId)
-    return await updateDoc(referencia, datos)
+    const resultado = await updateDoc(referencia, datos)
+    cacheCapa.invalidar(uid, "cuentas")
+    return resultado
 }
 
 export async function eliminarCuenta(uid, cuentaId) {
     const referencia = doc(db, "usuarios", uid, "cuentas", cuentaId)
-    return await deleteDoc(referencia)
+    const resultado = await deleteDoc(referencia)
+    cacheCapa.invalidar(uid, "cuentas")
+    return resultado
 }
 
 // ============================================
@@ -73,19 +82,23 @@ export async function eliminarCuenta(uid, cuentaId) {
 
 export async function crearMovimiento(uid, datos) {
     const referencia = collection(db, "usuarios", uid, "movimientos")
-    return await addDoc(referencia, {
+    const resultado = await addDoc(referencia, {
         ...datos,
         fechaRegistro: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "movimientos")
+    return resultado
 }
 
 export async function obtenerMovimientos(uid) {
-    const referencia = collection(db, "usuarios", uid, "movimientos")
-    const resultado = await getDocs(referencia)
-    return resultado.docs.map(documento => ({
-        id: documento.id,
-        ...documento.data()
-    }))
+    return cacheCapa.obtener(uid, "movimientos", async () => {
+        const referencia = collection(db, "usuarios", uid, "movimientos")
+        const resultado = await getDocs(referencia)
+        return resultado.docs.map(documento => ({
+            id: documento.id,
+            ...documento.data()
+        }))
+    })
 }
 
 // ============================================

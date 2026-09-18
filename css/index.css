@@ -20,7 +20,7 @@
     color: var(--text);
     width: 60px;
     height: 60px;
-    transition: transform 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 #logo:hover {
@@ -52,11 +52,12 @@
     padding: 20px;
     box-sizing: border-box;
     width: 100%;
+    transition: all 0.3s ease;
 }
 
-.login-form input#clave {
-    flex: 1;
-    min-width: 0;
+.login-form input:hover {
+    background-color: var(--lightHover);
+    transform: scale(1.02);
 }
 
 .login-form button.submit {
@@ -64,7 +65,7 @@
     height: 50px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: width 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 .login-form button.submit:hover {
@@ -115,7 +116,6 @@
     height: 50px;
     padding: 0 20px;
     border-radius: 30px;
-    border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
     font-family: var(--font-primary);
@@ -128,7 +128,6 @@
 
 .google-btn:hover {
     background: var(--lightHover);
-    border-color: var(--text);
     transform: scale(1.02);
 }
 

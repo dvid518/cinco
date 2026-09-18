@@ -80,7 +80,7 @@
     --lightWhiteSmoke: #F3F3F336;
     --smoke: #cfcfcf;
     --raspberryRed: #DC0051;
-    --tropicalMint: #00E695;
+    --tropicalMint: #00a269;
 
     --font-primary: "Inter", Arial, sans-serif;
     --font-secondary: "Roboto Mono", "Courier New", monospace;
@@ -108,6 +108,7 @@
     --negative: var(--cottonCandy);
 
     --border: var(--paleSky);
+    --shadow: var(--lightPaleSky);
 }
 
 /* Tema claro */
@@ -126,6 +127,7 @@
     --negative: var(--raspberryRed);
 
     --border: var(--slateGrey);
+    --shadow: var(--lightSlateGrey);
 }
 
 /* ============================================
@@ -220,6 +222,16 @@ input:focus {
     border: 1px solid var(--text);
 }
 
+/* Ocultar el "ojo" / iconos nativos del navegador en campos de contraseña */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+    display: none;
+    width: 0;
+    height: 0;
+    visibility: hidden;
+}
+
 /* ============================================
    BUTTONS / SELECTS
    ============================================ */
@@ -263,7 +275,6 @@ select {
 select:hover {
     color: var(--surface);
     background-color: var(--border);
-    padding: 8px 16px;
 }
 
 select:hover option {

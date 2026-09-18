@@ -13,6 +13,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
 import { Activo } from "../models/Activo.js"
+import { cacheCapa } from "../core/cache.js"
 
 // ============================================
 // ACTIVO REPOSITORIO (por usuario)
@@ -37,6 +38,7 @@ export async function crearActivo(uid, datos) {
         ...activo.toFirestore(),
         fechaCreacion: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "activos")
 
     return resultado.id
 }
@@ -46,12 +48,14 @@ export async function crearActivo(uid, datos) {
 // --------------------------------------------
 
 export async function obtenerActivos(uid) {
-    const referencia = refActivos(uid)
-    const q = query(referencia, orderBy("nombre", "asc"))
-    const resultado = await getDocs(q)
+    return cacheCapa.obtener(uid, "activos", async () => {
+        const referencia = refActivos(uid)
+        const q = query(referencia, orderBy("nombre", "asc"))
+        const resultado = await getDocs(q)
 
-    return resultado.docs.map(documento => {
-        return Activo.fromFirestore(documento.id, documento.data())
+        return resultado.docs.map(documento => {
+            return Activo.fromFirestore(documento.id, documento.data())
+        })
     })
 }
 
@@ -92,18 +96,26 @@ export async function buscarActivoPorSimbolo(uid, simbolo) {
 
 export async function actualizarActivo(uid, activoId, datos) {
     const referencia = doc(db, "usuarios", uid, "activos", activoId)
-    return await updateDoc(referencia, {
+    const resultado = await updateDoc(referencia, {
         ...datos,
         ultimaActualizacion: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "activos")
+    // Las posiciones unen el activo: su valor/ganancia cambia
+    cacheCapa.invalidar(uid, "posiciones")
+    return resultado
 }
 
 export async function actualizarPrecioActivo(uid, activoId, precio) {
     const referencia = doc(db, "usuarios", uid, "activos", activoId)
-    return await updateDoc(referencia, {
+    const resultado = await updateDoc(referencia, {
         ultimoPrecio: precio,
         ultimaActualizacion: serverTimestamp()
     })
+    cacheCapa.invalidar(uid, "activos")
+    // Las posiciones unen el activo: su valor/ganancia cambia
+    cacheCapa.invalidar(uid, "posiciones")
+    return resultado
 }
 
 // --------------------------------------------
@@ -112,5 +124,8 @@ export async function actualizarPrecioActivo(uid, activoId, precio) {
 
 export async function eliminarActivo(uid, activoId) {
     const referencia = doc(db, "usuarios", uid, "activos", activoId)
-    return await deleteDoc(referencia)
+    const resultado = await deleteDoc(referencia)
+    cacheCapa.invalidar(uid, "activos")
+    cacheCapa.invalidar(uid, "posiciones")
+    return resultado
 }

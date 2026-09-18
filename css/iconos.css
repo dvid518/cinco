@@ -1,0 +1,39 @@
+@import url("style.css");
+
+/* ============================================
+   ICONOS SVG (lucide)
+   ============================================ */
+
+.lucide {
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* Iconos de botones del sidebar */
+#sidebar button .lucide {
+    margin-right: 8px;
+    width: 18px;
+    height: 18px;
+}
+
+/* Icono de tema en la lastbar */
+#lastbar-item-tema {
+    color: var(--text);
+}
+
+#lastbar-item-tema:hover,
+#lastbar-item-tema:focus-visible {
+    box-shadow: 0 0 0 2px var(--anillo-positivo);
+    background-color: var(--lightHover);
+    outline: none;
+}
+
+#lastbar-item-tema:focus-visible .lucide {
+    color: var(--positive);
+}
+
+/* Botón de cerrar notificación */
+.lucide-x {
+    vertical-align: middle;
+}

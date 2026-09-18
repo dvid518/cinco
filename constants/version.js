@@ -1,9 +1,9 @@
 export const VERSION = {
-    numero: "1.0.0-beta.1",
+    numero: "1.0.0-beta.3",
     nombre: "cinco",
-    descripcion: "Gestión personal de patrimonio y finanzas",
+    descripcion: "tucson",
     ano: 2026,
-    autor: "David",
+    autor: "david",
     
     // Metadatos internos
     fechaLanzamiento: "2026-09-13",
