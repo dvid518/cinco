@@ -10,6 +10,10 @@ class Sesion {
                 inversiones: false,
                 trading: false,
                 configuracion: true
+            },
+            seg: {
+                inactividadMinutos: 15,
+                cerrarAlCerrarPestana: true
             }
         }
         // Intentar cargar preferencias guardadas al instanciar
@@ -70,6 +74,12 @@ class Sesion {
         }
         if (preferencias?.tema) {
             this.preferencias.tema = preferencias.tema
+        }
+        if (preferencias?.seg) {
+            this.preferencias.seg = {
+                ...this.preferencias.seg,
+                ...preferencias.seg
+            }
         }
         try {
             sessionStorage.setItem('escinco_preferencias', JSON.stringify(this.preferencias))
@@ -152,6 +162,10 @@ class Sesion {
                 inversiones: false,
                 trading: false,
                 configuracion: true
+            },
+            seg: {
+                inactividadMinutos: 15,
+                cerrarAlCerrarPestana: true
             }
         }
         try {

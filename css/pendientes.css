@@ -22,6 +22,53 @@
 }
 
 /* --------------------------------------------
+   CONSOLIDACIÓN EN LOTE
+   -------------------------------------------- */
+
+.pendientes-cabecera-acciones {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.pendiente-lote-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+}
+
+.pendiente-lote-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pendiente-lote-btn:disabled:hover {
+    background: var(--surface);
+    border-color: var(--border);
+    transform: none;
+}
+
+.pendiente-check {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.pendiente-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--positive);
+}
+
+.pendiente-lote-info {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--textSecondary);
+}
+
+/* --------------------------------------------
    LISTA
    -------------------------------------------- */
 

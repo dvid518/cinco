@@ -346,7 +346,7 @@ const MAPA_ACCIONES = {
             }
             case "trading": {
                 const m = await import("../pages/trading.js")
-                await m.cargarTrades()
+                await m.recargarTrading()
                 break
             }
             default:

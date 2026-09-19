@@ -206,6 +206,82 @@ service cloud.firestore {
       }
 
       // --------------------------------------------------------
+      // ESTRATEGIAS (COMPRA PROGRAMADA / DCA)
+      // --------------------------------------------------------
+      match /estrategias/{estrategiaId} {
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'nombre', 'activoSimbolo', 'cuentaId', 'montoFijo', 'divisa', 'frecuencia',
+            'diaPreferido', 'proximaEjecucion', 'ultimaEjecucion', 'activa', 'fechaCreacion'
+          ])
+          && request.resource.data.keys().hasAll([
+            'nombre', 'activoSimbolo', 'cuentaId', 'montoFijo', 'divisa', 'frecuencia', 'activa'
+          ])
+          && esTexto(request.resource.data.nombre)
+          && esTexto(request.resource.data.activoSimbolo)
+          && esTexto(request.resource.data.cuentaId)
+          && esNumero(request.resource.data.montoFijo)
+          && esTexto(request.resource.data.divisa)
+          && esTexto(request.resource.data.frecuencia)
+          && esBool(request.resource.data.activa)
+          && esNumeroONulo(request.resource.data.diaPreferido)
+          && esTimestampONulo(request.resource.data.proximaEjecucion)
+          && esTimestampONulo(request.resource.data.ultimaEjecucion);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'nombre')
+          && ifPresenteTexto(request.resource.data, 'activoSimbolo')
+          && ifPresenteTexto(request.resource.data, 'cuentaId')
+          && ifPresenteNumero(request.resource.data, 'montoFijo')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteTexto(request.resource.data, 'frecuencia')
+          && ifPresenteBool(request.resource.data, 'activa')
+          && ifPresenteNumeroONulo(request.resource.data, 'diaPreferido')
+          && ifPresenteTimestampONulo(request.resource.data, 'proximaEjecucion')
+          && ifPresenteTimestampONulo(request.resource.data, 'ultimaEjecucion')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaCreacion');
+
+        allow delete: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // METAS DE AHORRO
+      // --------------------------------------------------------
+      match /metas/{metaId} {
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'nombre', 'montoObjetivo', 'montoActual', 'divisa', 'fechaLimite',
+            'activa', 'icono', 'fechaCreacion'
+          ])
+          && request.resource.data.keys().hasAll([
+            'nombre', 'montoObjetivo', 'montoActual', 'divisa', 'activa', 'icono'
+          ])
+          && esTexto(request.resource.data.nombre)
+          && esNumero(request.resource.data.montoObjetivo)
+          && esNumero(request.resource.data.montoActual)
+          && esTexto(request.resource.data.divisa)
+          && esBool(request.resource.data.activa)
+          && esTexto(request.resource.data.icono)
+          && esTimestampONulo(request.resource.data.fechaLimite);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'nombre')
+          && ifPresenteNumero(request.resource.data, 'montoObjetivo')
+          && ifPresenteNumero(request.resource.data, 'montoActual')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteBool(request.resource.data, 'activa')
+          && ifPresenteTexto(request.resource.data, 'icono')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaLimite')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaCreacion');
+
+        allow delete: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
       // PENDIENTES
       // --------------------------------------------------------
       match /pendientes/{pendienteId} {
@@ -265,7 +341,7 @@ service cloud.firestore {
         allow create: if esPropietario(uid)
           && request.resource.data.keys().hasOnly([
             'activo', 'cuenta', 'entrada', 'salida', 'lotaje', 'sl', 'tp',
-            'tipo', 'estado', 'divisa', 'nota', 'fechaRegistro', 'fechaCierre'
+            'tipo', 'estado', 'divisa', 'nota', 'ordenId', 'fechaRegistro', 'fechaCierre'
           ])
           && request.resource.data.keys().hasAll(['activo', 'entrada', 'lotaje', 'tipo', 'estado', 'divisa', 'fechaRegistro'])
           && esTexto(request.resource.data.activo)
@@ -274,7 +350,8 @@ service cloud.firestore {
           && esTexto(request.resource.data.tipo)
           && esTexto(request.resource.data.estado)
           && esTexto(request.resource.data.divisa)
-          && esTimestamp(request.resource.data.fechaRegistro);
+          && esTimestamp(request.resource.data.fechaRegistro)
+          && (('ordenId' in request.resource.data) ? esTextoONulo(request.resource.data.ordenId) : true);
 
         allow update: if esPropietario(uid)
           && ifPresenteTexto(request.resource.data, 'activo')
@@ -288,8 +365,61 @@ service cloud.firestore {
           && ifPresenteTexto(request.resource.data, 'estado')
           && ifPresenteTexto(request.resource.data, 'divisa')
           && ifPresenteTextoONulo(request.resource.data, 'nota')
+          && ifPresenteTextoONulo(request.resource.data, 'ordenId')
           && ifPresenteTimestamp(request.resource.data, 'fechaRegistro')
           && ifPresenteTimestampONulo(request.resource.data, 'fechaCierre');
+
+        allow delete: if esPropietario(uid);
+      }
+
+      // --------------------------------------------------------
+      // ÓRDENES (LÍMITE / STOP)
+      // --------------------------------------------------------
+      match /ordenes/{ordenId} {
+        allow read: if esPropietario(uid);
+
+        allow create: if esPropietario(uid)
+          && request.resource.data.keys().hasOnly([
+            'activo', 'cuenta', 'tipoOrden', 'direccion', 'precioDisparo', 'lotaje',
+            'sl', 'tp', 'divisa', 'nota', 'estado', 'tradeId', 'precioEjecucion',
+            'fechaCreacion', 'fechaEjecucion'
+          ])
+          && request.resource.data.keys().hasAll([
+            'activo', 'cuenta', 'tipoOrden', 'direccion', 'precioDisparo', 'lotaje',
+            'divisa', 'estado', 'fechaCreacion'
+          ])
+          && esTexto(request.resource.data.activo)
+          && esTexto(request.resource.data.cuenta)
+          && esTexto(request.resource.data.tipoOrden)
+          && esTexto(request.resource.data.direccion)
+          && esNumero(request.resource.data.precioDisparo)
+          && esNumero(request.resource.data.lotaje)
+          && esNumeroONulo(request.resource.data.sl)
+          && esNumeroONulo(request.resource.data.tp)
+          && esTexto(request.resource.data.divisa)
+          && esTextoONulo(request.resource.data.nota)
+          && esTexto(request.resource.data.estado)
+          && esTextoONulo(request.resource.data.tradeId)
+          && esNumeroONulo(request.resource.data.precioEjecucion)
+          && esTimestamp(request.resource.data.fechaCreacion)
+          && esTimestampONulo(request.resource.data.fechaEjecucion);
+
+        allow update: if esPropietario(uid)
+          && ifPresenteTexto(request.resource.data, 'activo')
+          && ifPresenteTexto(request.resource.data, 'cuenta')
+          && ifPresenteTexto(request.resource.data, 'tipoOrden')
+          && ifPresenteTexto(request.resource.data, 'direccion')
+          && ifPresenteNumero(request.resource.data, 'precioDisparo')
+          && ifPresenteNumero(request.resource.data, 'lotaje')
+          && ifPresenteNumeroONulo(request.resource.data, 'sl')
+          && ifPresenteNumeroONulo(request.resource.data, 'tp')
+          && ifPresenteTexto(request.resource.data, 'divisa')
+          && ifPresenteTextoONulo(request.resource.data, 'nota')
+          && ifPresenteTexto(request.resource.data, 'estado')
+          && ifPresenteTextoONulo(request.resource.data, 'tradeId')
+          && ifPresenteNumeroONulo(request.resource.data, 'precioEjecucion')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaCreacion')
+          && ifPresenteTimestampONulo(request.resource.data, 'fechaEjecucion');
 
         allow delete: if esPropietario(uid);
       }
@@ -302,20 +432,23 @@ service cloud.firestore {
 
         allow create: if esPropietario(uid)
           && request.resource.data.keys().hasOnly([
-            'nombre', 'simbolo', 'tipo', 'ultimoPrecio', 'ultimaActualizacion', 'fechaCreacion'
+            'nombre', 'simbolo', 'tipo', 'ultimoPrecio', 'ultimaActualizacion',
+            'fechaCreacion', 'favorito'
           ])
           && request.resource.data.keys().hasAll(['nombre', 'simbolo'])
           && esTexto(request.resource.data.nombre)
           && esTexto(request.resource.data.simbolo)
           && esTexto(request.resource.data.tipo)
-          && esNumero(request.resource.data.ultimoPrecio);
+          && esNumero(request.resource.data.ultimoPrecio)
+          && (('favorito' in request.resource.data) ? esBool(request.resource.data.favorito) : true);
 
         allow update: if esPropietario(uid)
           && ifPresenteTexto(request.resource.data, 'nombre')
           && ifPresenteTexto(request.resource.data, 'simbolo')
           && ifPresenteTexto(request.resource.data, 'tipo')
           && ifPresenteNumero(request.resource.data, 'ultimoPrecio')
-          && ifPresenteTimestamp(request.resource.data, 'ultimaActualizacion');
+          && ifPresenteTimestamp(request.resource.data, 'ultimaActualizacion')
+          && ifPresenteBool(request.resource.data, 'favorito');
 
         allow delete: if esPropietario(uid);
 

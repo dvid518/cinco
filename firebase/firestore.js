@@ -13,7 +13,10 @@ import { app } from "./firebaseClient.js"
 import { cacheCapa } from "../js/core/cache.js"
 
 const db = getFirestore(app)
-export { db }
+
+// Re-exportamos utilidades de Firestore para que el resto de la app
+// no importe desde la CDN directamente (punto único de acceso).
+export { db, doc, updateDoc }
 
 // ============================================
 // USUARIO

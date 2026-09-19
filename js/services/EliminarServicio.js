@@ -28,6 +28,7 @@ export async function eliminarTodosLosDatos(uid) {
         "pendientes",
         "snapshots",
         "trades",
+        "ordenes",
         "activos" // ← ahora también por usuario
     ]
 

@@ -134,19 +134,19 @@
 .notificacion-accion {
     flex-shrink: 0;
     padding: 5px 10px;
-    border-radius: 6px;
-    background: var(--lightHover);
-    border: 1px solid var(--border);
+    border-radius: 30px;
+    background: var(--surface);
+    border: 1px solid var(--text);
     color: var(--text);
     font-size: 12px;
     font-family: var(--font-primary, inherit);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .notificacion-accion:hover {
-    background: var(--positive);
-    border-color: var(--positive);
+    background: var(--lightHover);
+    border-color: var(--border);
     color: #ffffff;
 }
 
@@ -221,8 +221,7 @@
 
 .filtros input:focus,
 .filtros select:focus {
-    border-color: var(--positive);
-    box-shadow: 0 0 0 3px var(--anillo-positivo);
+    border-color: var(--border);
 }
 
 .filtros .filtro-buscar {

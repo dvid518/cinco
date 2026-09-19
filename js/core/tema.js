@@ -1,5 +1,4 @@
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
-import { db } from "../../firebase/firestore.js"
+import { db, doc, updateDoc } from "../../firebase/firestore.js"
 
 // ============================================
 // TEMA

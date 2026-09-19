@@ -13,16 +13,26 @@ import {
     reauthenticateWithCredential,
     fetchSignInMethodsForEmail,
     getAdditionalUserInfo,
-    deleteUser
+    deleteUser,
+    setPersistence,
+    browserSessionPersistence,
+    browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js"
 import { app } from "./firebaseClient.js"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "./firestore.js"
 import { cacheCapa } from "../js/core/cache.js"
+import { sesion } from "../js/core/sesion.js"
 
 const auth = getAuth(app)
-const INACTIVITY_TIME = 30 * 60 * 1000
-let inactivityTimer
+
+const INACTIVIDAD_MINUTOS_DEFAULT = 15
+const REAUTH_VIGENCIA_MINUTOS = 5
+const CLAVE_REAUTH = "escinco_reauth_time"
+const EVENTOS_ACTIVIDAD = ["click", "mousemove", "keydown", "scroll", "touchstart"]
+
+let inactivityTimer = null
+let actividadRegistrada = false
 
 // ============================================
 // REGISTRO CON EMAIL Y CONTRASEÑA
@@ -142,22 +152,96 @@ export function observeAuth(callback) {
 // ============================================
 // INACTIVIDAD
 // ============================================
+// El tiempo se lee de usuarios/{uid}.preferencias.seg.inactividadMinutos.
+//   0  → nunca (no se inicia el temporizador)
+//   >0 → se cierra la sesión tras esos minutos sin actividad
+
+function minutosInactividad() {
+    const seg = sesion.getPreferencias()?.seg
+    if (!seg || seg.inactividadMinutos === undefined || seg.inactividadMinutos === null) {
+        return INACTIVIDAD_MINUTOS_DEFAULT
+    }
+    return Number(seg.inactividadMinutos)
+}
 
 function resetInactivityTimer() {
     clearTimeout(inactivityTimer)
+    inactivityTimer = null
+
+    const minutos = minutosInactividad()
+
+    // 0 = nunca: no se programa cierre por inactividad
+    if (!Number.isFinite(minutos) || minutos <= 0) return
 
     inactivityTimer = setTimeout(async () => {
         await logout()
         window.location.replace("/login")
-    }, INACTIVITY_TIME)
+    }, minutos * 60 * 1000)
 }
 
+/**
+ * Inicia (o reinicia) el temporizador de inactividad con la configuración
+ * actual de preferencias. Es idempotente: los listeners solo se registran una vez.
+ */
 export function startInactivityTimer() {
-    const events = ["click", "mousemove", "keydown", "scroll", "touchstart"]
-    events.forEach(event => {
-        document.addEventListener(event, resetInactivityTimer)
-    })
+    if (!actividadRegistrada) {
+        EVENTOS_ACTIVIDAD.forEach(event => {
+            document.addEventListener(event, resetInactivityTimer)
+        })
+        actividadRegistrada = true
+    }
     resetInactivityTimer()
+}
+
+// ============================================
+// PERSISTENCIA DE SESIÓN
+// ============================================
+// cerrarAlCerrarPestana = true  → browserSessionPersistence (sessionStorage)
+// cerrarAlCerrarPestana = false → browserLocalPersistence (localStorage)
+
+export async function aplicarPersistenciaSesion(cerrarAlCerrarPestana = true) {
+    const persistencia = cerrarAlCerrarPestana
+        ? browserSessionPersistence
+        : browserLocalPersistence
+
+    await setPersistence(auth, persistencia)
+    return true
+}
+
+// ============================================
+// VIGENCIA DE REAUTENTICACIÓN
+// ============================================
+// Una sesión se considera "reciente" si el último inicio de sesión o
+// reautenticación ocurrió hace menos de REAUTH_VIGENCIA_MINUTOS.
+
+export function marcarReautenticacion() {
+    try {
+        sessionStorage.setItem(CLAVE_REAUTH, String(Date.now()))
+    } catch (e) {
+        // Ignorar errores de storage
+    }
+}
+
+function ultimaAutenticacion() {
+    const user = auth.currentUser
+    const desdeMetadata = user?.metadata?.lastSignInTime
+        ? new Date(user.metadata.lastSignInTime).getTime()
+        : 0
+
+    let desdeReauth = 0
+    try {
+        desdeReauth = Number(sessionStorage.getItem(CLAVE_REAUTH)) || 0
+    } catch (e) {
+        // Ignorar errores de storage
+    }
+
+    return Math.max(desdeMetadata, desdeReauth)
+}
+
+export function esSesionReciente(minutos = REAUTH_VIGENCIA_MINUTOS) {
+    const ultima = ultimaAutenticacion()
+    if (!ultima) return false
+    return Date.now() - ultima < minutos * 60 * 1000
 }
 
 // ============================================
@@ -212,8 +296,24 @@ export async function cambiarPassword(passwordActual, passwordNueva) {
     // 1. Reautenticar
     const credencial = EmailAuthProvider.credential(user.email, passwordActual)
     await reauthenticateWithCredential(user, credencial)
+    marcarReautenticacion()
 
     // 2. Actualizar
+    await updatePassword(user, passwordNueva)
+    return true
+}
+
+/**
+ * Cambia la contraseña cuando la sesión ya fue verificada/reauntenticada
+ * recientemente (evita pedir de nuevo la contraseña actual).
+ *
+ * @param {string} passwordNueva
+ */
+export async function cambiarPasswordVerificada(passwordNueva) {
+    const user = auth.currentUser
+    if (!user) throw new Error("No hay usuario autenticado")
+    if (!user.email) throw new Error("El usuario no tiene email asociado")
+
     await updatePassword(user, passwordNueva)
     return true
 }
@@ -254,6 +354,7 @@ export async function reautenticarConPassword(password) {
 
     const credencial = EmailAuthProvider.credential(user.email, password)
     await reauthenticateWithCredential(user, credencial)
+    marcarReautenticacion()
     return true
 }
 
@@ -270,6 +371,7 @@ export async function reautenticarConGoogle() {
     provider.setCustomParameters({ prompt: "select_account" })
 
     await signInWithPopup(auth, provider)
+    marcarReautenticacion()
     return true
 }
 

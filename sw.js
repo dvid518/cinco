@@ -233,7 +233,9 @@ async function staleWhileRevalidate(request, cacheName) {
 
 async function networkFirst(request, cacheName, fallbackHtml) {
     try {
-        const response = await fetch(request)
+        // cache: "no-cache" fuerza revalidación con el servidor y evita que el
+        // HTTP cache del navegador devuelva módulos JS obsoletos.
+        const response = await fetch(request, { cache: "no-cache" })
         if (response && response.status === 200) {
             const cache = await caches.open(cacheName)
             cache.put(request, response.clone())

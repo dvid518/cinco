@@ -6,6 +6,7 @@ export class Activo {
         this.simbolo = datos.simbolo || ""
         this.tipo = datos.tipo || "accion" // accion, etf, crypto, bono
         this.ultimoPrecio = datos.ultimoPrecio || 0
+        this.favorito = datos.favorito !== undefined ? datos.favorito : false
         this.ultimaActualizacion = datos.ultimaActualizacion || new Date()
         this.fechaCreacion = datos.fechaCreacion || new Date()
     }
@@ -29,6 +30,7 @@ export class Activo {
             simbolo: this.simbolo.toUpperCase(),
             tipo: this.tipo,
             ultimoPrecio: this.ultimoPrecio,
+            favorito: this.favorito,
             ultimaActualizacion: this.ultimaActualizacion,
             fechaCreacion: this.fechaCreacion
         }
@@ -41,6 +43,7 @@ export class Activo {
             simbolo: data.simbolo,
             tipo: data.tipo,
             ultimoPrecio: data.ultimoPrecio || 0,
+            favorito: data.favorito === true,
             ultimaActualizacion: data.ultimaActualizacion?.toDate?.() || data.ultimaActualizacion,
             fechaCreacion: data.fechaCreacion?.toDate?.() || data.fechaCreacion
         })

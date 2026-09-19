@@ -20,6 +20,16 @@ import { obtenerPosicionesConValor } from "../services/PosicionServicio.js"
 import { obtenerPendientes } from "../repositories/PendienteRepositorio.js"
 import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
+import { parseFechaLocal, fechaLocalISO } from "../core/fechas.js"
+import { icono } from "../core/iconos.js"
+import { ICONOS_META } from "../models/Meta.js"
+import {
+    obtenerMetas,
+    crearMeta,
+    actualizarMeta,
+    eliminarMeta
+} from "../repositories/MetaRepositorio.js"
+import { aportarMeta } from "../services/MetaServicio.js"
 
 // ============================================
 // ESTADO
@@ -31,9 +41,27 @@ let divisaActual = getDivisaPrincipal()
 let datosGrafico = null
 let inversionesData = null
 let vencimientosData = null
+let favoritosData = []
+let metasData = []
 let cargado = false
 
 const DIAS_VENCIMIENTO = 7
+
+// Periodos del gráfico de patrimonio. "todo" usa un tope alto de días.
+const PERIODOS_GRAFICO = [
+    { id: "7d", etiqueta: "7D", dias: 7, sub: "Últimos 7 días" },
+    { id: "30d", etiqueta: "30D", dias: 30, sub: "Últimos 30 días" },
+    { id: "90d", etiqueta: "90D", dias: 90, sub: "Últimos 90 días" },
+    { id: "1a", etiqueta: "1A", dias: 365, sub: "Último año" },
+    { id: "todo", etiqueta: "Todo", dias: 3650, sub: "Histórico completo" }
+]
+const PERIODO_POR_DEFECTO = "30d"
+
+let periodoGrafico = PERIODO_POR_DEFECTO
+
+function obtenerPeriodo(id) {
+    return PERIODOS_GRAFICO.find(p => p.id === id) || PERIODOS_GRAFICO[1]
+}
 
 // ============================================
 // RENDER
@@ -73,13 +101,41 @@ export function render() {
                 <div class="card-sub" id="vencimientos-detalle">—</div>
             </div>
 
+            <div class="card card-navegable favoritos-card" id="card-favoritos" role="button" tabindex="0" title="Ver inversiones">
+                <div class="card-header">
+                    <span class="card-title">Favoritos</span>
+                    <span class="card-badge" id="favoritos-cantidad">0</span>
+                </div>
+                <div class="favoritos-lista" id="favoritos-lista">
+                    <p class="card-vacio">Cargando...</p>
+                </div>
+            </div>
+
+            <div class="card metas-card" id="card-metas">
+                <div class="card-header">
+                    <span class="card-title">Metas de ahorro</span>
+                    <button type="button" class="glass-btn btn-meta-nueva" id="btn-nueva-meta">
+                        ${icono("plus-circle", 14)} Nueva
+                    </button>
+                </div>
+                <div class="metas-lista" id="metas-lista">
+                    <p class="card-vacio">Cargando...</p>
+                </div>
+            </div>
+
             <div class="card grafico-patrimonio-card">
                 <div class="card-header">
                     <span class="card-title">Evolución patrimonial</span>
-                    <span class="card-sub" id="grafico-periodo">Últimos 30 días</span>
+                    <div class="toggle-group grafico-periodos" id="grafico-periodos">
+                        ${PERIODOS_GRAFICO.map(p => `
+                            <span class="toggle-option" data-periodo="${p.id}">${p.etiqueta}</span>
+                        `).join('')}
+                    </div>
                 </div>
+                <span class="card-sub" id="grafico-periodo">Últimos 30 días</span>
                 <div class="grafico-container-dashboard">
                     <canvas id="grafico-patrimonio"></canvas>
+                    <div class="grafico-estado" id="grafico-estado" hidden></div>
                 </div>
             </div>
         </div>
@@ -94,10 +150,13 @@ export async function init() {
     uid = sesion.uid
     // Divisiva reactiva: se relee al entrar, no solo al importar el módulo.
     divisaActual = getDivisaPrincipal()
+    periodoGrafico = PERIODO_POR_DEFECTO
     console.log("[INFO] Dashboard iniciado para UID:", uid)
 
     configurarDivisa()
+    configurarPeriodos()
     configurarCardsNavegacion()
+    configurarMetas()
 
     await cargarTodo()
 
@@ -148,14 +207,17 @@ async function cargarTodo() {
         // primero para evitar la carrera con el estado del módulo.
         const cuentasResp = await obtenerCuentas(uid)
 
-        const [inversionesResp, vencimientosResp] = await Promise.all([
+        const [inversionesResp, vencimientosResp, metasResp] = await Promise.all([
             cargarInversiones(),
-            cargarVencimientos(cuentasResp)
+            cargarVencimientos(cuentasResp),
+            cargarMetas()
         ])
 
         cuentas = cuentasResp
         inversionesData = inversionesResp
         vencimientosData = vencimientosResp
+        favoritosData = inversionesResp.favoritos || []
+        metasData = metasResp
 
         actualizarUI()
     } catch (error) {
@@ -167,16 +229,28 @@ async function cargarTodo() {
 async function cargarInversiones() {
     try {
         const data = await obtenerPosicionesConValor(uid)
+        const posiciones = data.posiciones || []
         return {
             valorTotal: data.valorTotal || 0,
             gananciaTotal: data.gananciaTotal || 0,
             cantidad: data.cantidad || 0,
             // La divisa a la que ya fueron convertidos los totales
-            divisa: data.divisa || "pen"
+            divisa: data.divisa || "pen",
+            // Posiciones cuyo activo está marcado como favorito
+            favoritos: posiciones.filter(p => p.activo?.favorito === true)
         }
     } catch (error) {
         console.error("Error cargando inversiones:", error)
-        return { valorTotal: 0, gananciaTotal: 0, cantidad: 0, divisa: "pen" }
+        return { valorTotal: 0, gananciaTotal: 0, cantidad: 0, divisa: "pen", favoritos: [] }
+    }
+}
+
+async function cargarMetas() {
+    try {
+        return await obtenerMetas(uid)
+    } catch (error) {
+        console.error("Error cargando metas:", error)
+        return []
     }
 }
 
@@ -324,6 +398,8 @@ function actualizarUI() {
     actualizarPatrimonio()
     actualizarInversiones()
     actualizarVencimientos()
+    actualizarFavoritos()
+    actualizarMetas()
 }
 
 function actualizarCuentas() {
@@ -334,7 +410,7 @@ function actualizarCuentas() {
 
     const detalleEl = document.getElementById("patrimonio-detalle")
     if (detalleEl) {
-        const simbolo = simbologDe(divisaActual)
+        const simbolo = DIVISAS_SYMBOLS[divisaActual] || "S/"
         let detalle = `Activos: ${simbolo} ${convertirMonto(stats.totalActivos, "pen", divisaActual).toFixed(2)}`
         if (stats.tieneDeuda) {
             detalle += ` | Deuda: -${simbolo} ${convertirMonto(stats.totalDeuda, "pen", divisaActual).toFixed(2)}`
@@ -343,13 +419,9 @@ function actualizarCuentas() {
     }
 }
 
-function simbologDe(divisa) {
-    return DIVISAS_SYMBOLS[divisa] || "S/"
-}
-
 function actualizarPatrimonio() {
     const stats = calcularPatrimonio()
-    const simbolo = simbologDe(divisaActual)
+    const simbolo = DIVISAS_SYMBOLS[divisaActual] || "S/"
     const valorEl = document.getElementById("patrimonio-valor")
 
     if (!valorEl) return
@@ -384,7 +456,7 @@ function actualizarInversiones() {
         divisaActual
     )
 
-    const simbolo = simbologDe(divisaActual)
+    const simbolo = DIVISAS_SYMBOLS[divisaActual] || "S/"
     valorEl.textContent = `${simbolo} ${valorConvertido.toFixed(2)}`
 
     if (detalleEl) {
@@ -451,6 +523,7 @@ function configurarCardsNavegacion() {
 
     bindNavegacion("card-cuentas", "/cuentas")
     bindNavegacion("card-inversiones", "/inversiones")
+    bindNavegacion("card-favoritos", "/inversiones")
 
     const vencimientos = document.getElementById("card-vencimientos")
     vencimientos?.addEventListener("click", abrirModalVencimientos)
@@ -532,6 +605,350 @@ function textoDias(dias) {
 }
 
 // ============================================
+// FAVORITOS
+// ============================================
+
+function actualizarFavoritos() {
+    const lista = document.getElementById("favoritos-lista")
+    const cantidadEl = document.getElementById("favoritos-cantidad")
+    if (!lista) return
+
+    if (cantidadEl) cantidadEl.textContent = favoritosData.length
+
+    if (favoritosData.length === 0) {
+        lista.innerHTML = `<p class="card-vacio">Marca activos con la estrella en Inversiones.</p>`
+        return
+    }
+
+    lista.innerHTML = favoritosData.map(plantillaFavorito).join("")
+}
+
+function plantillaFavorito(posicion) {
+    const activo = posicion.activo || {}
+    const precio = (activo.ultimoPrecio || 0).toFixed(2)
+
+    return `
+        <div class="favorito-item">
+            <div class="favorito-info">
+                <span class="favorito-nombre">${activo.nombre || posicion.activoId}</span>
+                <span class="favorito-simbolo">${activo.simbolo || ""}</span>
+            </div>
+            <span class="favorito-precio">${DIVISAS_SYMBOLS[posicion.divisa] || "S/"} ${precio}</span>
+        </div>
+    `
+}
+
+// ============================================
+// METAS DE AHORRO
+// ============================================
+
+function configurarMetas() {
+    document.getElementById("btn-nueva-meta")
+        ?.addEventListener("click", () => abrirModalMeta())
+}
+
+function actualizarMetas() {
+    const lista = document.getElementById("metas-lista")
+    if (!lista) return
+
+    if (metasData.length === 0) {
+        lista.innerHTML = `<p class="card-vacio">Crea tu primera meta de ahorro.</p>`
+        return
+    }
+
+    lista.innerHTML = metasData.map(plantillaMeta).join("")
+    ajustarBarrasMetas(lista)
+    enlazarAccionesMetas(lista)
+}
+
+function plantillaMeta(meta) {
+    const simbolo = DIVISAS_SYMBOLS[meta.divisa] || "S/"
+    const clases = [
+        "meta-item",
+        meta.completada ? "completada" : "",
+        meta.activa ? "" : "pausada"
+    ].filter(Boolean).join(" ")
+
+    return `
+        <div class="${clases}" data-meta-id="${meta.id}">
+            <div class="meta-cabecera">
+                <span class="meta-nombre">${icono(meta.icono, 16)}<span>${meta.nombre}</span></span>
+                <span class="meta-porcentaje">${meta.porcentaje.toFixed(0)}%</span>
+            </div>
+            <div class="meta-progreso">
+                <div class="meta-progreso-barra" data-meta-id="${meta.id}"></div>
+            </div>
+            <div class="meta-detalle">
+                <span>${simbolo} ${meta.montoActual.toFixed(2)} de ${simbolo} ${meta.montoObjetivo.toFixed(2)}</span>
+                <span>${textoFechaLimite(meta.fechaLimite)}</span>
+            </div>
+            <div class="meta-acciones">
+                <button type="button" class="glass btn-sm meta-aportar" data-id="${meta.id}">Aportar</button>
+                <button type="button" class="glass btn-sm meta-editar" data-id="${meta.id}">Editar</button>
+                <button type="button" class="glass btn-sm btn-danger meta-eliminar" data-id="${meta.id}">Eliminar</button>
+            </div>
+        </div>
+    `
+}
+
+function ajustarBarrasMetas(container) {
+    container.querySelectorAll(".meta-progreso-barra").forEach(barra => {
+        const meta = metasData.find(m => m.id === barra.dataset.metaId)
+        const porcentaje = Math.min(100, meta?.porcentaje || 0)
+        // Variable CSS: mantiene la regla de no usar estilos inline.
+        barra.style.setProperty("--progreso", `${porcentaje}%`)
+    })
+}
+
+function enlazarAccionesMetas(container) {
+    container.querySelectorAll(".meta-aportar").forEach(boton => {
+        boton.addEventListener("click", () => {
+            const meta = metasData.find(m => m.id === boton.dataset.id)
+            if (meta) abrirModalAporteMeta(meta)
+        })
+    })
+
+    container.querySelectorAll(".meta-editar").forEach(boton => {
+        boton.addEventListener("click", () => {
+            const meta = metasData.find(m => m.id === boton.dataset.id)
+            if (meta) abrirModalMeta(meta)
+        })
+    })
+
+    container.querySelectorAll(".meta-eliminar").forEach(boton => {
+        boton.addEventListener("click", () => {
+            const meta = metasData.find(m => m.id === boton.dataset.id)
+            if (meta) confirmarEliminarMeta(meta)
+        })
+    })
+}
+
+function textoFechaLimite(fecha) {
+    if (!fecha) return "Sin fecha límite"
+    const dias = diasHasta(fecha)
+    return `Límite: ${formatearFecha(fecha)} (${textoDias(dias)})`
+}
+
+function formatearFecha(fecha) {
+    const d = new Date(fecha)
+    if (isNaN(d.getTime())) return "—"
+    return d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })
+}
+
+function opcionesIconos(seleccionado) {
+    return ICONOS_META
+        .map(i => `<option value="${i.valor}" ${i.valor === seleccionado ? "selected" : ""}>${i.etiqueta}</option>`)
+        .join("")
+}
+
+function abrirModalMeta(meta = null) {
+    const esEdicion = !!meta
+    const valorIcono = meta?.icono || "target"
+    const valorDivisa = meta?.divisa || getDivisaPrincipal()
+    const valorFecha = meta?.fechaLimite ? fechaLocalISO(new Date(meta.fechaLimite)) : ""
+
+    const contenido = `
+        <form id="form-meta" class="form-movimiento">
+            <div class="form-group">
+                <label for="meta-nombre">Nombre *</label>
+                <input type="text" id="meta-nombre" class="form-input" placeholder="Ej: Fondo de emergencia" value="${meta?.nombre || ""}" required>
+            </div>
+            <div class="form-grupo-doble">
+                <div class="form-group">
+                    <label for="meta-objetivo">Monto objetivo *</label>
+                    <input type="number" id="meta-objetivo" class="form-input" step="0.01" min="0.01" placeholder="0.00" value="${meta?.montoObjetivo ?? ""}" required>
+                </div>
+                <div class="form-group">
+                    <label for="meta-actual">Monto actual</label>
+                    <input type="number" id="meta-actual" class="form-input" step="0.01" min="0" placeholder="0.00" value="${meta?.montoActual ?? 0}">
+                </div>
+            </div>
+            <div class="form-grupo-doble">
+                <div class="form-group">
+                    <label for="meta-divisa">Divisa *</label>
+                    <select id="meta-divisa" class="form-input">
+                        ${["pen", "usd", "usdt"].map(d => `<option value="${d}" ${d === valorDivisa ? "selected" : ""}>${d.toUpperCase()}</option>`).join("")}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="meta-fecha">Fecha límite</label>
+                    <input type="date" id="meta-fecha" class="form-input" value="${valorFecha}">
+                </div>
+            </div>
+            <div class="form-grupo-doble">
+                <div class="form-group">
+                    <label for="meta-icono">Icono</label>
+                    <select id="meta-icono" class="form-input">${opcionesIconos(valorIcono)}</select>
+                </div>
+                <div class="form-group">
+                    <label for="meta-activa">Estado</label>
+                    <select id="meta-activa" class="form-input">
+                        <option value="true" ${meta?.activa !== false ? "selected" : ""}>Activa</option>
+                        <option value="false" ${meta?.activa === false ? "selected" : ""}>Pausada</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+    `
+
+    abrirModal({
+        titulo: esEdicion ? "Editar meta" : "Nueva meta",
+        contenido,
+        confirmText: esEdicion ? "Guardar" : "Crear meta",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            const nombre = document.getElementById("meta-nombre")?.value.trim()
+            const montoObjetivo = parseFloat(document.getElementById("meta-objetivo")?.value)
+            const montoActual = parseFloat(document.getElementById("meta-actual")?.value) || 0
+            const divisa = document.getElementById("meta-divisa")?.value
+            const fechaValor = document.getElementById("meta-fecha")?.value
+            const iconoValor = document.getElementById("meta-icono")?.value
+            const activa = document.getElementById("meta-activa")?.value === "true"
+
+            if (!nombre) {
+                mostrarNotificacion("error", "El nombre es obligatorio")
+                return false
+            }
+            if (!montoObjetivo || montoObjetivo <= 0) {
+                mostrarNotificacion("error", "El monto objetivo debe ser mayor a 0")
+                return false
+            }
+
+            const datos = {
+                nombre,
+                montoObjetivo,
+                montoActual,
+                divisa,
+                fechaLimite: fechaValor ? parseFechaLocal(fechaValor) : null,
+                icono: iconoValor,
+                activa
+            }
+
+            try {
+                if (esEdicion) {
+                    await actualizarMeta(uid, meta.id, datos)
+                } else {
+                    await crearMeta(uid, datos)
+                }
+                metasData = await cargarMetas()
+                actualizarMetas()
+                mostrarNotificacion("exito", esEdicion ? "Meta actualizada" : "Meta creada")
+                return true
+            } catch (error) {
+                console.error("Error guardando meta:", error)
+                mostrarNotificacion("error", error.message || "No se pudo guardar la meta")
+                return false
+            }
+        }
+    })
+}
+
+function abrirModalAporteMeta(meta) {
+    const simbolo = DIVISAS_SYMBOLS[meta.divisa] || "S/"
+    const montoSugerido = meta.montoRestante > 0 ? meta.montoRestante.toFixed(2) : ""
+
+    const contenido = `
+        <form id="form-aporte-meta" class="form-movimiento">
+            <p class="modal-message-desc">
+                Aporte a <strong>${meta.nombre}</strong>.
+                Restante: ${simbolo} ${meta.montoRestante.toFixed(2)}.
+            </p>
+            <div class="form-group">
+                <label for="aporte-monto">Monto del aporte *</label>
+                <input type="number" id="aporte-monto" class="form-input" step="0.01" min="0.01" placeholder="0.00" value="${montoSugerido}" required>
+            </div>
+            <div class="form-group">
+                <label for="aporte-cuenta">Cuenta de origen *</label>
+                <select id="aporte-cuenta" class="form-input" required>
+                    <option value="">Seleccionar cuenta</option>
+                </select>
+                <span class="form-hint">Se registrará un gasto en la cuenta seleccionada.</span>
+            </div>
+        </form>
+    `
+
+    abrirModal({
+        titulo: "Aportar a meta",
+        contenido,
+        confirmText: "Aportar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            const monto = parseFloat(document.getElementById("aporte-monto")?.value)
+            const cuentaId = document.getElementById("aporte-cuenta")?.value
+
+            if (!monto || monto <= 0) {
+                mostrarNotificacion("error", "El monto debe ser mayor a 0")
+                return false
+            }
+            if (!cuentaId) {
+                mostrarNotificacion("error", "Selecciona una cuenta de origen")
+                return false
+            }
+
+            try {
+                await aportarMeta(uid, meta, { monto, cuentaId })
+                await cargarTodo()
+                mostrarNotificacion("exito", `Aporte de ${simbolo} ${monto.toFixed(2)} registrado`)
+                return true
+            } catch (error) {
+                console.error("Error registrando aporte:", error)
+                mostrarNotificacion("error", error.message || "No se pudo registrar el aporte")
+                return false
+            }
+        }
+    })
+
+    setTimeout(() => cargarCuentasEnSelect("aporte-cuenta"), 200)
+}
+
+function confirmarEliminarMeta(meta) {
+    abrirModal({
+        titulo: "Eliminar meta",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    ¿Eliminar la meta <strong>${meta.nombre}</strong>? Esta acción no se puede deshacer.
+                </p>
+            </div>
+        `,
+        variante: "peligro",
+        confirmText: "Eliminar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            try {
+                await eliminarMeta(uid, meta.id)
+                metasData = await cargarMetas()
+                actualizarMetas()
+                mostrarNotificacion("exito", "Meta eliminada")
+                return true
+            } catch (error) {
+                console.error("Error eliminando meta:", error)
+                mostrarNotificacion("error", "No se pudo eliminar la meta")
+                return false
+            }
+        }
+    })
+}
+
+async function cargarCuentasEnSelect(selectId) {
+    const select = document.getElementById(selectId)
+    if (!select) return
+
+    try {
+        const lista = await obtenerCuentas(uid)
+        const disponibles = lista.filter(c => c.estado !== "archivada" && c.tipo !== "credito")
+
+        select.innerHTML = `<option value="">Seleccionar cuenta</option>` +
+            disponibles.map(c => {
+                const moneda = (c.moneda || "pen").toUpperCase()
+                return `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (${moneda})</option>`
+            }).join("")
+    } catch (error) {
+        console.error("Error cargando cuentas en select:", error)
+    }
+}
+
+// ============================================
 // SELECTOR DE DIVISA
 // ============================================
 
@@ -547,7 +964,8 @@ function configurarDivisa() {
         actualizarPatrimonio()
         actualizarInversiones()
 
-        if (datosGrafico) {
+        // Redibujar el gráfico manteniendo el periodo actual
+        if (datosGrafico?.labels?.length) {
             await crearGraficoPatrimonio("grafico-patrimonio", datosGrafico, {
                 divisa: divisaActual.toUpperCase()
             })
@@ -556,41 +974,106 @@ function configurarDivisa() {
 }
 
 // ============================================
+// SELECTOR DE PERIODO
+// ============================================
+
+function configurarPeriodos() {
+    const contenedor = document.getElementById("grafico-periodos")
+    if (!contenedor) return
+
+    const opciones = contenedor.querySelectorAll(".toggle-option")
+
+    const marcarActivo = () => {
+        opciones.forEach(opt => {
+            opt.classList.toggle("active", opt.dataset.periodo === periodoGrafico)
+        })
+    }
+
+    opciones.forEach(opt => {
+        opt.addEventListener("click", async () => {
+            if (opt.dataset.periodo === periodoGrafico) return
+            periodoGrafico = opt.dataset.periodo
+            marcarActivo()
+            await cargarGraficoPatrimonio()
+        })
+    })
+
+    marcarActivo()
+    actualizarEtiquetaPeriodo(obtenerPeriodo(periodoGrafico))
+}
+
+function actualizarEtiquetaPeriodo(periodo) {
+    const etiqueta = document.getElementById("grafico-periodo")
+    if (etiqueta) etiqueta.textContent = periodo.sub
+}
+
+// ============================================
 // GRÁFICO DE PATRIMONIO
 // ============================================
 
 async function cargarGraficoPatrimonio() {
-    try {
-        datosGrafico = await obtenerPatrimonioParaGrafico(uid, 30)
+    const periodo = obtenerPeriodo(periodoGrafico)
+    actualizarEtiquetaPeriodo(periodo)
+    mostrarEstadoGrafico("cargando", "Cargando datos...")
 
-        if (datosGrafico.labels.length > 0) {
-            setTimeout(async () => {
-                await crearGraficoPatrimonio("grafico-patrimonio", datosGrafico, {
-                    divisa: divisaActual.toUpperCase()
-                })
-            }, 200)
-        } else {
-            mostrarGraficoVacio()
+    try {
+        datosGrafico = await obtenerPatrimonioParaGrafico(uid, periodo.dias)
+
+        if (!datosGrafico || datosGrafico.labels.length === 0) {
+            mostrarEstadoGrafico("vacio", "Sin datos para este periodo", "Los datos se registran automáticamente cada día")
+            ocultarCanvas()
+            return
         }
+
+        mostrarCanvas()
+        ocultarEstadoGrafico()
+        dibujarGrafico()
     } catch (error) {
         console.error("Error cargando gráfico de patrimonio:", error)
-        mostrarGraficoVacio()
+        mostrarEstadoGrafico("vacio", "No se pudo cargar el gráfico", error.message)
+        ocultarCanvas()
     }
 }
 
-function mostrarGraficoVacio() {
-    const canvas = document.getElementById("grafico-patrimonio")
-    if (!canvas) return
+function dibujarGrafico() {
+    setTimeout(async () => {
+        await crearGraficoPatrimonio("grafico-patrimonio", datosGrafico, {
+            divisa: divisaActual.toUpperCase()
+        })
+    }, 200)
+}
 
-    const parent = canvas.parentElement
-    if (!parent) return
+function mostrarEstadoGrafico(tipo, texto, hint = "") {
+    const estado = document.getElementById("grafico-estado")
+    if (!estado) return
 
-    parent.innerHTML = `
+    const spinner = tipo === "cargando" ? '<div class="loading-spinner"></div>' : ""
+
+    estado.innerHTML = `
         <div class="grafico-vacio">
-            <p class="grafico-vacio-texto">Aún no hay datos históricos</p>
-            <p class="grafico-vacio-hint">Los datos se registran automáticamente cada día</p>
+            ${spinner}
+            <p class="grafico-vacio-texto">${texto}</p>
+            ${hint ? `<p class="grafico-vacio-hint">${hint}</p>` : ""}
         </div>
     `
+    estado.hidden = false
+}
+
+function ocultarEstadoGrafico() {
+    const estado = document.getElementById("grafico-estado")
+    if (!estado) return
+    estado.hidden = true
+    estado.innerHTML = ""
+}
+
+function mostrarCanvas() {
+    const canvas = document.getElementById("grafico-patrimonio")
+    if (canvas) canvas.hidden = false
+}
+
+function ocultarCanvas() {
+    const canvas = document.getElementById("grafico-patrimonio")
+    if (canvas) canvas.hidden = true
 }
 
 // ============================================

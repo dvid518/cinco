@@ -39,9 +39,7 @@ export async function obtenerPendientes(uid, soloPendientes = true) {
             let q = referencia
             
             if (soloPendientes) {
-                q = query(referencia, where("pendiente", "==", true))
-                // ⚠️ Temporalmente sin orderBy hasta que el índice esté listo
-                // q = query(referencia, where("pendiente", "==", true), orderBy("fechaRegistro", "desc"))
+                q = query(referencia, where("pendiente", "==", true), orderBy("fechaRegistro", "desc"))
             } else {
                 q = query(referencia, orderBy("fechaRegistro", "desc"))
             }
@@ -50,13 +48,6 @@ export async function obtenerPendientes(uid, soloPendientes = true) {
             
             const pendientes = resultado.docs.map(doc => {
                 return Pendiente.fromFirestore(doc.id, doc.data())
-            })
-            
-            // Ordenar en JavaScript si no usamos orderBy
-            pendientes.sort((a, b) => {
-                const fechaA = a.fechaRegistro?.toDate?.() || new Date(a.fechaRegistro)
-                const fechaB = b.fechaRegistro?.toDate?.() || new Date(b.fechaRegistro)
-                return fechaB - fechaA
             })
             
             return pendientes

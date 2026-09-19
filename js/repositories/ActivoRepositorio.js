@@ -118,6 +118,17 @@ export async function actualizarPrecioActivo(uid, activoId, precio) {
     return resultado
 }
 
+export async function marcarFavoritoActivo(uid, activoId, favorito) {
+    const referencia = doc(db, "usuarios", uid, "activos", activoId)
+    const resultado = await updateDoc(referencia, {
+        favorito: !!favorito
+    })
+    cacheCapa.invalidar(uid, "activos")
+    // Las posiciones incluyen el activo; el favorito se refleja en la lista
+    cacheCapa.invalidar(uid, "posiciones")
+    return resultado
+}
+
 // --------------------------------------------
 // ELIMINAR
 // --------------------------------------------

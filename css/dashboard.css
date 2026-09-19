@@ -230,6 +230,28 @@
 }
 
 /* ============================================
+   SELECTOR DE PERIODO Y ESTADOS DEL GRÁFICO
+   ============================================ */
+
+.grafico-periodos {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.grafico-periodos .toggle-option {
+    padding: 4px 10px;
+}
+
+.grafico-estado {
+    display: flex;
+    justify-content: center;
+}
+
+.grafico-estado[hidden] {
+    display: none;
+}
+
+/* ============================================
    MODAL DE VENCIMIENTOS
    ============================================ */
 
@@ -245,4 +267,202 @@
 .btn-consolidar-vencimiento {
     flex-shrink: 0;
     margin-left: 8px;
+}
+
+/* ============================================
+   CARD DE FAVORITOS
+   ============================================ */
+
+.favoritos-card .card-header,
+.metas-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.favoritos-card .card-header .card-title,
+.metas-card .card-header .card-title {
+    margin-bottom: 0;
+}
+
+.card-badge {
+    min-width: 24px;
+    padding: 2px 8px;
+    border-radius: 50px;
+    background: var(--border);
+    color: var(--textSecondary);
+    font-family: var(--font-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.btn-meta-nueva {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.favoritos-lista,
+.metas-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.card-vacio {
+    margin: 0;
+    color: var(--textSecondary);
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.favorito-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--background);
+    border: 1px solid var(--border);
+}
+
+.favorito-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.favorito-nombre {
+    color: var(--text);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.favorito-simbolo {
+    color: var(--textSecondary);
+    font-size: 11px;
+}
+
+.favorito-precio {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+/* ============================================
+   CARD DE METAS DE AHORRO
+   ============================================ */
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--background);
+    border: 1px solid var(--border);
+}
+
+.meta-item.pausada {
+    opacity: 0.6;
+}
+
+.meta-item.completada {
+    border-color: var(--positive);
+}
+
+.meta-cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.meta-nombre {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.meta-nombre span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.meta-porcentaje {
+    flex-shrink: 0;
+    font-family: var(--font-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--textSecondary);
+}
+
+.meta-item.completada .meta-porcentaje {
+    color: var(--positive);
+}
+
+.meta-progreso {
+    width: 100%;
+    height: 6px;
+    border-radius: 50px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.meta-progreso-barra {
+    width: var(--progreso, 0%);
+    height: 100%;
+    border-radius: 50px;
+    background: var(--positive);
+    transition: width 0.3s ease;
+}
+
+.meta-detalle {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--textSecondary);
+}
+
+.meta-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.meta-acciones .btn-sm {
+    font-size: 11px;
+    padding: 4px 10px;
+}
+
+/* ============================================
+   FORMULARIO DE METAS
+   ============================================ */
+
+.form-grupo-doble {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 480px) {
+    .form-grupo-doble {
+        grid-template-columns: 1fr;
+    }
 }

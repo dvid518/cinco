@@ -119,3 +119,45 @@
     padding: 4px 12px;
     font-size: 12px;
 }
+
+/* ============================================
+   ÓRDENES (LÍMITE / STOP)
+   ============================================ */
+
+.orden-item .orden-badge {
+    margin-left: 8px;
+    padding: 2px 10px;
+    border-radius: 50px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+}
+
+.orden-item .orden-badge.pendiente {
+    background: var(--border);
+    color: var(--text);
+}
+
+.orden-item .orden-badge.ejecutada {
+    background: var(--positive);
+    color: var(--background);
+}
+
+.orden-item .orden-badge.cancelada {
+    background: var(--negative);
+    color: var(--text);
+}
+
+.orden-acciones {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    justify-content: flex-end;
+}
+
+.orden-acciones .glass-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+}

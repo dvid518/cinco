@@ -1,4 +1,4 @@
-import { observeAuth, startInactivityTimer } from "../../firebase/auth.js"
+import { observeAuth, startInactivityTimer, aplicarPersistenciaSesion } from "../../firebase/auth.js"
 import { sesion } from "./sesion.js"
 import { initRouter } from "./router.js"
 import { obtenerPreferencias } from "../../firebase/firestore.js"
@@ -57,6 +57,15 @@ export async function initApp() {
             // Si cargar preferencias falla, continuar con los valores por defecto
             console.warn("[WARN] Error cargando preferencias:", error)
             sesion.setPreferencias({})
+        }
+
+        // Persistencia de sesión según preferencias.seg.cerrarAlCerrarPestana
+        // (true = sessionStorage, false = localStorage).
+        const seg = sesion.getPreferencias()?.seg || {}
+        try {
+            await aplicarPersistenciaSesion(seg.cerrarAlCerrarPestana !== false)
+        } catch (error) {
+            console.warn("[WARN] No se pudo aplicar la persistencia de sesión:", error)
         }
 
         try {

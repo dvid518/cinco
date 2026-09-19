@@ -222,6 +222,40 @@
 }
 
 /* ========================================
+   TIPO DE CAMBIO · MODO AUTOMÁTICO
+   ======================================== */
+
+.config-group [hidden] {
+    display: none;
+}
+
+.tc-auto-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.exchange-note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--textSecondary);
+}
+
+.tc-auto-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.tc-status {
+    font-size: 13px;
+    color: var(--negative);
+}
+
+/* ========================================
    ZONA PELIGROSA
    ======================================== */
 

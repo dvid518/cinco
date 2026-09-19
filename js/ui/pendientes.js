@@ -1,7 +1,7 @@
 import { abrirModal, cerrarModal } from "./modal.js"
 import { obtenerPendientes, eliminarPendiente, crearPendiente, actualizarPendiente } from "../repositories/PendienteRepositorio.js"
 import { sesion } from "../core/sesion.js"
-import { obtenerTiposCompatibles, consolidarPendienteAMovimiento } from "../services/PendienteServicio.js"
+import { obtenerTiposCompatibles, consolidarPendienteAMovimiento, consolidarPendientesEnLote } from "../services/PendienteServicio.js"
 import { generarFormularioMovimiento, recogerDatosFormulario, vincularSimboloDivisa } from "./formularioMovimiento.js"
 import { DIVISAS } from "../../constants/divisas.js"
 import { mostrarNotificacion } from "./notificaciones.js"
@@ -25,9 +25,14 @@ export async function mostrarPendientes() {
                 <span class="pendientes-contador">
                     ${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''}
                 </span>
-                <button class="glass pendiente-crear-btn" id="btn-crear-pendiente">
-                    + Nuevo pendiente
-                </button>
+                <div class="pendientes-cabecera-acciones">
+                    <button class="glass pendiente-lote-btn" id="btn-consolidar-lote" disabled>
+                        Consolidar seleccionados
+                    </button>
+                    <button class="glass pendiente-crear-btn" id="btn-crear-pendiente">
+                        + Nuevo pendiente
+                    </button>
+                </div>
             </div>
             <div class="pendientes-lista">
                 ${pendientes.length === 0 ? `
@@ -36,6 +41,9 @@ export async function mostrarPendientes() {
                     </p>
                 ` : pendientes.map(p => `
                     <div class="pendiente-item ${p.tipoClase || (p.tipo ? 'cobrar' : 'pagar')}" data-id="${p.id}">
+                        <label class="pendiente-check">
+                            <input type="checkbox" class="pendiente-select" data-id="${p.id}" aria-label="Seleccionar ${p.concepto}">
+                        </label>
                         <div class="pendiente-info">
                             <div class="pendiente-concepto">${p.concepto}</div>
                             <div class="pendiente-detalle">
@@ -66,6 +74,39 @@ export async function mostrarPendientes() {
         document.getElementById('btn-crear-pendiente')?.addEventListener('click', () => {
             cerrarModal()
             abrirFormularioCrearPendiente()
+        })
+
+        const seleccionados = new Set()
+
+        const actualizarBotonLote = () => {
+            const btn = document.getElementById('btn-consolidar-lote')
+            if (!btn) return
+            const cantidad = seleccionados.size
+            btn.disabled = cantidad === 0
+            btn.textContent = cantidad > 0
+                ? `Consolidar ${cantidad} seleccionado${cantidad !== 1 ? 's' : ''}`
+                : 'Consolidar seleccionados'
+        }
+
+        document.querySelectorAll('.pendiente-select').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    seleccionados.add(checkbox.dataset.id)
+                } else {
+                    seleccionados.delete(checkbox.dataset.id)
+                }
+                actualizarBotonLote()
+            })
+        })
+
+        document.getElementById('btn-consolidar-lote')?.addEventListener('click', () => {
+            const elegidos = pendientes.filter(p => seleccionados.has(p.id))
+            if (elegidos.length === 0) {
+                mostrarNotificacion("info", "Selecciona al menos un pendiente")
+                return
+            }
+            cerrarModal()
+            abrirConsolidacionEnLote(elegidos, uid)
         })
 
         document.querySelectorAll('.pendiente-consolidar').forEach(btn => {
@@ -328,6 +369,112 @@ export async function abrirConsolidacionPendiente(pendiente, uidOrigen = sesion.
     if (campoMonto) campoMonto.value = pendiente.monto
     if (campoCantidad && pendiente.monto) campoCantidad.value = pendiente.monto
     if (campoConcepto) campoConcepto.value = pendiente.concepto
+
+    vincularSimboloDivisa()
+}
+
+// ============================================
+// CONSOLIDACIÓN EN LOTE
+// ============================================
+
+/**
+ * Agrupa los pendientes por tipo (cobrar/pagar) y divisa, para que el monto
+ * agregado siempre sume importes de la misma moneda.
+ */
+function agruparPendientesSeleccionados(pendientes) {
+    const grupos = new Map()
+
+    for (const pendiente of pendientes) {
+        const clave = `${pendiente.tipo ? "cobrar" : "pagar"}|${pendiente.divisa}`
+
+        if (!grupos.has(clave)) {
+            grupos.set(clave, {
+                tipo: pendiente.tipo,
+                divisa: pendiente.divisa,
+                lista: []
+            })
+        }
+
+        grupos.get(clave).lista.push(pendiente)
+    }
+
+    return [...grupos.values()]
+}
+
+export async function abrirConsolidacionEnLote(pendientes, uidOrigen = sesion.uid) {
+    const uid = uidOrigen || sesion.uid
+
+    if (!pendientes || pendientes.length === 0) {
+        mostrarNotificacion("error", "No hay pendientes seleccionados")
+        return
+    }
+
+    const grupos = agruparPendientesSeleccionados(pendientes)
+    await procesarGrupoConsolidacion(grupos, 0, uid)
+}
+
+async function procesarGrupoConsolidacion(grupos, indice, uid) {
+    if (indice >= grupos.length) {
+        mostrarNotificacion("exito", "Pendientes consolidados correctamente")
+        setTimeout(() => mostrarPendientes(), 100)
+        return
+    }
+
+    const grupo = grupos[indice]
+    const tiposCompatibles = obtenerTiposCompatibles(grupo.tipo)
+
+    if (tiposCompatibles.length === 0) {
+        mostrarNotificacion("error", "No hay tipos de movimiento compatibles para este grupo")
+        await procesarGrupoConsolidacion(grupos, indice + 1, uid)
+        return
+    }
+
+    const tipo = tiposCompatibles[0]
+    const cantidad = grupo.lista.length
+    const total = grupo.lista.reduce((suma, p) => suma + (p.monto || 0), 0)
+    const html = await generarFormularioMovimiento(tipo)
+
+    const contenido = `
+        <p class="pendiente-lote-info">
+            Se consolidarán ${cantidad} pendiente${cantidad !== 1 ? 's' : ''}
+            de ${grupo.divisa.toUpperCase()} por un total de ${total.toFixed(2)}.
+        </p>
+        ${html}
+    `
+
+    abrirModal({
+        titulo: `Consolidar ${cantidad} pendiente${cantidad !== 1 ? 's' : ''}`,
+        contenido,
+        confirmText: 'Consolidar',
+        onConfirm: async () => {
+            const datos = recogerDatosFormulario(tipo)
+            if (!datos) {
+                return false
+            }
+
+            try {
+                await consolidarPendientesEnLote(uid, grupo.lista.map(p => p.id), tipo, datos)
+                setTimeout(() => procesarGrupoConsolidacion(grupos, indice + 1, uid), 150)
+                return true
+            } catch (error) {
+                console.error('[ERROR] Error consolidando en lote:', error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        },
+        onCancel: () => {
+            setTimeout(() => mostrarPendientes(), 100)
+        }
+    })
+
+    const campoMonto = document.getElementById('campo-monto')
+    const campoConcepto = document.getElementById('campo-concepto')
+    if (campoMonto) campoMonto.value = total.toFixed(2)
+    if (campoConcepto) {
+        campoConcepto.value = cantidad === 1
+            ? grupo.lista[0].concepto
+            : `Consolidación de ${cantidad} pendientes`
+    }
 
     vincularSimboloDivisa()
 }

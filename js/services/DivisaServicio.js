@@ -101,3 +101,43 @@ export async function guardarTipoCambio(uid, penUSD, modo = "manual") {
     const prefs = sesion.getPreferencias()
     sesion.setPreferencias({ ...prefs, tipoCambio })
 }
+
+// --------------------------------------------
+// TIPO DE CAMBIO AUTOMÁTICO
+// --------------------------------------------
+
+const API_TIPO_CAMBIO = "https://open.er-api.com/v6/latest/USD"
+const TIEMPO_MAXIMO_API = 10000
+
+/**
+ * Consulta el tipo de cambio PEN/USD en una API pública y lo guarda en
+ * Firestore (modo: "auto"). Si el servidor falla, lanza error sin tocar el
+ * valor actual; la capa de UI conserva así el valor manual como respaldo.
+ */
+export async function actualizarTipoCambioAuto(uid) {
+    const controlador = new AbortController()
+    const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_API)
+
+    try {
+        const respuesta = await fetch(API_TIPO_CAMBIO, { signal: controlador.signal })
+
+        if (!respuesta.ok) {
+            throw new Error(`La API respondió ${respuesta.status}`)
+        }
+
+        const datos = await respuesta.json()
+        const penUSD = datos?.result === "success" ? Number(datos.rates?.PEN) : null
+
+        if (!penUSD || penUSD <= 0) {
+            throw new Error("La API no devolvió el tipo de cambio PEN")
+        }
+
+        await guardarTipoCambio(uid, penUSD, "auto")
+        return penUSD
+    } catch (error) {
+        console.error("Error actualizando tipo de cambio automático:", error)
+        throw error
+    } finally {
+        clearTimeout(temporizador)
+    }
+}

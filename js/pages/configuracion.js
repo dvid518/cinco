@@ -1,11 +1,11 @@
-import { logout, tienePassword, configurarPassword, cambiarPassword, actualizarNombre, reautenticarConPassword, reautenticarConGoogle } from "../../firebase/auth.js"
+import { logout, tienePassword, configurarPassword, cambiarPasswordVerificada, actualizarNombre, reautenticarConPassword, reautenticarConGoogle, esSesionReciente, aplicarPersistenciaSesion, startInactivityTimer } from "../../firebase/auth.js"
 import { sesion } from "../core/sesion.js"
 import { obtenerPreferencias, actualizarPreferencias } from "../../firebase/firestore.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { VERSION } from "../../constants/version.js"
 import { TIPO_CAMBIO_DEFAULT } from "../../constants/divisas.js"
-import { getDivisaPrincipal, getTipoCambio } from "../services/DivisaServicio.js"
+import { getDivisaPrincipal, getTipoCambio, actualizarTipoCambioAuto } from "../services/DivisaServicio.js"
 import { aplicarTema, setTemaLocal } from "../core/tema.js"
 import { icono } from "../core/iconos.js"
 import { accionExportar } from "../ui/exportar.js"
@@ -42,6 +42,7 @@ export function render() {
                 <button class="glass act" data-section="apariencia">${icono("palette", 18)}<span>Apariencia</span></button>
                 <button class="glass" data-section="moneda">${icono("coins", 18)}<span>Moneda</span></button>
                 <button class="glass" data-section="cuenta">${icono("circle-user", 18)}<span>Cuenta</span></button>
+                <button class="glass" data-section="seguridad">${icono("shield", 18)}<span>Seguridad</span></button>
                 <button class="glass" data-section="datos">${icono("database", 18)}<span>Datos</span></button>
             </section>
         `)}
@@ -121,11 +122,28 @@ export function render() {
 
                 <div class="config-group">
                     <span class="config-label">Tipo de cambio</span>
-                    <div class="exchange-rate-inputs">
+
+                    <div class="toggle-group" id="tc-modo">
+                        <span class="toggle-option" data-modo="manual">Manual</span>
+                        <span class="toggle-option" data-modo="auto">Automático</span>
+                    </div>
+
+                    <div class="exchange-rate-inputs" id="tc-input-manual" hidden>
                         <div class="exchange-input">
                             <label>1 USD =</label>
                             <input type="number" id="tc-pen-usd" class="form-input" step="0.01" min="0.01" placeholder="${TIPO_CAMBIO_DEFAULT.pen_usd}">
                             <span>PEN</span>
+                        </div>
+                    </div>
+
+                    <div class="tc-auto-box" id="tc-input-auto" hidden>
+                        <p class="exchange-note" id="tc-valor-auto"></p>
+                        <p class="exchange-note" id="tc-fecha-auto"></p>
+                        <div class="tc-auto-actions">
+                            <button class="glass-btn" id="tc-actualizar-btn">
+                                <span class="tc-btn-text">Actualizar ahora</span>
+                            </button>
+                            <span class="tc-status" id="tc-status" hidden></span>
                         </div>
                     </div>
                 </div>
@@ -156,6 +174,52 @@ export function render() {
                     <span class="config-label danger">Eliminar cuenta</span>
                     <button class="glass-btn danger" id="delete-account">Eliminar cuenta</button>
                     <span class="config-hint">Se eliminarán todos tus datos permanentemente</span>
+                </div>
+            </div>
+
+            <!-- SEGURIDAD -->
+            <div class="panel-section hidden-section" id="section-seguridad">
+                <h2>Seguridad</h2>
+
+                <div class="config-group">
+                    <span class="config-label">Cerrar sesión por inactividad</span>
+                    <select class="select" id="seg-inactividad">
+                        <option value="5">5 minutos</option>
+                        <option value="15">15 minutos</option>
+                        <option value="30">30 minutos</option>
+                        <option value="60">1 hora</option>
+                        <option value="0">Nunca</option>
+                    </select>
+                    <span class="config-hint">
+                        Si no hay actividad durante este tiempo, la sesión se cierra automáticamente.
+                        Con "Nunca", la sesión permanece abierta hasta que la cierres manualmente.
+                    </span>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Sesión en el navegador</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Cerrar sesión al cerrar la pestaña</span>
+                            <label class="switch">
+                                <input type="checkbox" id="seg-cerrar-pestana" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <span class="config-hint">
+                        Activado: la sesión se cierra al cerrar la pestaña o ventana (más seguro).
+                        Desactivado: la sesión se mantiene hasta que cierres sesión manualmente.
+                    </span>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Operaciones sensibles</span>
+                    <span class="config-hint">
+                        Eliminar la cuenta, eliminar todos los datos y cambiar la contraseña piden
+                        confirmar tu identidad si la sesión tiene más de 5 minutos. Exportar o
+                        importar un respaldo no requiere confirmación adicional.
+                    </span>
                 </div>
             </div>
 
@@ -205,6 +269,7 @@ export async function init() {
     configurarBotones()
     configurarLastbar()
     configurarDetectorCambios()
+    configurarTipoCambio()
 }
 
 // ============================================
@@ -297,11 +362,14 @@ function configurarCuenta() {
             : "Configurar contraseña"
 
         botonPassword.addEventListener("click", () => {
-            if (tienePassword()) {
-                abrirModalCambiarPassword()
-            } else {
+            if (!tienePassword()) {
                 abrirModalConfigurarPassword()
+                return
             }
+
+            // Operación sensible: si la sesión es vieja, se pide reautenticación
+            // antes de abrir el modal de cambio de contraseña.
+            conReautenticacion(() => abrirModalCambiarPassword())
         })
     }
 }
@@ -370,10 +438,6 @@ function abrirModalCambiarPassword() {
     const html = `
         <form class="form-movimiento" id="form-cambiar-password">
             <div class="form-group">
-                <label for="actual-password">Contraseña actual</label>
-                <input type="password" id="actual-password" class="form-input" autocomplete="current-password" required>
-            </div>
-            <div class="form-group">
                 <label for="nueva-password">Nueva contraseña</label>
                 <input type="password" id="nueva-password" class="form-input" autocomplete="new-password" required>
                 <span class="form-hint">Mínimo 6 caracteres</span>
@@ -393,15 +457,10 @@ function abrirModalCambiarPassword() {
         confirmText: "Cambiar",
         cancelText: "Cancelar",
         onConfirm: async () => {
-            const actual = document.getElementById("actual-password")?.value
             const nueva = document.getElementById("nueva-password")?.value
             const confirmar = document.getElementById("confirmar-password")?.value
             const errorEl = document.getElementById("password-error")
 
-            if (!actual) {
-                mostrarErrorPassword(errorEl, "Introduce tu contraseña actual.")
-                return false
-            }
             if (!nueva || nueva.length < 6) {
                 mostrarErrorPassword(errorEl, "La nueva contraseña debe tener al menos 6 caracteres.")
                 return false
@@ -410,13 +469,9 @@ function abrirModalCambiarPassword() {
                 mostrarErrorPassword(errorEl, "Las contraseñas nuevas no coinciden.")
                 return false
             }
-            if (nueva === actual) {
-                mostrarErrorPassword(errorEl, "La nueva contraseña debe ser distinta a la actual.")
-                return false
-            }
 
             try {
-                await cambiarPassword(actual, nueva)
+                await cambiarPasswordVerificada(nueva)
                 await cerrarSesionConAviso(
                     "Contraseña actualizada",
                     "Inicia sesión de nuevo con tu nueva contraseña."
@@ -510,6 +565,17 @@ async function cargarPreferencias() {
         document.getElementById("toggle-inversiones").checked = paginas.inversiones !== false
         document.getElementById("toggle-trading").checked = paginas.trading !== false
 
+        // Seguridad
+        const seg = prefs?.seg || sesion.getPreferencias().seg || {}
+        const segInactividad = document.getElementById("seg-inactividad")
+        if (segInactividad) {
+            segInactividad.value = String(seg.inactividadMinutos ?? 15)
+        }
+        const segCerrarPestana = document.getElementById("seg-cerrar-pestana")
+        if (segCerrarPestana) {
+            segCerrarPestana.checked = seg.cerrarAlCerrarPestana !== false
+        }
+
         actualizarEstadoGuardar()
     } catch (error) {
         console.error("Error cargando preferencias:", error)
@@ -520,9 +586,10 @@ async function cargarPreferencias() {
     if (divisaSelect) divisaSelect.value = getDivisaPrincipal()
 
     // Tipo de cambio
+    const tc = getTipoCambio()
+    refrescarModoTipoCambio(tc.modo === "auto" ? "auto" : "manual")
     const tcUSD = document.getElementById("tc-pen-usd")
     if (tcUSD) {
-        const tc = getTipoCambio()
         tcUSD.value = tc.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd
     }
 }
@@ -530,17 +597,25 @@ async function cargarPreferencias() {
 function hayCambiosEnVivo() {
     const base = sesion.getPreferencias() || {}
     const basePaginas = base.paginas || {}
+    const segBase = base.seg || {}
     const tc = getTipoCambio()
+    const modoTCUI = getModoTipoCambioUI()
     const nombreBase = (sesion.getUsuario()?.nombre || "Usuario").trim()
+
+    const segInactividadUI = parseInt(document.getElementById("seg-inactividad")?.value, 10)
+    const segCerrarUI = document.getElementById("seg-cerrar-pestana")?.checked
 
     return (
         (nombrePendiente !== null && nombrePendiente !== nombreBase) ||
+        (Number.isFinite(segInactividadUI) && segInactividadUI !== (segBase.inactividadMinutos ?? 15)) ||
+        (segCerrarUI !== undefined && segCerrarUI !== (segBase.cerrarAlCerrarPestana !== false)) ||
         (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
         (document.getElementById("toggle-movimientos")?.checked !== (basePaginas.movimientos !== false)) ||
         (document.getElementById("toggle-inversiones")?.checked !== (basePaginas.inversiones !== false)) ||
         (document.getElementById("toggle-trading")?.checked !== (basePaginas.trading !== false)) ||
         (document.getElementById("divisa-principal")?.value !== getDivisaPrincipal()) ||
-        (parseFloat(document.getElementById("tc-pen-usd")?.value) !== tc.pen_usd)
+        (modoTCUI !== null && modoTCUI !== (tc.modo === "auto" ? "auto" : "manual")) ||
+        (modoTCUI !== "auto" && parseFloat(document.getElementById("tc-pen-usd")?.value) !== tc.pen_usd)
     )
 }
 
@@ -551,7 +626,9 @@ function configurarDetectorCambios() {
         "toggle-inversiones",
         "toggle-trading",
         "divisa-principal",
-        "tc-pen-usd"
+        "tc-pen-usd",
+        "seg-inactividad",
+        "seg-cerrar-pestana"
     ]
 
     ids.forEach(id => {
@@ -562,6 +639,111 @@ function configurarDetectorCambios() {
             })
         }
     })
+}
+
+// ============================================
+// TIPO DE CAMBIO · MANUAL / AUTOMÁTICO
+// ============================================
+
+function getModoTipoCambioUI() {
+    const opt = document.querySelector("#tc-modo .toggle-option.active")
+    return opt?.dataset.modo || null
+}
+
+function refrescarModoTipoCambio(modo = null) {
+    const modoActual = modo || (getTipoCambio().modo === "auto" ? "auto" : "manual")
+    const opciones = document.querySelectorAll("#tc-modo .toggle-option")
+
+    opciones.forEach(opt => {
+        opt.classList.toggle("active", opt.dataset.modo === modoActual)
+    })
+
+    const esAuto = modoActual === "auto"
+    const inputManual = document.getElementById("tc-input-manual")
+    const inputAuto = document.getElementById("tc-input-auto")
+    const tcUSD = document.getElementById("tc-pen-usd")
+
+    if (inputManual) inputManual.hidden = esAuto
+    if (inputAuto) inputAuto.hidden = !esAuto
+    if (tcUSD) tcUSD.disabled = esAuto
+
+    actualizarInfoAuto()
+}
+
+function actualizarInfoAuto() {
+    const tc = getTipoCambio()
+    const penUSD = tc.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd
+
+    const valorAuto = document.getElementById("tc-valor-auto")
+    if (valorAuto) {
+        valorAuto.textContent = `1 USD = ${Number(penUSD).toFixed(2)} PEN`
+    }
+
+    const fechaAuto = document.getElementById("tc-fecha-auto")
+    if (fechaAuto) {
+        if (tc.modo === "auto" && tc.actualizacion) {
+            const fecha = new Date(tc.actualizacion)
+            fechaAuto.textContent = `Última actualización: ${fecha.toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}`
+        } else {
+            fechaAuto.textContent = "Aún sin actualización automática"
+        }
+    }
+}
+
+function configurarTipoCambio() {
+    const opciones = document.querySelectorAll("#tc-modo .toggle-option")
+
+    opciones.forEach(opt => {
+        opt.addEventListener("click", () => {
+            opciones.forEach(o => o.classList.remove("active"))
+            opt.classList.add("active")
+            refrescarModoTipoCambio(opt.dataset.modo)
+            actualizarEstadoGuardar()
+        })
+    })
+
+    const btnActualizar = document.getElementById("tc-actualizar-btn")
+    if (btnActualizar) {
+        btnActualizar.addEventListener("click", actualizarTipoCambioAutomatico)
+    }
+}
+
+async function actualizarTipoCambioAutomatico() {
+    const btn = document.getElementById("tc-actualizar-btn")
+    const btnText = btn?.querySelector(".tc-btn-text")
+    const status = document.getElementById("tc-status")
+
+    if (status) {
+        status.hidden = true
+        status.textContent = ""
+    }
+
+    if (btn) {
+        btn.disabled = true
+        if (btnText) btnText.textContent = "Actualizando..."
+    }
+
+    try {
+        const penUSD = await actualizarTipoCambioAuto(uid)
+
+        const tcUSD = document.getElementById("tc-pen-usd")
+        if (tcUSD) tcUSD.value = penUSD
+
+        actualizarInfoAuto()
+        actualizarEstadoGuardar()
+        mostrarNotificacion("exito", `Tipo de cambio actualizado: 1 USD = ${penUSD.toFixed(2)} PEN`)
+    } catch (error) {
+        if (status) {
+            status.textContent = "No se pudo actualizar; se mantiene el valor actual"
+            status.hidden = false
+        }
+        mostrarNotificacion("error", `No se pudo actualizar el tipo de cambio: ${error.message}`)
+    } finally {
+        if (btn) {
+            btn.disabled = false
+            if (btnText) btnText.textContent = "Actualizar ahora"
+        }
+    }
 }
 
 // ============================================
@@ -590,7 +772,26 @@ function actualizarEstadoGuardar() {
 
 async function guardarPreferencias() {
     const divisaPrincipal = document.getElementById("divisa-principal")?.value || "pen"
-    const penUSD = parseFloat(document.getElementById("tc-pen-usd")?.value) || TIPO_CAMBIO_DEFAULT.pen_usd
+    const modoTCUI = getModoTipoCambioUI()
+    const tcActual = getTipoCambio()
+
+    const tipoCambio = modoTCUI === "auto"
+        ? {
+            pen_usd: tcActual.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd,
+            modo: "auto",
+            actualizacion: tcActual.actualizacion || new Date().toISOString()
+        }
+        : {
+            pen_usd: parseFloat(document.getElementById("tc-pen-usd")?.value) || TIPO_CAMBIO_DEFAULT.pen_usd,
+            modo: "manual",
+            actualizacion: new Date().toISOString()
+        }
+
+    const segInactividadUI = parseInt(document.getElementById("seg-inactividad")?.value, 10)
+    const seg = {
+        inactividadMinutos: Number.isFinite(segInactividadUI) ? segInactividadUI : 15,
+        cerrarAlCerrarPestana: document.getElementById("seg-cerrar-pestana")?.checked !== false
+    }
 
     const preferencias = {
         tema: temaActual,
@@ -603,11 +804,8 @@ async function guardarPreferencias() {
             configuracion: true
         },
         divisaPrincipal,
-        tipoCambio: {
-            pen_usd: penUSD,
-            modo: "manual",
-            actualizacion: new Date().toISOString()
-        }
+        tipoCambio,
+        seg
     }
 
     try {
@@ -620,6 +818,14 @@ async function guardarPreferencias() {
 
         await actualizarPreferencias(uid, preferencias)
         sesion.setPreferencias(preferencias)
+
+        // Aplicar de inmediato la seguridad configurada
+        try {
+            await aplicarPersistenciaSesion(preferencias.seg.cerrarAlCerrarPestana)
+        } catch (error) {
+            console.warn("[WARN] No se pudo aplicar la persistencia de sesión:", error)
+        }
+        startInactivityTimer()
 
         // Persistir tema y modo de lastbar en localStorage
         setTemaLocal(temaActual)
@@ -951,7 +1157,7 @@ function eliminarTodosLosDatos() {
         cancelText: "Cancelar",
         onConfirm: () => {
             cerrarModal()
-            setTimeout(confirmarEliminacionFinal, 100)
+            setTimeout(() => conReautenticacion(confirmarEliminacionFinal), 100)
             return false
         }
     })
@@ -1092,21 +1298,30 @@ function abrirModalEliminarCuenta() {
         cancelText: "Cancelar",
         onConfirm: () => {
             cerrarModal()
-            setTimeout(iniciarReautenticacion, 100)
+            setTimeout(() => conReautenticacion(abrirModalConfirmacionFinal), 100)
             return false
         }
     })
 }
 
-function iniciarReautenticacion() {
+/**
+ * Ejecuta `alContinuar` cuando la sesión es reciente. Si no lo es, pide
+ * reautenticación (contraseña o Google). Si el usuario cancela, no continúa.
+ */
+function conReautenticacion(alContinuar) {
+    if (esSesionReciente()) {
+        alContinuar()
+        return
+    }
+
     if (tienePassword()) {
-        abrirModalReauthPassword()
+        abrirModalReauthPassword(alContinuar)
     } else {
-        abrirModalReauthGoogle()
+        abrirModalReauthGoogle(alContinuar)
     }
 }
 
-function abrirModalReauthPassword() {
+function abrirModalReauthPassword(alContinuar) {
     abrirModal({
         titulo: "Reautenticación requerida",
         contenido: `
@@ -1148,13 +1363,13 @@ function abrirModalReauthPassword() {
             }
 
             cerrarModal()
-            setTimeout(abrirModalConfirmacionFinal, 100)
+            setTimeout(() => alContinuar(), 100)
             return false
         }
     })
 }
 
-function abrirModalReauthGoogle() {
+function abrirModalReauthGoogle(alContinuar) {
     abrirModal({
         titulo: "Reautenticación requerida",
         contenido: `
@@ -1181,7 +1396,7 @@ function abrirModalReauthGoogle() {
             }
 
             cerrarModal()
-            setTimeout(abrirModalConfirmacionFinal, 100)
+            setTimeout(() => alContinuar(), 100)
             return false
         }
     })

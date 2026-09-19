@@ -1,5 +1,12 @@
 import { sesion } from "../core/sesion.js"
 import { obtenerTradesConFiltros, registrarTrade, finalizarTrade, borrarTrade, reabrirTradeAbierto, editarTrade } from "../services/TradingServicio.js"
+import {
+    obtenerOrdenesConFiltros,
+    registrarOrden,
+    cancelarOrden,
+    borrarOrden,
+    evaluarOrdenesPendientes
+} from "../services/OrdenServicio.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { icono } from "../core/iconos.js"
@@ -9,6 +16,8 @@ import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 let uid = null
 let datosTrades = null
 let filtroActual = 'todos'
+let ordenesData = []
+let vistaActual = "trades"
 
 export function render() {
     return `
@@ -24,21 +33,31 @@ export function render() {
         <section id="panel" class="glass">
             <div class="panel-header">
                 <h2>Trading</h2>
+                <div class="toggle-group" id="toggle-vista-trading">
+                    <span class="toggle-option active" data-vista="trades">Trades</span>
+                    <span class="toggle-option" data-vista="ordenes">Órdenes</span>
+                </div>
             </div>
 
             <div class="portfolio-resumen">
                 <div class="resumen-card">
-                    <div class="resumen-label">P&L Total</div>
+                    <div class="resumen-label" id="resumen-label-1">P&L Total</div>
                     <div class="resumen-valor" id="pnl-total">0.00</div>
                 </div>
                 <div class="resumen-card">
-                    <div class="resumen-label">Abiertos</div>
+                    <div class="resumen-label" id="resumen-label-2">Abiertos</div>
                     <div class="resumen-valor" id="total-abiertos">0</div>
                 </div>
                 <div class="resumen-card">
-                    <div class="resumen-label">Cerrados</div>
+                    <div class="resumen-label" id="resumen-label-3">Cerrados</div>
                     <div class="resumen-valor" id="total-cerrados">0</div>
                 </div>
+            </div>
+
+            <div class="estrategias-acciones" id="ordenes-acciones" hidden>
+                <button type="button" class="glass-btn" id="btn-nueva-orden">
+                    ${icono("plus-circle", 16)} Nueva orden
+                </button>
             </div>
 
             <div id="lista-trades" class="lista-posiciones">
@@ -50,11 +69,42 @@ export function render() {
 
 export async function init() {
     uid = sesion.uid
+    vistaActual = "trades"
     console.log("[INFO] Trading iniciado para UID:", uid)
 
-    await cargarTrades()
     configurarEventos()
+    configurarToggleVista()
+
+    await evaluarYNotificar()
+    await Promise.all([cargarTrades(), cargarOrdenes()])
 }
+
+// ============================================
+// EVALUACIÓN DE ÓRDENES
+// ============================================
+
+async function evaluarYNotificar() {
+    try {
+        const resultado = await evaluarOrdenesPendientes(uid)
+        if (resultado.ejecutadas > 0) {
+            mostrarNotificacion("exito", `${resultado.ejecutadas} orden(es) ejecutada(s)`)
+        }
+        return resultado
+    } catch (error) {
+        console.error("Error evaluando órdenes:", error)
+        return { ejecutadas: 0 }
+    }
+}
+
+/**
+ * Refresca trades y órdenes, evaluando antes las órdenes pendientes.
+ * Usada por el botón "Actualizar" de la lastbar.
+ */
+export async function recargarTrading() {
+    await evaluarYNotificar()
+    await Promise.all([cargarTrades(), cargarOrdenes()])
+}
+
 export async function cargarTrades() {
     try {
         const filtros = {}
@@ -67,13 +117,33 @@ export async function cargarTrades() {
         }
 
         datosTrades = await obtenerTradesConFiltros(uid, filtros)
-        renderizarTrades()
+        if (vistaActual === "trades") renderizarTrades()
         actualizarResumen()
     } catch (error) {
         console.error("Error cargando trades:", error)
+        if (vistaActual !== "trades") return
         const container = document.getElementById('lista-trades')
         if (container) {
             container.innerHTML = `<p class="lista-vacia error">Error al cargar trades</p>`
+        }
+    }
+}
+
+// ============================================
+// CARGAR ÓRDENES
+// ============================================
+
+async function cargarOrdenes() {
+    try {
+        ordenesData = await obtenerOrdenesConFiltros(uid, {})
+        if (vistaActual === "ordenes") renderizarOrdenes()
+        actualizarResumen()
+    } catch (error) {
+        console.error("Error cargando órdenes:", error)
+        if (vistaActual !== "ordenes") return
+        const container = document.getElementById('lista-trades')
+        if (container) {
+            container.innerHTML = `<p class="lista-vacia error">Error al cargar órdenes</p>`
         }
     }
 }
@@ -186,23 +256,156 @@ function renderizarTrades() {
     })
 }
 
+// ============================================
+// RENDERIZAR ÓRDENES
+// ============================================
+
+function renderizarOrdenes() {
+    const container = document.getElementById('lista-trades')
+    if (!container) return
+
+    if (!ordenesData || ordenesData.length === 0) {
+        container.innerHTML = `
+            <p class="lista-vacia">
+                No hay órdenes registradas.
+                <br><br>
+                <span class="lista-vacia-hint">Usa <strong>"Nueva orden"</strong> para programar una compra o venta límite/stop.</span>
+            </p>
+        `
+        return
+    }
+
+    container.innerHTML = ordenesData.map(o => {
+        const simbolo = DIVISAS_SYMBOLS[o.divisa] || '$'
+        const claseDireccion = o.direccion === "long" ? "positive" : "negative"
+        const claseEstado = o.estaPendiente ? "pendiente" : (o.fueEjecutada ? "ejecutada" : "cancelada")
+
+        return `
+            <div class="posicion-item trade-item orden-item" data-orden-id="${o.id}">
+                <div class="posicion-info">
+                    <div class="posicion-nombre">
+                        ${o.activo}
+                        <span class="posicion-simbolo">${o.direccionLabel}</span>
+                        <span class="orden-badge ${claseEstado}">${o.estadoTexto}</span>
+                    </div>
+                    <div class="posicion-detalle">
+                        ${o.tipoLabel}: ${simbolo} ${o.precioDisparo.toFixed(2)} · Lotaje: ${o.lotaje}
+                    </div>
+                    ${o.fueEjecutada && o.precioEjecucion ? `
+                        <div class="posicion-detalle">
+                            Ejecutada a ${simbolo} ${o.precioEjecucion.toFixed(2)}
+                        </div>
+                    ` : ''}
+                    ${o.nota ? `
+                        <div class="posicion-detalle trade-nota">${o.nota.replace(/</g, "&lt;")}</div>
+                    ` : ''}
+                </div>
+                <div class="posicion-valores">
+                    <div class="posicion-valor ${claseDireccion}">
+                        ${o.direccion === "long" ? "Largo" : "Corto"}
+                    </div>
+                    <div class="orden-acciones">
+                        ${o.estaPendiente ? `
+                            <button class="glass-btn orden-cancelar" data-id="${o.id}">Cancelar</button>
+                        ` : ''}
+                        <button class="glass-btn danger orden-eliminar" data-id="${o.id}">Eliminar</button>
+                    </div>
+                </div>
+            </div>
+        `
+    }).join('')
+
+    container.querySelectorAll('.orden-cancelar').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation()
+            confirmarCancelarOrden(btn.dataset.id)
+        })
+    })
+
+    container.querySelectorAll('.orden-eliminar').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation()
+            confirmarEliminarOrden(btn.dataset.id)
+        })
+    })
+}
+
 function actualizarResumen() {
-    const pnlTotal = document.getElementById('pnl-total')
-    const totalAbiertos = document.getElementById('total-abiertos')
-    const totalCerrados = document.getElementById('total-cerrados')
+    const label1 = document.getElementById('resumen-label-1')
+    const label2 = document.getElementById('resumen-label-2')
+    const label3 = document.getElementById('resumen-label-3')
+    const valor1 = document.getElementById('pnl-total')
+    const valor2 = document.getElementById('total-abiertos')
+    const valor3 = document.getElementById('total-cerrados')
 
-    if (pnlTotal && datosTrades) {
+    if (vistaActual === "ordenes") {
+        if (label1) label1.textContent = "Pendientes"
+        if (label2) label2.textContent = "Ejecutadas"
+        if (label3) label3.textContent = "Canceladas"
+
+        const pendientes = ordenesData.filter(o => o.estaPendiente).length
+        const ejecutadas = ordenesData.filter(o => o.fueEjecutada).length
+        const canceladas = ordenesData.length - pendientes - ejecutadas
+
+        if (valor1) { valor1.textContent = pendientes; valor1.className = "resumen-valor" }
+        if (valor2) { valor2.textContent = ejecutadas; valor2.className = "resumen-valor" }
+        if (valor3) { valor3.textContent = canceladas; valor3.className = "resumen-valor" }
+        return
+    }
+
+    if (label1) label1.textContent = "P&L Total"
+    if (label2) label2.textContent = "Abiertos"
+    if (label3) label3.textContent = "Cerrados"
+
+    if (valor1 && datosTrades) {
         const pnl = datosTrades.metricas.pnlTotal
-        pnlTotal.textContent = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`
-        pnlTotal.className = `resumen-valor ${pnl >= 0 ? 'positive' : 'negative'}`
+        valor1.textContent = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`
+        valor1.className = `resumen-valor ${pnl >= 0 ? 'positive' : 'negative'}`
     }
 
-    if (totalAbiertos && datosTrades) {
-        totalAbiertos.textContent = datosTrades.metricas.abiertos
+    if (valor2 && datosTrades) {
+        valor2.textContent = datosTrades.metricas.abiertos
     }
 
-    if (totalCerrados && datosTrades) {
-        totalCerrados.textContent = datosTrades.metricas.cerrados
+    if (valor3 && datosTrades) {
+        valor3.textContent = datosTrades.metricas.cerrados
+    }
+}
+
+// ============================================
+// VISTA: TRADES / ÓRDENES
+// ============================================
+
+function configurarToggleVista() {
+    const contenedor = document.getElementById("toggle-vista-trading")
+    if (!contenedor) return
+
+    contenedor.querySelectorAll(".toggle-option").forEach(opcion => {
+        opcion.addEventListener("click", () => cambiarVista(opcion.dataset.vista))
+    })
+
+    actualizarBotonesVista()
+}
+
+function actualizarBotonesVista() {
+    const contenedor = document.getElementById("toggle-vista-trading")
+    contenedor?.querySelectorAll(".toggle-option").forEach(opcion => {
+        opcion.classList.toggle("active", opcion.dataset.vista === vistaActual)
+    })
+
+    const acciones = document.getElementById("ordenes-acciones")
+    if (acciones) acciones.hidden = vistaActual !== "ordenes"
+}
+
+function cambiarVista(vista) {
+    vistaActual = vista === "ordenes" ? "ordenes" : "trades"
+    actualizarBotonesVista()
+    actualizarResumen()
+
+    if (vistaActual === "ordenes") {
+        renderizarOrdenes()
+    } else {
+        renderizarTrades()
     }
 }
 
@@ -217,8 +420,19 @@ function configurarEventos() {
             btn.classList.add('act')
 
             filtroActual = btn.dataset.filtro
+
+            // Los filtros del sidebar aplican a trades: volver a esa vista.
+            if (vistaActual !== "trades") {
+                vistaActual = "trades"
+                actualizarBotonesVista()
+            }
+
             cargarTrades()
         })
+    })
+
+    document.getElementById('btn-nueva-orden')?.addEventListener('click', () => {
+        abrirModalNuevaOrden()
     })
 }
 
@@ -539,6 +753,176 @@ function confirmarEliminarTrade(tradeId) {
                 return true
             } catch (error) {
                 console.error('Error eliminando trade:', error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
+}
+
+// ============================================
+// ÓRDENES · NUEVA
+// ============================================
+
+export function abrirModalNuevaOrden() {
+    const html = `
+        <form class="form-movimiento form-movimiento-grid">
+            <div class="form-group">
+                <label for="orden-activo">Activo *</label>
+                <input type="text" id="orden-activo" class="form-input" placeholder="Ej: BTC, ETH, AAPL" required>
+            </div>
+            <div class="form-group">
+                <label for="orden-cuenta">Cuenta *</label>
+                <select id="orden-cuenta" class="form-input" required>
+                    <option value="">Seleccionar cuenta</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="orden-tipo">Tipo de orden *</label>
+                <select id="orden-tipo" class="form-input">
+                    <option value="limite">Límite</option>
+                    <option value="stop">Stop</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="orden-direccion">Dirección *</label>
+                <select id="orden-direccion" class="form-input">
+                    <option value="long">Compra (Largo)</option>
+                    <option value="short">Venta (Corto)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="orden-precio">Precio de disparo *</label>
+                <input type="number" id="orden-precio" class="form-input" step="0.01" min="0.01" placeholder="0.00" required>
+            </div>
+            <div class="form-group">
+                <label for="orden-lotaje">Lotaje *</label>
+                <input type="number" id="orden-lotaje" class="form-input" step="0.0001" min="0.0001" placeholder="0" required>
+            </div>
+            <div class="form-group">
+                <label for="orden-sl">Stop Loss (opcional)</label>
+                <input type="number" id="orden-sl" class="form-input" step="0.01" min="0" placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label for="orden-tp">Take Profit (opcional)</label>
+                <input type="number" id="orden-tp" class="form-input" step="0.01" min="0" placeholder="0.00">
+            </div>
+            <div class="form-group span-full">
+                <label for="orden-nota">Nota (opcional)</label>
+                <textarea id="orden-nota" class="form-input form-textarea" rows="3" maxlength="1500" placeholder="Estrategia, contexto del mercado, decisiones..."></textarea>
+                <span class="form-hint">Máximo 1500 caracteres</span>
+            </div>
+        </form>
+    `
+
+    abrirModal({
+        titulo: "Nueva orden",
+        contenido: html,
+        confirmText: 'Crear orden',
+        onConfirm: async () => {
+            const activo = document.getElementById('orden-activo')?.value.trim().toUpperCase()
+            const cuentaEl = document.getElementById('orden-cuenta')
+            const cuenta = cuentaEl?.value
+            const divisa = cuentaEl?.selectedOptions?.[0]?.dataset?.moneda || "usd"
+            const tipoOrden = document.getElementById('orden-tipo')?.value
+            const direccion = document.getElementById('orden-direccion')?.value
+            const precioDisparo = parseFloat(document.getElementById('orden-precio')?.value)
+            const lotaje = parseFloat(document.getElementById('orden-lotaje')?.value)
+            const sl = parseFloat(document.getElementById('orden-sl')?.value) || null
+            const tp = parseFloat(document.getElementById('orden-tp')?.value) || null
+            const nota = document.getElementById('orden-nota')?.value.trim()
+
+            if (!activo) { mostrarNotificacion("error", "El activo es obligatorio"); return false }
+            if (!cuenta) { mostrarNotificacion("error", "Selecciona una cuenta"); return false }
+            if (!precioDisparo || precioDisparo <= 0) { mostrarNotificacion("error", "El precio de disparo debe ser mayor a 0"); return false }
+            if (!lotaje || lotaje <= 0) { mostrarNotificacion("error", "El lotaje debe ser mayor a 0"); return false }
+
+            try {
+                await registrarOrden(uid, {
+                    activo,
+                    cuenta,
+                    tipoOrden,
+                    direccion,
+                    precioDisparo,
+                    lotaje,
+                    sl,
+                    tp,
+                    divisa,
+                    nota,
+                    estado: 'pendiente'
+                })
+
+                await cargarOrdenes()
+                mostrarNotificacion("exito", "Orden creada correctamente")
+                return true
+            } catch (error) {
+                console.error('Error creando orden:', error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
+
+    setTimeout(() => cargarCuentasEnSelect('orden-cuenta'), 200)
+}
+
+// ============================================
+// ÓRDENES · CANCELAR
+// ============================================
+
+function confirmarCancelarOrden(ordenId) {
+    const orden = ordenesData.find(o => o.id === ordenId)
+    if (!orden) return
+
+    abrirModal({
+        titulo: "Cancelar orden",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">
+                    ¿Cancelar la orden ${orden.tipoLabel.toLowerCase()} de ${orden.activo}
+                    (${orden.direccionLabel.toLowerCase()})? La orden quedará inactiva.
+                </p>
+            </div>
+        `,
+        confirmText: 'Cancelar orden',
+        cancelText: 'Volver',
+        onConfirm: async () => {
+            try {
+                await cancelarOrden(uid, ordenId)
+                await cargarOrdenes()
+                mostrarNotificacion("exito", "Orden cancelada")
+                return true
+            } catch (error) {
+                console.error('Error cancelando orden:', error)
+                mostrarNotificacion("error", `Error: ${error.message}`)
+                return false
+            }
+        }
+    })
+}
+
+// ============================================
+// ÓRDENES · ELIMINAR
+// ============================================
+
+function confirmarEliminarOrden(ordenId) {
+    abrirModal({
+        titulo: "Eliminar orden",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-desc">¿Estás seguro de que quieres eliminar esta orden?</p>
+            </div>
+        `,
+        confirmText: 'Eliminar',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+            try {
+                await borrarOrden(uid, ordenId)
+                await cargarOrdenes()
+                mostrarNotificacion("exito", "Orden eliminada")
+                return true
+            } catch (error) {
+                console.error('Error eliminando orden:', error)
                 mostrarNotificacion("error", `Error: ${error.message}`)
                 return false
             }
