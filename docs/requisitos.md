@@ -20,7 +20,7 @@ Firestore. No usa framework: JavaScript (ES Modules), HTML y CSS propios.
 | Estilos | CSS por página + variables de tema (`css/style.css`) |
 | Backend | Firebase: Auth, Firestore (rules + índices), Hosting |
 | Firebase SDK | CDN `gstatic.com/firebasejs/12.0.0` |
-| Build (dev) | Vite (`vite.config.mjs`, puerto 5500) |
+| Build (dev) | firebase emulators:start --only hosting |
 | Gráficos | Chart.js embebido local (`js/lib/chart.umd.min.js`) |
 | PWA | `manifest.webmanifest` + `sw.js` (precache + network-first) |
 | Caché de datos | `js/core/cache.js` (TTL 5 min, dedupe, invalidación por repos) |
