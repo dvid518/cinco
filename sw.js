@@ -63,6 +63,9 @@ const SHELL_ASSETS = [
     "/js/models/Posicion.js",
     "/js/models/Pendiente.js",
     "/js/models/Trade.js",
+    "/js/models/Orden.js",
+    "/js/models/Meta.js",
+    "/js/models/Estrategia.js",
 
     // JS repositories
     "/js/repositories/ActivoRepositorio.js",
@@ -71,6 +74,10 @@ const SHELL_ASSETS = [
     "/js/repositories/TradeRepositorio.js",
     "/js/repositories/SnapshotRepositorio.js",
     "/js/repositories/HistorialRepositorio.js",
+    "/js/repositories/OrdenRepositorio.js",
+    "/js/repositories/MetaRepositorio.js",
+    "/js/repositories/EstrategiaRepositorio.js",
+    "/js/repositories/PrecioRepositorio.js",
 
     // JS services
     "/js/services/ActivoServicio.js",
@@ -81,11 +88,13 @@ const SHELL_ASSETS = [
     "/js/services/SnapshotServicio.js",
     "/js/services/HistorialServicio.js",
     "/js/services/DivisaServicio.js",
-    "/js/services/CreditoServicio.js",
     "/js/services/ExportarServicio.js",
     "/js/services/ImportarServicio.js",
     "/js/services/EliminarServicio.js",
-    "/js/services/VersionServicio.js",
+    "/js/services/OrdenServicio.js",
+    "/js/services/MetaServicio.js",
+    "/js/services/EstrategiaServicio.js",
+    "/js/services/PrecioServicio.js",
 
     // JS firebase
     "/firebase/firebaseClient.js",
@@ -96,8 +105,11 @@ const SHELL_ASSETS = [
     // JS constants
     "/constants/version.js",
     "/constants/tiposMovimiento.js",
-    "/constants/tiposCuentas.js",
     "/constants/divisas.js",
+
+    // JS strategies
+    "/js/strategies/ManualPrecioStrategy.js",
+    "/js/strategies/PrecioAutomaticoStrategy.js",
 
     // JS libs
     "/js/lib/chart.umd.min.js",

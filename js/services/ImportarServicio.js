@@ -60,8 +60,8 @@ export async function importarDVID(uid, archivo) {
         const texto = await leerArchivo(archivo)
         const datos = JSON.parse(texto)
 
-        if (datos.formato !== "ESCINCO") {
-            throw new Error("El archivo no es un respaldo válido de ESCINCO")
+        if (datos.formato?.toLowerCase() !== "escinco") {
+            throw new Error("El archivo no es un respaldo válido de escinco")
         }
 
         validarVersion(datos.version)
@@ -183,7 +183,7 @@ function validarVersion(version) {
         const actual = partes[i]
         if (actual > requerida) return
         if (actual < requerida) {
-            throw new Error(`Versión de respaldo no compatible (${version}). Exporta de nuevo desde ESCINCO.`)
+            throw new Error(`Versión de respaldo no compatible (${version}). Exporta de nuevo desde escinco.`)
         }
     }
 }
@@ -525,8 +525,8 @@ export async function previsualizarImportacion(archivo) {
     const texto = await leerArchivo(archivo)
     const datos = JSON.parse(texto)
 
-    if (datos.formato !== "ESCINCO") {
-        throw new Error("El archivo no es un respaldo válido de ESCINCO")
+    if (datos.formato?.toLowerCase() !== "escinco") {
+        throw new Error("El archivo no es un respaldo válido de escinco")
     }
 
     validarVersion(datos.version)

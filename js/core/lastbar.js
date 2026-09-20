@@ -356,11 +356,6 @@ const MAPA_ACCIONES = {
             }
             case "inversiones": {
                 const m = await import("../pages/inversiones.js")
-                await m.cargarPosiciones()
-                break
-            }
-            case "inversiones": {
-                const m = await import("../pages/inversiones.js")
                 if (typeof m.actualizarPrecios === "function") {
                     await m.actualizarPrecios()
                 } else {
