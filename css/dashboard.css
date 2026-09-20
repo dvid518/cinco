@@ -363,6 +363,88 @@
 }
 
 /* ============================================
+   CARD DE ÚLTIMOS MOVIMIENTOS
+   ============================================ */
+
+.movimientos-card .card-title {
+    margin-bottom: 12px;
+}
+
+.movimientos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 320px;
+    padding-right: 4px;
+    padding-bottom: 12px;
+}
+
+.movimientos-lista::-webkit-scrollbar {
+    width: 6px;
+}
+
+.movimientos-lista::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.movimientos-lista::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+}
+
+.movimientos-lista .movimiento-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border-radius: 40px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+}
+
+.movimientos-lista .movimiento-item:hover {
+    box-shadow: 0 0 10px var(--shadow);
+    background-color: var(--lightHover);
+}
+
+.movimiento-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.movimiento-titulo {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.movimiento-detalle {
+    color: var(--textSecondary);
+    font-size: 11px;
+}
+
+.movimiento-monto {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.movimiento-monto.positive {
+    color: var(--positive);
+}
+
+.movimiento-monto.negative {
+    color: var(--negative);
+}
+
+/* ============================================
    CARD DE METAS DE AHORRO
    ============================================ */
 

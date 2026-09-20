@@ -6,7 +6,7 @@ import {
     marcarOrdenEjecutada
 } from "../repositories/OrdenRepositorio.js"
 import { buscarActivoPorSimbolo } from "../repositories/ActivoRepositorio.js"
-import { obtenerPrecioActual } from "./HistorialServicio.js"
+import { obtenerPrecioHistorialDeHoy } from "./HistorialServicio.js"
 import { registrarTrade } from "./TradingServicio.js"
 import { ESTADOS_ORDEN } from "../models/Orden.js"
 
@@ -110,7 +110,7 @@ export async function evaluarOrdenesPendientes(uid) {
                 if (!activo) {
                     preciosPorSimbolo.set(simbolo, null)
                 } else {
-                    const precioHoy = await obtenerPrecioActual(uid, activo.id)
+                    const precioHoy = await obtenerPrecioHistorialDeHoy(uid, activo.id)
                     preciosPorSimbolo.set(simbolo, {
                         activo,
                         precio: precioHoy ?? activo.ultimoPrecio ?? null

@@ -1,11 +1,13 @@
 import { sesion } from "../core/sesion.js"
 import { cacheCapa } from "../core/cache.js"
 import { activarSpinLogo, desactivarSpinLogo, navigateTo } from "../core/router.js"
-import { obtenerCuentas } from "../../firebase/firestore.js"
+import { obtenerCuentas, obtenerMovimientos } from "../../firebase/firestore.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
+import { CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
 import {
     registrarSnapshot,
-    obtenerPatrimonioParaGrafico
+    obtenerPatrimonioParaGrafico,
+    calcularPatrimonio
 } from "../services/SnapshotServicio.js"
 import {
     crearGraficoPatrimonio,
@@ -43,6 +45,7 @@ let inversionesData = null
 let vencimientosData = null
 let favoritosData = []
 let metasData = []
+let movimientosData = []
 let cargado = false
 
 const DIAS_VENCIMIENTO = 7
@@ -99,6 +102,13 @@ export function render() {
                 <div class="card-title">Próximos vencimientos</div>
                 <div class="card-value" id="vencimientos-cantidad">—</div>
                 <div class="card-sub" id="vencimientos-detalle">—</div>
+            </div>
+
+            <div class="card card-navegable movimientos-card" id="card-movimientos" role="button" tabindex="0" title="Ver movimientos">
+                <div class="card-title">Últimos movimientos</div>
+                <div class="movimientos-lista" id="movimientos-lista">
+                    <p class="card-vacio">Cargando...</p>
+                </div>
             </div>
 
             <div class="card card-navegable favoritos-card" id="card-favoritos" role="button" tabindex="0" title="Ver inversiones">
@@ -207,10 +217,11 @@ async function cargarTodo() {
         // primero para evitar la carrera con el estado del módulo.
         const cuentasResp = await obtenerCuentas(uid)
 
-        const [inversionesResp, vencimientosResp, metasResp] = await Promise.all([
+        const [inversionesResp, vencimientosResp, metasResp, movimientosResp] = await Promise.all([
             cargarInversiones(),
             cargarVencimientos(cuentasResp),
-            cargarMetas()
+            cargarMetas(),
+            cargarMovimientos()
         ])
 
         cuentas = cuentasResp
@@ -218,8 +229,9 @@ async function cargarTodo() {
         vencimientosData = vencimientosResp
         favoritosData = inversionesResp.favoritos || []
         metasData = metasResp
+        movimientosData = movimientosResp
 
-        actualizarUI()
+        await actualizarUI()
     } catch (error) {
         console.error("Error cargando dashboard:", error)
         mostrarErrorCarga()
@@ -252,6 +264,31 @@ async function cargarMetas() {
         console.error("Error cargando metas:", error)
         return []
     }
+}
+
+async function cargarMovimientos() {
+    try {
+        const lista = await obtenerMovimientos(uid)
+        return lista
+            .slice()
+            .sort((a, b) => {
+                const fa = (fechaDeMovimiento(a)?.getTime?.()) || 0
+                const fb = (fechaDeMovimiento(b)?.getTime?.()) || 0
+                return fb - fa
+            })
+            .slice(0, cantidadMovimientosRecientes())
+    } catch (error) {
+        console.error("Error cargando movimientos:", error)
+        return []
+    }
+}
+
+// Cantidad de "últimos movimientos" a mostrar, desde Configuración (1-10).
+function cantidadMovimientosRecientes() {
+    const prefs = sesion.getPreferencias()
+    const n = Number.parseInt(prefs?.movimientosRecientes, 10)
+    if (!Number.isFinite(n)) return 5
+    return Math.min(10, Math.max(1, n))
 }
 
 async function cargarVencimientos(cuentasDeUsuario) {
@@ -354,56 +391,25 @@ function diasHastaDiaDelMes(diaMes) {
 }
 
 // ============================================
-// PATRIMONIO (todo se normaliza a PEN)
+// PATRIMONIO (fuente única: SnapshotServicio.calcularPatrimonio)
 // ============================================
-
-function calcularPatrimonio() {
-    let totalActivos = 0
-    let totalDeuda = 0
-    let totalCuentas = 0
-
-    cuentas.forEach(c => {
-        if (c.estado === "archivada") return
-
-        // El contador incluye tarjetas de crédito activas
-        totalCuentas++
-
-        if (c.tipo === "credito") {
-            totalDeuda += convertirMonto(c.deuda || 0, c.moneda || "pen", "pen")
-            return
-        }
-
-        if (c.esPatrimonio !== false) {
-            totalActivos += convertirMonto(c.saldoInicial || 0, c.moneda || "pen", "pen")
-        }
-    })
-
-    const patrimonio = totalActivos - totalDeuda
-
-    return {
-        totalActivos,
-        totalDeuda,
-        totalCuentas,
-        patrimonio,
-        tieneDeuda: totalDeuda > 0
-    }
-}
 
 // ============================================
 // ACTUALIZAR UI
 // ============================================
 
-function actualizarUI() {
-    actualizarCuentas()
-    actualizarPatrimonio()
+async function actualizarUI() {
+    await actualizarCuentas()
+    await actualizarPatrimonio()
     actualizarInversiones()
     actualizarVencimientos()
     actualizarFavoritos()
     actualizarMetas()
+    actualizarMovimientos()
 }
 
-function actualizarCuentas() {
-    const stats = calcularPatrimonio()
+async function actualizarCuentas() {
+    const stats = await calcularPatrimonio(uid)
 
     const totalEl = document.getElementById("total-cuentas")
     if (totalEl) totalEl.textContent = stats.totalCuentas
@@ -419,8 +425,8 @@ function actualizarCuentas() {
     }
 }
 
-function actualizarPatrimonio() {
-    const stats = calcularPatrimonio()
+async function actualizarPatrimonio() {
+    const stats = await calcularPatrimonio(uid)
     const simbolo = DIVISAS_SYMBOLS[divisaActual] || "S/"
     const valorEl = document.getElementById("patrimonio-valor")
 
@@ -504,6 +510,74 @@ function mostrarErrorCarga() {
 }
 
 // ============================================
+// ÚLTIMOS MOVIMIENTOS
+// ============================================
+
+function actualizarMovimientos() {
+    const lista = document.getElementById("movimientos-lista")
+    if (!lista) return
+
+    if (movimientosData.length === 0) {
+        lista.innerHTML = `<p class="card-vacio">Sin movimientos por ahora.</p>`
+        return
+    }
+
+    lista.innerHTML = movimientosData.map(plantillaMovimiento).join("")
+}
+
+function plantillaMovimiento(m) {
+    const monto = montoDeMovimiento(m)
+    const esPositivo = esMovimientoPositivo(m.tipo)
+    const signo = esPositivo ? "+" : "-"
+    const clase = esPositivo ? "positive" : "negative"
+    const tipoNombre = CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Movimiento"
+
+    return `
+        <div class="movimiento-item">
+            <div class="movimiento-info">
+                <span class="movimiento-titulo">${m.concepto || m.activo || tipoNombre}</span>
+                <span class="movimiento-detalle">${formatearFecha(fechaDeMovimiento(m))}</span>
+            </div>
+            <span class="movimiento-monto ${clase}">${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}</span>
+        </div>
+    `
+}
+
+function esMovimientoPositivo(tipo) {
+    return (
+        tipo === "ingreso" ||
+        tipo === "ventaActivo" ||
+        tipo === "p2pVenta"
+    )
+}
+
+function montoDeMovimiento(m) {
+    if (m.monto !== undefined && m.monto !== null && m.monto !== "") {
+        return Number(m.monto) || 0
+    }
+    if (m.cantidad && m.precio) {
+        const total = Number(m.cantidad) * Number(m.precio)
+        const comision = Number(m.comision) || 0
+        return esMovimientoPositivo(m.tipo) ? (total - comision) : (total + comision)
+    }
+    if (m.montoOrigen) return Number(m.montoOrigen) || 0
+    if (m.montoDestino) return Number(m.montoDestino) || 0
+    return 0
+}
+
+function fechaDeMovimiento(m) {
+    const valor = m.fechaRealizacion || m.fechaRegistro
+    if (!valor) return null
+    if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}/.test(valor)) {
+        const [anio, mes, dia] = valor.split("-").map(Number)
+        return new Date(anio, mes - 1, dia)
+    }
+    if (valor?.toDate) return valor.toDate()
+    if (valor?.seconds) return new Date(valor.seconds * 1000)
+    return new Date(valor)
+}
+
+// ============================================
 // CARDS NAVEGABLES
 // ============================================
 
@@ -524,6 +598,7 @@ function configurarCardsNavegacion() {
     bindNavegacion("card-cuentas", "/cuentas")
     bindNavegacion("card-inversiones", "/inversiones")
     bindNavegacion("card-favoritos", "/inversiones")
+    bindNavegacion("card-movimientos", "/movimientos")
 
     const vencimientos = document.getElementById("card-vencimientos")
     vencimientos?.addEventListener("click", abrirModalVencimientos)
@@ -730,6 +805,7 @@ function textoFechaLimite(fecha) {
 }
 
 function formatearFecha(fecha) {
+    if (!fecha) return "—"
     const d = new Date(fecha)
     if (isNaN(d.getTime())) return "—"
     return d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -961,7 +1037,7 @@ function configurarDivisa() {
     select.addEventListener("change", async () => {
         divisaActual = select.value
 
-        actualizarPatrimonio()
+        await actualizarPatrimonio()
         actualizarInversiones()
 
         // Redibujar el gráfico manteniendo el periodo actual

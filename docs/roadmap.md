@@ -38,7 +38,6 @@
 |---|---|---|
 | 13 | Desduplicar CSS y cargar solo los estilos de cada página | `css/*` |
 | 14 | Probar reglas en simulador + test de caché en producción (`test-cache.html`) | `firestore.rules`, `cache` |
-| 15 | Límites/elementos de tarjeta configurables y pronóstico de rentabilidad | `CreditoServicio`, `configuracion` |
 
 ## Orden de ejecución
 

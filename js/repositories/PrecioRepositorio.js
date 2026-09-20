@@ -11,7 +11,7 @@
 // Estrategia: "manual" cuando el activo no está marcado como "api";
 // "api" cuando el precio se consulta a una fuente externa.
 
-import { obtenerActivo, actualizarPrecioActivo } from "./ActivoRepositorio.js"
+import { actualizarPrecioActivo } from "./ActivoRepositorio.js"
 import {
     obtenerHistorial,
     guardarPrecioDelDia,
@@ -21,20 +21,6 @@ import {
 // --------------------------------------------
 // LEER
 // --------------------------------------------
-
-export async function obtenerPrecioActual(uid, activoId) {
-    const activo = await obtenerActivo(uid, activoId)
-
-    if (!activo) {
-        return null
-    }
-
-    return {
-        precio: activo.ultimoPrecio,
-        ultimaActualizacion: activo.ultimaActualizacion,
-        fuente: activo.fuente || "manual"
-    }
-}
 
 export async function obtenerHistorialPrecios(uid, activoId, dias = 7) {
     return obtenerHistorial(uid, activoId, dias)

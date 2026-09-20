@@ -20,9 +20,15 @@ export async function calcularPatrimonio(uid) {
     let patrimonioPEN = 0
     let patrimonioUSD = 0
     let patrimonioUSDT = 0
+    let totalActivos = 0
+    let totalDeuda = 0
+    let totalCuentas = 0
 
     cuentas.forEach(c => {
         if (c.estado === "archivada") return
+
+        totalCuentas++
+
         if (c.esPatrimonio === false) return
 
         const divisa = c.moneda || "pen"
@@ -32,17 +38,19 @@ export async function calcularPatrimonio(uid) {
             const deuda = c.deuda || 0
             const deudaPEN = convertirMonto(deuda, divisa, "pen")
             const deudaUSD = convertirMonto(deuda, divisa, "usd")
-            const deudaUSDT = deudaUSD
 
+            totalDeuda += deudaPEN
             patrimonioPEN -= deudaPEN
             patrimonioUSD -= deudaUSD
-            patrimonioUSDT -= deudaUSDT
+            patrimonioUSDT -= deudaUSD
             return
         }
 
         // Cuentas normales
         const saldo = c.saldoInicial || 0
-        patrimonioPEN += convertirMonto(saldo, divisa, "pen")
+        const saldoPEN = convertirMonto(saldo, divisa, "pen")
+        totalActivos += saldoPEN
+        patrimonioPEN += saldoPEN
         patrimonioUSD += convertirMonto(saldo, divisa, "usd")
         patrimonioUSDT += convertirMonto(saldo, divisa, "usd")
     })
@@ -50,7 +58,12 @@ export async function calcularPatrimonio(uid) {
     return {
         patrimonioPEN,
         patrimonioUSD,
-        patrimonioUSDT
+        patrimonioUSDT,
+        totalActivos,
+        totalDeuda,
+        totalCuentas,
+        patrimonio: patrimonioPEN,
+        tieneDeuda: totalDeuda > 0
     }
 }
 

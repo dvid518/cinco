@@ -459,9 +459,8 @@ function configurarEventos() {
         clearTimeout(holdState[btnId].timer)
         btn.classList.remove("selected")
 
-        if (!holdState[btnId].isHolding) {
-            seleccionarCuenta(btnId)
-        }
+        // La selección la gestiona UN SOLO evento (click en el botón):
+        // dispararla aquí también causaba doble toggle en un tap (bug #1).
         delete holdState[btnId]
     })
 

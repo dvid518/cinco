@@ -145,7 +145,9 @@ export async function exportarDVID(uid) {
         const nombreArchivo = `escinco_backup_${fecha}.dvid`
 
         descargarArchivo(url, nombreArchivo)
-        URL.revokeObjectURL(url)
+        // Revoke diferido: revocar aquí cancelaba la descarga en algunos
+        // navegadores antes de que arrancara (bug #9).
+        setTimeout(() => URL.revokeObjectURL(url), 0)
 
         console.log("[INFO] .dvid exportado:", nombreArchivo)
         return { ok: true, archivo: nombreArchivo }

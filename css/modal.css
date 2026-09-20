@@ -196,7 +196,8 @@
 }
 
 .form-group .form-input:focus {
-    border-color: var(--border);
+    border-color: var(--text);
+    background-color: var(--lightHover);
 }
 
 .form-group .form-input::placeholder {
@@ -277,7 +278,13 @@
     background: var(--lightHover);
 }
 
-/* Modal procesando confirmación: blur + sin interacción (evita doble envío) */
+/* Modal procesando confirmación: blur en toda la pantalla + sin
+   interacción (evita doble envío mientras el servidor responde) */
+.modal-overlay.modal-procesando {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
 .modal-overlay.modal-procesando .modal {
     filter: blur(4px);
     opacity: 0.9;

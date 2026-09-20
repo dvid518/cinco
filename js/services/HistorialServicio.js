@@ -46,9 +46,11 @@ export async function obtenerHistorialParaGrafico(uid, activoId, dias = 7) {
 }
 
 /**
- * Devuelve el precio más reciente del activo o null.
+ * Devuelve el precio del día de HOY del historial del activo, o null.
+ * (Distinto del precio actual del activo guardado en su doc: este es el
+ * precio registrado en el doc de historial diario, no el `ultimoPrecio`.)
  */
-export async function obtenerPrecioActual(uid, activoId) {
+export async function obtenerPrecioHistorialDeHoy(uid, activoId) {
     try {
         const hoy = await obtenerPrecioHoy(uid, activoId)
         return hoy?.precio ?? null

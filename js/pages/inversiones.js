@@ -1040,7 +1040,8 @@ export function abrirModalCompra() {
 
                 const { registrarMovimiento } = await import("../services/MovimientoServicio.js")
                 await registrarMovimiento(uid, "compraActivo", {
-                    activo: activo.id,
+                    // Símbolo, no doc-ID: PosicionServicio resuelve por símbolo (bug #3)
+                    activo: simbolo,
                     cuenta: cuentaId,
                     cantidad,
                     precio,
@@ -1158,7 +1159,8 @@ export function abrirModalVenta() {
 
                 const { registrarMovimiento } = await import("../services/MovimientoServicio.js")
                 await registrarMovimiento(uid, "ventaActivo", {
-                    activo: posicion.activoId,
+                    // Símbolo, no doc-ID: PosicionServicio resuelve por símbolo (bug #3)
+                    activo: posicion.activo?.simbolo,
                     cuenta: cuentaId,
                     cantidad,
                     precio,

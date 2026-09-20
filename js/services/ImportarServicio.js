@@ -222,67 +222,60 @@ async function crearActivo(uid, datos) {
     return resultado.id
 }
 
-async function importarCuentas(uid, cuentas, resultado) {
-    if (!cuentas || cuentas.length === 0) return
+/**
+ * Importa una colección aplanada: quita el id, deserializa fechas y agrega
+ * cada doc con addDoc. El primer campo de `camposFecha` es el que, de
+ * faltar, se rellena con serverTimestamp (igual que los importadores a los
+ * que reemplaza).
+ */
+async function importarColeccion(uid, elementos, resultado, config) {
+    const { coleccion: nombreColeccion, camposFecha, contador, etiqueta } = config
 
-    const CAMPOS_FECHA = ["fechaCreacion"]
+    if (!elementos || elementos.length === 0) return
 
-    for (const cuenta of cuentas) {
+    for (const elemento of elementos) {
         try {
-            const { id, ...datosLimpios } = cuenta
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "cuentas")
+            const { id, ...datosLimpios } = elemento
+            const datos = deserializarFechas(datosLimpios, camposFecha)
+            const campoFecha = camposFecha[0]
+            const referencia = collection(db, "usuarios", uid, nombreColeccion)
             await addDoc(referencia, {
                 ...datos,
-                fechaCreacion: datos.fechaCreacion || serverTimestamp()
+                [campoFecha]: datos[campoFecha] || serverTimestamp()
             })
-            resultado.cuentas++
+            resultado[contador]++
         } catch (error) {
-            resultado.errores.push(`Cuenta ${cuenta.nombre}: ${error.message}`)
+            const detalle = elemento.nombre ? ` ${elemento.nombre}` : ""
+            resultado.errores.push(`${etiqueta}${detalle}: ${error.message}`)
         }
     }
+}
+
+async function importarCuentas(uid, cuentas, resultado) {
+    await importarColeccion(uid, cuentas, resultado, {
+        coleccion: "cuentas",
+        camposFecha: ["fechaCreacion"],
+        contador: "cuentas",
+        etiqueta: "Cuenta"
+    })
 }
 
 async function importarMovimientos(uid, movimientos, resultado) {
-    if (!movimientos || movimientos.length === 0) return
-
-    const CAMPOS_FECHA = ["fechaRegistro"]
-
-    for (const movimiento of movimientos) {
-        try {
-            const { id, ...datosLimpios } = movimiento
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "movimientos")
-            await addDoc(referencia, {
-                ...datos,
-                fechaRegistro: datos.fechaRegistro || serverTimestamp()
-            })
-            resultado.movimientos++
-        } catch (error) {
-            resultado.errores.push(`Movimiento: ${error.message}`)
-        }
-    }
+    await importarColeccion(uid, movimientos, resultado, {
+        coleccion: "movimientos",
+        camposFecha: ["fechaRegistro"],
+        contador: "movimientos",
+        etiqueta: "Movimiento"
+    })
 }
 
 async function importarPendientes(uid, pendientes, resultado) {
-    if (!pendientes || pendientes.length === 0) return
-
-    const CAMPOS_FECHA = ["fechaRegistro", "fechaVencimiento", "fechaConsolidacion"]
-
-    for (const pendiente of pendientes) {
-        try {
-            const { id, ...datosLimpios } = pendiente
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "pendientes")
-            await addDoc(referencia, {
-                ...datos,
-                fechaRegistro: datos.fechaRegistro || serverTimestamp()
-            })
-            resultado.pendientes++
-        } catch (error) {
-            resultado.errores.push(`Pendiente: ${error.message}`)
-        }
-    }
+    await importarColeccion(uid, pendientes, resultado, {
+        coleccion: "pendientes",
+        camposFecha: ["fechaRegistro", "fechaVencimiento", "fechaConsolidacion"],
+        contador: "pendientes",
+        etiqueta: "Pendiente"
+    })
 }
 
 async function importarPosiciones(uid, posiciones, resultado) {
@@ -320,87 +313,39 @@ async function importarPosiciones(uid, posiciones, resultado) {
 }
 
 async function importarTrades(uid, trades, resultado) {
-    if (!trades || trades.length === 0) return
-
-    const CAMPOS_FECHA = ["fechaRegistro", "fechaCierre"]
-
-    for (const trade of trades) {
-        try {
-            const { id, ...datosLimpios } = trade
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "trades")
-            await addDoc(referencia, {
-                ...datos,
-                fechaRegistro: datos.fechaRegistro || serverTimestamp()
-            })
-            resultado.trades++
-        } catch (error) {
-            resultado.errores.push(`Trade: ${error.message}`)
-        }
-    }
+    await importarColeccion(uid, trades, resultado, {
+        coleccion: "trades",
+        camposFecha: ["fechaRegistro", "fechaCierre"],
+        contador: "trades",
+        etiqueta: "Trade"
+    })
 }
 
 async function importarOrdenes(uid, ordenes, resultado) {
-    if (!ordenes || ordenes.length === 0) return
-
-    const CAMPOS_FECHA = ["fechaCreacion", "fechaEjecucion"]
-
-    for (const orden of ordenes) {
-        try {
-            const { id, ...datosLimpios } = orden
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "ordenes")
-            await addDoc(referencia, {
-                ...datos,
-                fechaCreacion: datos.fechaCreacion || serverTimestamp()
-            })
-            resultado.ordenes++
-        } catch (error) {
-            resultado.errores.push(`Orden: ${error.message}`)
-        }
-    }
+    await importarColeccion(uid, ordenes, resultado, {
+        coleccion: "ordenes",
+        camposFecha: ["fechaCreacion", "fechaEjecucion"],
+        contador: "ordenes",
+        etiqueta: "Orden"
+    })
 }
 
 async function importarEstrategias(uid, estrategias, resultado) {
-    if (!estrategias || estrategias.length === 0) return
-
-    const CAMPOS_FECHA = ["fechaCreacion", "proximaEjecucion", "ultimaEjecucion"]
-
-    for (const estrategia of estrategias) {
-        try {
-            const { id, ...datosLimpios } = estrategia
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "estrategias")
-            await addDoc(referencia, {
-                ...datos,
-                fechaCreacion: datos.fechaCreacion || serverTimestamp()
-            })
-            resultado.estrategias++
-        } catch (error) {
-            resultado.errores.push(`Estrategia: ${error.message}`)
-        }
-    }
+    await importarColeccion(uid, estrategias, resultado, {
+        coleccion: "estrategias",
+        camposFecha: ["fechaCreacion", "proximaEjecucion", "ultimaEjecucion"],
+        contador: "estrategias",
+        etiqueta: "Estrategia"
+    })
 }
 
 async function importarMetas(uid, metas, resultado) {
-    if (!metas || metas.length === 0) return
-
-    const CAMPOS_FECHA = ["fechaCreacion", "fechaLimite"]
-
-    for (const meta of metas) {
-        try {
-            const { id, ...datosLimpios } = meta
-            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
-            const referencia = collection(db, "usuarios", uid, "metas")
-            await addDoc(referencia, {
-                ...datos,
-                fechaCreacion: datos.fechaCreacion || serverTimestamp()
-            })
-            resultado.metas++
-        } catch (error) {
-            resultado.errores.push(`Meta: ${error.message}`)
-        }
-    }
+    await importarColeccion(uid, metas, resultado, {
+        coleccion: "metas",
+        camposFecha: ["fechaCreacion", "fechaLimite"],
+        contador: "metas",
+        etiqueta: "Meta"
+    })
 }
 
 async function importarHistorial(uid, historial, resultado) {

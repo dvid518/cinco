@@ -1,7 +1,6 @@
 import {
     crearTrade,
     obtenerTrades,
-    obtenerTrade,
     actualizarTrade,
     cerrarTrade,
     reabrirTrade,
@@ -9,7 +8,7 @@ import {
     eliminarTrade
 } from "../repositories/TradeRepositorio.js"
 import { buscarActivoPorSimbolo } from "../repositories/ActivoRepositorio.js"
-import { obtenerPrecioActual } from "./HistorialServicio.js"
+import { obtenerPrecioHistorialDeHoy } from "./HistorialServicio.js"
 
 // ============================================
 // TRADING SERVICIO
@@ -73,7 +72,7 @@ async function anexarPnlFlotante(uid, trades) {
         try {
             const activo = await buscarActivoPorSimbolo(uid, simbolo)
             if (activo) {
-                const precioHoy = await obtenerPrecioActual(uid, activo.id)
+                const precioHoy = await obtenerPrecioHistorialDeHoy(uid, activo.id)
                 preciosPorSimbolo.set(simbolo, precioHoy ?? activo.ultimoPrecio ?? null)
             }
         } catch (error) {

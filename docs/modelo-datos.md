@@ -252,11 +252,6 @@ El trade abierto usa el precio de mercado observado como `entrada` y guarda
 Índice: no requiere índice compuesto; el `orderBy` por campo único usa el
 índice automático de `fechaCreacion`.
 
-## `config/version`
-
-Documento único con la versión publicada; `VersionServicio` la compara con
-`constants/version.js` para avisar de actualización.
-
 ## Formato de respaldo `.dvid`
 
 Versión **4.0.0** (`formato: "ESCINCO"`). Incluye `cuentas`, `movimientos`,

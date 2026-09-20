@@ -5,7 +5,7 @@ import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { VERSION } from "../../constants/version.js"
 import { TIPO_CAMBIO_DEFAULT } from "../../constants/divisas.js"
-import { getDivisaPrincipal, getTipoCambio, actualizarTipoCambioAuto } from "../services/DivisaServicio.js"
+import { getDivisaPrincipal, getTipoCambio, actualizarTipoCambioAuto, guardarDivisaPrincipal, guardarTipoCambio } from "../services/DivisaServicio.js"
 import { aplicarTema, setTemaLocal } from "../core/tema.js"
 import { icono } from "../core/iconos.js"
 import { accionExportar } from "../ui/exportar.js"
@@ -18,6 +18,8 @@ let lastbarModo = "hide"
 let nombrePendiente = null
 let temaPendiente = false
 let lastbarPendiente = false
+
+const CANTIDAD_MOVIMIENTOS_DEFAULT = 5
 
 // Sincroniza el panel de tema cuando el tema cambia desde el lastbar
 // (u otra fuente), sin recargar la página.
@@ -92,6 +94,24 @@ export function render() {
                             </label>
                         </div>
                     </div>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Últimos movimientos en el dashboard</span>
+                    <input
+                        type="text"
+                        id="movimientos-recientes"
+                        class="form-input"
+                        inputmode="numeric"
+                        pattern="[0-9]{1,2}"
+                        maxlength="2"
+                        value="5"
+                        aria-label="Cantidad de últimos movimientos en el dashboard"
+                    >
+                    <span class="config-hint">
+                        Cantidad de movimientos a mostrar en la tarjeta
+                        "Últimos movimientos" del dashboard. Entre 1 y 10.
+                    </span>
                 </div>
 
                 <div class="config-group">
@@ -545,12 +565,34 @@ function cerrarSesionConAviso(titulo, mensaje) {
 // PREFERENCIAS
 // ============================================
 
+// Ajusta un valor de "cantidad de últimos movimientos" a 1-10 (por defecto 5).
+function validarCantidadMovimientos(valor) {
+    const n = Number.parseInt(valor, 10)
+    if (!Number.isFinite(n)) return CANTIDAD_MOVIMIENTOS_DEFAULT
+    return Math.min(10, Math.max(1, n))
+}
+
+// Lee la cantidad escrita en el input; null si no es un número entre 1 y 10.
+function leerCantidadMovimientos() {
+    const input = document.getElementById("movimientos-recientes")
+    if (!input) return null
+    const n = Number.parseInt(input.value.trim(), 10)
+    if (!Number.isFinite(n) || n < 1 || n > 10) return null
+    return n
+}
+
 async function cargarPreferencias() {
     try {
         const prefs = await obtenerPreferencias(uid)
 
         // Tema
         temaActual = prefs?.tema || "dark"
+
+        // Últimos movimientos en el dashboard
+        const movRecientes = document.getElementById("movimientos-recientes")
+        if (movRecientes) {
+            movRecientes.value = String(validarCantidadMovimientos(prefs?.movimientosRecientes))
+        }
 
         // Páginas: los guardados del servidor tienen prioridad; si no hay,
         // se usan los valores por defecto de la sesión (cuentas nuevas).
@@ -599,11 +641,13 @@ function hayCambiosEnVivo() {
 
     const segInactividadUI = parseInt(document.getElementById("seg-inactividad")?.value, 10)
     const segCerrarUI = document.getElementById("seg-cerrar-pestana")?.checked
+    const movRecientesUI = leerCantidadMovimientos()
 
     return (
         (nombrePendiente !== null && nombrePendiente !== nombreBase) ||
         (Number.isFinite(segInactividadUI) && segInactividadUI !== (segBase.inactividadMinutos ?? 15)) ||
         (segCerrarUI !== undefined && segCerrarUI !== (segBase.cerrarAlCerrarPestana !== false)) ||
+        (movRecientesUI !== null && movRecientesUI !== (base.movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT)) ||
         (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
         (document.getElementById("toggle-movimientos")?.checked !== (basePaginas.movimientos !== false)) ||
         (document.getElementById("toggle-inversiones")?.checked !== (basePaginas.inversiones !== false)) ||
@@ -633,6 +677,11 @@ function configurarDetectorCambios() {
                 actualizarEstadoGuardar()
             })
         }
+    })
+
+    const movRecientes = document.getElementById("movimientos-recientes")
+    movRecientes?.addEventListener("input", () => {
+        actualizarEstadoGuardar()
     })
 }
 
@@ -770,17 +819,17 @@ async function guardarPreferencias() {
     const modoTCUI = getModoTipoCambioUI()
     const tcActual = getTipoCambio()
 
-    const tipoCambio = modoTCUI === "auto"
-        ? {
-            pen_usd: tcActual.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd,
-            modo: "auto",
-            actualizacion: tcActual.actualizacion || new Date().toISOString()
-        }
-        : {
-            pen_usd: parseFloat(document.getElementById("tc-pen-usd")?.value) || TIPO_CAMBIO_DEFAULT.pen_usd,
-            modo: "manual",
-            actualizacion: new Date().toISOString()
-        }
+    const penUSD = modoTCUI === "auto"
+        ? tcActual.pen_usd || TIPO_CAMBIO_DEFAULT.pen_usd
+        : parseFloat(document.getElementById("tc-pen-usd")?.value) || TIPO_CAMBIO_DEFAULT.pen_usd
+
+    const tipoCambio = {
+        pen_usd: penUSD,
+        modo: modoTCUI,
+        actualizacion: modoTCUI === "auto"
+            ? tcActual.actualizacion || new Date().toISOString()
+            : new Date().toISOString()
+    }
 
     const segInactividadUI = parseInt(document.getElementById("seg-inactividad")?.value, 10)
     const seg = {
@@ -790,6 +839,7 @@ async function guardarPreferencias() {
 
     const preferencias = {
         tema: temaActual,
+        movimientosRecientes: leerCantidadMovimientos() ?? (sesion.getPreferencias().movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT),
         paginas: {
             dashboard: document.getElementById("toggle-dashboard").checked,
             cuentas: true,
@@ -811,7 +861,22 @@ async function guardarPreferencias() {
             nombrePendiente = null
         }
 
-        await actualizarPreferencias(uid, preferencias)
+        // Divisa y tipo de cambio se persisten vía DivisaServicio. En modo
+        // "auto" se conserva la actualizacion previa (el TC no cambió).
+        await guardarDivisaPrincipal(uid, divisaPrincipal)
+        await guardarTipoCambio(
+            uid,
+            penUSD,
+            modoTCUI,
+            modoTCUI === "auto" && tcActual.actualizacion ? tcActual.actualizacion : null
+        )
+
+        await actualizarPreferencias(uid, {
+            tema: preferencias.tema,
+            movimientosRecientes: preferencias.movimientosRecientes,
+            paginas: preferencias.paginas,
+            seg: preferencias.seg
+        })
         sesion.setPreferencias(preferencias)
 
         // Aplicar de inmediato la seguridad configurada

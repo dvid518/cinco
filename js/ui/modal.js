@@ -18,7 +18,7 @@ let dragState = null
  */
 export function abrirModal(opciones) {
     const {
-        titulo = "ESCINCO",
+        titulo = "escinco",
         contenido = "",
         variante = "form",
         confirmText = "Confirmar",

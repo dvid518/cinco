@@ -184,7 +184,8 @@ export const cacheCapa = {
             document.body.appendChild(a)
             a.click()
             a.remove()
-            URL.revokeObjectURL(url)
+            // Revoke diferido: permite que la descarga arranque (bug #9)
+            setTimeout(() => URL.revokeObjectURL(url), 0)
         }
 
         return reporte

@@ -88,12 +88,15 @@ export async function guardarDivisaPrincipal(uid, divisa) {
 
 /**
  * Guarda el tipo de cambio en Firestore y sesión.
+ * `actualizacion` refleja cuándo se actualizó el TC: si la persona guarda
+ * las preferencias con la moneda en modo "auto" y ya hay una fecha previa,
+ * se conserva (el TC no cambió); si se pasa null se sella ahora.
  */
-export async function guardarTipoCambio(uid, penUSD, modo = "manual") {
+export async function guardarTipoCambio(uid, penUSD, modo = "manual", actualizacion = null) {
     const tipoCambio = {
         pen_usd: penUSD,
         modo,
-        actualizacion: new Date().toISOString()
+        actualizacion: actualizacion || new Date().toISOString()
     }
 
     await actualizarPreferencias(uid, { tipoCambio })

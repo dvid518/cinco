@@ -82,6 +82,8 @@
     --raspberryRed: #DC0051;
     --tropicalMint: #00a269;
 
+    --warning: #f5a623;
+
     --font-primary: "Inter", Arial, sans-serif;
     --font-secondary: "Roboto Mono", "Courier New", monospace;
 
@@ -104,7 +106,12 @@
     --positive: var(--lightGreen);
     --negative: var(--cottonCandy);
 
+    --positiveAlt: var(--tropicalMint);
+    --negativeAlt: var(--raspberryRed);
+
     --border: var(--paleSky);
+    --borderAlt: var(--slateGrey);
+
     --shadow: var(--lightPaleSky);
     --blurBackground: var(--lightGraphite);
 }
@@ -125,7 +132,12 @@
     --positive: var(--tropicalMint);
     --negative: var(--raspberryRed);
 
+    --positiveAlt: var(--lightGreen);
+    --negativeAlt: var(--cottonCandy);
+
     --border: var(--slateGrey);
+    --borderAlt: var(--graphite);
+
     --shadow: var(--lightSlateGrey);
     --blurBackground: var(--lightPaleSky);
 }

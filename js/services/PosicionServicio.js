@@ -1,8 +1,6 @@
 import {
-    obtenerPosicionPorActivo,
     crearOActualizarPosicion,
-    obtenerPosiciones,
-    actualizarPosicion
+    obtenerPosiciones
 } from "../repositories/PosicionRepositorio.js"
 import { obtenerOCrearActivo } from "./ActivoServicio.js"
 import { convertirMonto, getDivisaPrincipal } from "./DivisaServicio.js"
@@ -104,16 +102,4 @@ export async function obtenerPosicionesConValor(uid, divisaObjetivo = null) {
         cantidad: posiciones.length,
         divisa: objetivo
     }
-}
-
-// ============================================
-// (Opción B — mantener funciones individuales si las necesitas)
-// ============================================
-
-export async function obtenerPosicion(uid, activoId) {
-    return await obtenerPosicionPorActivo(uid, activoId)
-}
-
-export async function aplicarAjustePosicion(uid, posicionId, datos) {
-    return await actualizarPosicion(uid, posicionId, datos)
 }

@@ -8,6 +8,17 @@ import {
     eliminarMovimientoDoc
 } from "../../firebase/firestore.js"
 import { TIPOS_MOVIMIENTO, CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
+import { getFechaHoy } from "../core/fechas.js"
+
+// No se permiten fechas futuras: cualquier fechaRealizacion mayor que hoy
+// se normaliza al día de hoy. Aplica tanto al registrar como al editar.
+function normalizarFechaFutura(datos) {
+    const iso = typeof datos?.fechaRealizacion === "string" ? datos.fechaRealizacion.slice(0, 10) : ""
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso) && iso > getFechaHoy()) {
+        datos.fechaRealizacion = getFechaHoy()
+    }
+    return datos
+}
 
 // ============================================
 // REGISTRAR MOVIMIENTO
@@ -38,6 +49,8 @@ export async function registrarMovimiento(uid, tipo, datos) {
         throw new Error(`Campos obligatorios faltantes: ${camposFaltantes.join(", ")}`)
     }
 
+    normalizarFechaFutura(datos)
+
     // 1. Crear el movimiento
     const movimiento = await crearMovimiento(uid, {
         tipo: tipoFinal,
@@ -51,17 +64,8 @@ export async function registrarMovimiento(uid, tipo, datos) {
     //    El error NO se traga: si la posición no pudo actualizarse, el
     //    usuario debe saberlo para no dejar el inventario inconsistente.
     if (esMovimientoDeActivo(tipoFinal)) {
-        const { actualizarPosicionPorMovimiento } = await import("./PosicionServicio.js")
         try {
-            await actualizarPosicionPorMovimiento(uid, {
-                tipo: tipoFinal,
-                activo: datos.activo,
-                cuenta: datos.cuenta,
-                cantidad: datos.cantidad,
-                precio: datos.precio,
-                comision: datos.comision || 0,
-                divisa: datos.divisa
-            })
+            await aplicarPosicion(uid, tipoFinal, datos)
             console.log(`[INFO] Posición actualizada para activo: ${datos.activo}`)
         } catch (error) {
             console.error("[ERROR] Error actualizando posición:", error)
@@ -142,6 +146,8 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
     if (camposFaltantes.length > 0) {
         throw new Error(`Campos obligatorios faltantes: ${camposFaltantes.join(", ")}`)
     }
+
+    normalizarFechaFutura(datos)
 
     // 1. Deshacer el efecto del movimiento original
     await revertirSaldos(uid, movimientoOriginal.tipo, movimientoOriginal)

@@ -138,6 +138,14 @@ async function asegurarDocUsuario(user, esNuevo, nombrePersonalizado) {
 
 export async function logout() {
     cacheCapa.limpiar(auth.currentUser?.uid)
+    // Limpiar la sesión local: sin esto quedaban guardados en sessionStorage
+    // los datos del usuario anterior (bug #6).
+    sesion.limpiar()
+    try {
+        sessionStorage.removeItem(CLAVE_REAUTH)
+    } catch {
+        // Ignorar errores de storage
+    }
     return await signOut(auth)
 }
 

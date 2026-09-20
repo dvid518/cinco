@@ -183,53 +183,6 @@
 }
 
 /* --------------------------------------------
-   FILTROS
-   -------------------------------------------- */
-
-.filtros {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    background: var(--surface);
-    border-radius: 25px;
-}
-
-.filtros input,
-.filtros select {
-    padding: 8px 16px;
-    padding-right: 42px;
-    border-radius: 50px;
-    background-color: var(--background);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: var(--font-primary);
-    font-size: 13px;
-    outline: none;
-    transition: all 0.3s ease;
-}
-
-.filtros input {
-    padding-right: 16px;
-}
-
-.filtros input:hover,
-.filtros select:hover {
-    border-color: var(--text);
-    background-color: var(--lightHover);
-    box-shadow: 0 0 10px var(--shadow);
-}
-
-.filtros input:focus,
-.filtros select:focus {
-    border-color: var(--border);
-}
-
-.filtros .filtro-buscar {
-    flex: 1;
-    min-width: 140px;
-}
-
-/* --------------------------------------------
    TOTALES DEL FILTRO
    -------------------------------------------- */
 
@@ -312,17 +265,18 @@
     padding: 12px 16px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    border-radius: 40px;
     flex-shrink: 0;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.card-item:hover {
+.card-item:not(.seleccionado):hover {
     background: var(--lightHover);
     border-color: var(--text);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
-.card-item-info {
+.card-item .card-item-info {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -330,7 +284,7 @@
     flex: 1;
 }
 
-.card-item-titulo {
+.card-item .card-item-titulo {
     font-weight: 500;
     color: var(--text);
     overflow: hidden;
@@ -338,7 +292,7 @@
     white-space: nowrap;
 }
 
-.card-item-detalle {
+.card-item .card-item-detalle {
     font-size: 12px;
     color: var(--textSecondary);
 }
@@ -358,6 +312,28 @@
 
 .card-item-valor.negative {
     color: var(--negative);
+}
+
+.card-item.seleccionado {
+    border-color: var(--text);
+    background: var(--border);
+    box-shadow: inset 0 0 0 1px var(--shadow);
+}
+
+.card-item.seleccionado .card-item-titulo {
+    color: var(--textAlt);
+}
+
+.card-item.seleccionado .card-item-detalle {
+    color: var(--borderAlt);
+}
+
+.card-item.card-item.seleccionado .card-item-valor.positive {
+    color: var(--positiveAlt);
+}
+
+.card-item.card-item.seleccionado .card-item-valor.negative {
+    color: var(--negativeAlt);
 }
 
 /* --------------------------------------------

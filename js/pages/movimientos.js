@@ -59,6 +59,15 @@ export function render() {
         `)}
         <section id="panel" class="glass">
             <div class="filtros">
+                <div class="campo-buscar">
+                    <input type="text" id="filtro-buscar" class="filtro-buscar" placeholder="Buscar..." aria-label="Buscar">
+                    <button type="button" class="campo-buscar-limpiar" id="filtro-buscar-limpiar" title="Limpiar búsqueda" aria-label="Limpiar búsqueda" hidden>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
+                            <path d="M18 6 6 18"/>
+                            <path d="m6 6 12 12"/>
+                        </svg>
+                    </button>
+                </div>
                 <div class="campo-fecha">
                     <input type="date" id="filtro-desde" aria-label="Desde">
                     <button type="button" class="btn-calendario" aria-label="Abrir calendario">
@@ -102,15 +111,6 @@ export function render() {
                     <option value="USD">USD</option>
                     <option value="USDT">USDT</option>
                 </select>
-                <div class="campo-buscar">
-                    <input type="text" id="filtro-buscar" class="filtro-buscar" placeholder="Buscar..." aria-label="Buscar">
-                    <button type="button" class="campo-buscar-limpiar" id="filtro-buscar-limpiar" title="Limpiar búsqueda" aria-label="Limpiar búsqueda" hidden>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
-                            <path d="M18 6 6 18"/>
-                            <path d="m6 6 12 12"/>
-                        </svg>
-                    </button>
-                </div>
                 <button type="button" class="btn-icon filtro-limpiar" id="filtro-limpiar" title="Limpiar filtros" aria-label="Limpiar filtros">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-broom preview-icon">
                         <path d="M13.5 10.5 22 2"/>
@@ -216,17 +216,19 @@ function plantillaMovimiento(m) {
                     <span class="card-item-titulo">${m.concepto || m.activo || m.tipo || "Sin concepto"}</span>
                     <span class="card-item-detalle">${fecha} · ${tipoNombre}</span>
                 </div>
-                <span class="card-item-valor ${clase}">
-                    ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
-                </span>
-            </div>
-            <div class="card-item-acciones">
-                <button type="button" class="card-action-btn" data-accion="editar" title="Editar" aria-label="Editar">
-                    ${icono("pencil", 16)}
-                </button>
-                <button type="button" class="card-action-btn danger" data-accion="eliminar" title="Eliminar" aria-label="Eliminar">
-                    ${icono("trash", 16)}
-                </button>
+                <div class="card-item-valor-wrap">
+                    <span class="card-item-valor ${clase}">
+                        ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
+                    </span>
+                    <div class="card-item-acciones">
+                        <button type="button" class="card-action-btn" data-accion="editar" title="Editar" aria-label="Editar">
+                            ${icono("pencil", 16)}
+                        </button>
+                        <button type="button" class="card-action-btn danger" data-accion="eliminar" title="Eliminar" aria-label="Eliminar">
+                            ${icono("trash", 16)}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     `
@@ -879,7 +881,7 @@ function renderizarAccionesDetalle(modalEl, bloqueado) {
         `
         : `
             <button type="button" class="glass-btn" data-detalle-accion="cancelar">Cancelar</button>
-            <button type="button" class="glass-btn primary" data-detalle-accion="guardar">Guardar cambios</button>
+            <button type="button" class="modal-btn modal-btn-primary" data-detalle-accion="guardar">Guardar cambios</button>
         `
 }
 
@@ -917,6 +919,12 @@ async function manejarAccionDetalle(accion, m, modalEl) {
 
         if (!datos.fechaRealizacion) datos.fechaRealizacion = getFechaHoy()
 
+        // Mientras el servidor procesa: blur en toda la pantalla + desactivar
+        // botones del detalle para evitar doble envío.
+        const overlay = modalEl.closest(".modal-overlay")
+        overlay?.classList.add("modal-procesando")
+        modalEl.querySelectorAll("button").forEach(boton => boton.setAttribute("disabled", "true"))
+
         try {
             await actualizarMovimiento(uid, m.id, m, m.tipo, datos)
             await cargarMovimientos()
@@ -925,6 +933,8 @@ async function manejarAccionDetalle(accion, m, modalEl) {
         } catch (error) {
             console.error("Error actualizando movimiento:", error)
             mostrarNotificacion("error", `No se pudo actualizar: ${error.message || "error desconocido"}`)
+            overlay?.classList.remove("modal-procesando")
+            modalEl.querySelectorAll("button").forEach(boton => boton.removeAttribute("disabled"))
         }
     }
 }
@@ -1084,7 +1094,8 @@ export async function exportarExtractoCSV() {
         const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
         const url = URL.createObjectURL(blob)
         descargarArchivo(url, `escinco_movimientos_${getFechaHoy()}.csv`)
-        URL.revokeObjectURL(url)
+        // Revoke diferido: revocar aquí cancelaba la descarga antes de arrancar (bug #9)
+        setTimeout(() => URL.revokeObjectURL(url), 0)
 
         mostrarNotificacion("exito", `Extracto exportado (${movimientos.length} movimientos)`)
     } catch (error) {

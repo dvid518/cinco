@@ -14,7 +14,8 @@ class Sesion {
             seg: {
                 inactividadMinutos: 15,
                 cerrarAlCerrarPestana: true
-            }
+            },
+            movimientosRecientes: 5
         }
         // Intentar cargar preferencias guardadas al instanciar
         this.recargarPreferencias()
@@ -80,6 +81,9 @@ class Sesion {
                 ...this.preferencias.seg,
                 ...preferencias.seg
             }
+        }
+        if (preferencias?.movimientosRecientes !== undefined) {
+            this.preferencias.movimientosRecientes = preferencias.movimientosRecientes
         }
         try {
             sessionStorage.setItem('escinco_preferencias', JSON.stringify(this.preferencias))
@@ -166,7 +170,8 @@ class Sesion {
             seg: {
                 inactividadMinutos: 15,
                 cerrarAlCerrarPestana: true
-            }
+            },
+            movimientosRecientes: 5
         }
         try {
             sessionStorage.removeItem('escinco_usuario')

@@ -5,7 +5,6 @@
 // repositorios. La UI siempre trabaja contra este servicio.
 
 import {
-    obtenerPrecioActual as leerPrecioStorage,
     obtenerHistorialPrecios,
     guardarPrecio,
     guardarRegistroPrecio,
@@ -27,13 +26,6 @@ export function obtenerEstrategiaPrecio(activo) {
 // --------------------------------------------
 // LECTURA
 // --------------------------------------------
-
-/**
- * Precio actual guardado + fuente + fecha de la última actualización.
- */
-export async function obtenerPrecioActual(uid, activoId) {
-    return leerPrecioStorage(uid, activoId)
-}
 
 // --------------------------------------------
 // ESCRITURA

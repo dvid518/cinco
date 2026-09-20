@@ -217,7 +217,7 @@ function generarCampo(campo, contexto, opcional) {
                 <div class="form-group${ancho}">
                     <label for="campo-fecha">Fecha de realización</label>
                     <div class="campo-fecha">
-                        <input type="date" id="campo-fecha" class="form-input" value="${hoy}"${req}>
+                        <input type="date" id="campo-fecha" class="form-input" value="${hoy}" max="${hoy}"${req}>
                         <button type="button" class="btn-calendario" aria-label="Abrir calendario">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days preview-icon">
                                 <path d="M8 2v4"/>

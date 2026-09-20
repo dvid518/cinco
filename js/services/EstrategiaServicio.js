@@ -84,7 +84,9 @@ export async function ejecutarEstrategia(uid, estrategia, fecha = new Date()) {
     const cantidad = estrategia.montoFijo / precio
 
     await registrarMovimiento(uid, TIPOS_MOVIMIENTO.COMPRA_ACTIVO, {
-        activo: activo.id,
+        // PosicionServicio resuelve el activo por SÍMBOLO; pasar el doc-ID
+        // crearía un activo fantasma (bug #3).
+        activo: estrategia.activoSimbolo,
         cuenta: estrategia.cuentaId,
         cantidad,
         precio,

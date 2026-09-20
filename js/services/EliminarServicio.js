@@ -29,7 +29,9 @@ export async function eliminarTodosLosDatos(uid) {
         "snapshots",
         "trades",
         "ordenes",
-        "activos" // ← ahora también por usuario
+        "estrategias",
+        "metas",
+        "activos" // ← ahora también por usuario; incluye la subcolección `historial`
     ]
 
     const resultado = {}

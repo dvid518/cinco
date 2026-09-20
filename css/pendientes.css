@@ -180,7 +180,7 @@
 
 .tipo-movimiento-btn {
     padding: 10px 14px;
-    border-radius: 12px;
+    border-radius: 40px;
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--text);
@@ -194,5 +194,6 @@
 .tipo-movimiento-btn:hover {
     background: var(--lightHover);
     border-color: var(--text);
+    box-shadow: 0 0 10px var(--shadow);
     transform: scale(1.02);
 }
