@@ -50,7 +50,6 @@ export function render() {
 
             <!-- APARIENCIA -->
             <div class="panel-section" id="section-apariencia">
-                <h2>Apariencia</h2>
 
                 <div class="config-group">
                     <span class="config-label">Tema</span>
@@ -109,7 +108,6 @@ export function render() {
 
             <!-- MONEDA -->
             <div class="panel-section hidden-section" id="section-moneda">
-                <h2>Moneda</h2>
 
                 <div class="config-group">
                     <span class="config-label">Divisa principal</span>
@@ -151,7 +149,6 @@ export function render() {
 
             <!-- CUENTA -->
             <div class="panel-section hidden-section" id="section-cuenta">
-                <h2>Cuenta</h2>
 
                 <div class="config-group">
                     <span class="config-label">Usuario</span>
@@ -179,7 +176,6 @@ export function render() {
 
             <!-- SEGURIDAD -->
             <div class="panel-section hidden-section" id="section-seguridad">
-                <h2>Seguridad</h2>
 
                 <div class="config-group">
                     <span class="config-label">Cerrar sesión por inactividad</span>
@@ -225,7 +221,6 @@ export function render() {
 
             <!-- DATOS -->
             <div class="panel-section hidden-section" id="section-datos">
-                <h2>Datos</h2>
                 <div class="config-group">
                     <span class="config-label">Exportar respaldo</span>
                     <button class="glass-btn" id="export-dvid">Exportar .dvid</button>
@@ -982,6 +977,10 @@ function abrirModalPreviewImportacion(archivo, preview) {
                 <div class="preview-row">
                     <span class="preview-label">Formato</span>
                     <span class="preview-value">${preview.formato} v${preview.version}</span>
+                </div>
+                <div class="preview-row">
+                    <span class="preview-label">Versión mínima</span>
+                    <span class="preview-value">v${preview.versionMinima || "2.0.0"}</span>
                 </div>
                 <div class="preview-row">
                     <span class="preview-label">Exportado</span>

@@ -191,6 +191,19 @@ export async function crearGraficoLinea(canvasId, datos, opciones = {}) {
 }
 
 // ============================================
+// GRÁFICO DE EVOLUCIÓN DE PRECIO (últimos 7 días)
+// ============================================
+// Línea simple, sin velas ni indicadores. Reutiliza la configuración
+// de crearGraficoLinea (misma instancia, colores del tema y redibujado).
+
+export async function crearGraficoEvolucionPrecio(canvasId, datos, opciones = {}) {
+    return crearGraficoLinea(canvasId, datos, {
+        label: opciones.label || "Precio",
+        simbolo: opciones.simbolo || ""
+    })
+}
+
+// ============================================
 // DESTRUIR GRÁFICO
 // ============================================
 

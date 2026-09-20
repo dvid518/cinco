@@ -94,6 +94,10 @@
     font-weight: 500;
 }
 
+.toggle-option:hover {
+    padding: 4px 20px;
+}
+
 .toggle-option:hover:not(.active) {
     background: var(--lightHover);
 }
@@ -135,7 +139,7 @@
    ======================================== */
 
 .glass-btn {
-    background: var(--surface);
+    background: var(--background);
     border: 1px solid var(--border);
     border-radius: 50px;
     padding: 6px 20px;
@@ -150,6 +154,7 @@
     background: var(--lightHover);
     border-color: var(--text);
     transform: scale(1.02);
+    box-shadow: 0 0 5px var(--shadow);
 }
 
 .glass-btn.danger {

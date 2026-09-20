@@ -128,7 +128,7 @@ function generarCampo(campo, contexto, opcional) {
         case "monto":
             return `
                 <div class="form-group${ancho}">
-                    <label for="campo-monto">Monto <span id="simbolo-monto" class="simbolo-divisa">S/</span></label>
+                    <label for="campo-monto">Monto (<span id="simbolo-monto" class="simbolo-divisa">S/</span>)</label>
                     <input type="number" id="campo-monto" class="form-input" step="0.01" min="0.01" placeholder="0.00"${req}>
                 </div>
             `

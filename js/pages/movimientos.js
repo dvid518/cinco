@@ -17,6 +17,13 @@ let movimientos = []
 let cuentas = []
 let uid = null
 let filtroActual = "todos"
+const seleccionados = new Set()
+const ordenSeleccion = []
+let clickTimer = null
+let supresorClick = false
+let supresorClickTimer = null
+let cardConAcciones = null
+let eventosGlobalesListos = false
 
 // ============================================
 // RENDER
@@ -51,9 +58,6 @@ export function render() {
             </section>
         `)}
         <section id="panel" class="glass">
-            <div class="panel-header">
-                <h2>Movimientos</h2>
-            </div>
             <div class="filtros">
                 <div class="campo-fecha">
                     <input type="date" id="filtro-desde" aria-label="Desde">
@@ -98,8 +102,23 @@ export function render() {
                     <option value="USD">USD</option>
                     <option value="USDT">USDT</option>
                 </select>
-                <input type="search" id="filtro-buscar" class="filtro-buscar" placeholder="Buscar..." aria-label="Buscar">
-                <button type="button" class="btn-sm" id="filtro-limpiar">Limpiar</button>
+                <div class="campo-buscar">
+                    <input type="text" id="filtro-buscar" class="filtro-buscar" placeholder="Buscar..." aria-label="Buscar">
+                    <button type="button" class="campo-buscar-limpiar" id="filtro-buscar-limpiar" title="Limpiar búsqueda" aria-label="Limpiar búsqueda" hidden>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
+                            <path d="M18 6 6 18"/>
+                            <path d="m6 6 12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <button type="button" class="btn-icon filtro-limpiar" id="filtro-limpiar" title="Limpiar filtros" aria-label="Limpiar filtros">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-broom preview-icon">
+                        <path d="M13.5 10.5 22 2"/>
+                        <path d="M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z"/>
+                        <path d="m5 18 2-2"/>
+                        <path d="m7.699 10.7 5.602 5.601"/>
+                    </svg>
+                </button>
             </div>
             <div id="totales-movimientos" class="totales"></div>
             <div id="lista-movimientos" class="lista-cards">
@@ -150,7 +169,8 @@ async function cargarMovimientos() {
             const fb = (fechaDeMovimiento(b)?.getTime?.()) || 0
             return fb - fa
         })
-        renderizarMovimientos()
+        limpiarSeleccion()
+        aplicarFiltro()
     } catch (error) {
         console.error("Error cargando movimientos:", error)
         mostrarError()
@@ -166,18 +186,6 @@ function mostrarError() {
 // ============================================
 // RENDERIZADO
 // ============================================
-
-function renderizarMovimientos() {
-    const container = document.getElementById("lista-movimientos")
-    if (!container) return
-
-    if (!movimientos || movimientos.length === 0) {
-        container.innerHTML = plantillaVacio()
-        return
-    }
-
-    container.innerHTML = movimientos.map(plantillaMovimiento).join("")
-}
 
 function plantillaVacio() {
     return `
@@ -195,23 +203,30 @@ function plantillaVacio() {
 function plantillaMovimiento(m) {
     const monto = montoDeMovimiento(m)
     const esPositivo = esMovimientoPositivo(m.tipo)
-    const signo = esPositivo ? "+" : (m.tipo === "error" ? "" : "-")
-    const clase = esMovimientoPositivo(m.tipo) ? "positive" : (m.tipo === "error" ? "" : "negative")
+    const signo = esPositivo ? "+" : "-"
+    const clase = esPositivo ? "positive" : "negative"
     const tipoNombre = CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Desconocido"
     const fecha = formatearFecha(m.fechaRealizacion)
+    const seleccionada = seleccionados.has(m.id) ? " seleccionado" : ""
 
     return `
-        <div class="card-item" data-id="${m.id}">
-            <div class="card-item-info">
-                <span class="card-item-titulo">${m.concepto || m.activo || m.tipo || "Sin concepto"}</span>
-                <span class="card-item-detalle">${fecha} · ${tipoNombre}</span>
+        <div class="card-item${seleccionada}" data-id="${m.id}">
+            <div class="card-item-main">
+                <div class="card-item-info">
+                    <span class="card-item-titulo">${m.concepto || m.activo || m.tipo || "Sin concepto"}</span>
+                    <span class="card-item-detalle">${fecha} · ${tipoNombre}</span>
+                </div>
+                <span class="card-item-valor ${clase}">
+                    ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
+                </span>
             </div>
-            <span class="card-item-valor ${clase}">
-                ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
-            </span>
             <div class="card-item-acciones">
-                <button class="card-action-btn" data-accion="editar" data-id="${m.id}" title="Editar" type="button">${icono("pencil", 15)}</button>
-                <button class="card-action-btn" data-accion="eliminar" data-id="${m.id}" title="Eliminar" type="button">${icono("trash", 15)}</button>
+                <button type="button" class="card-action-btn" data-accion="editar" title="Editar" aria-label="Editar">
+                    ${icono("pencil", 16)}
+                </button>
+                <button type="button" class="card-action-btn danger" data-accion="eliminar" title="Eliminar" aria-label="Eliminar">
+                    ${icono("trash", 16)}
+                </button>
             </div>
         </div>
     `
@@ -274,40 +289,240 @@ function configurarEventos() {
     const cuenta = document.getElementById("filtro-cuenta")
     const divisa = document.getElementById("filtro-divisa")
     const buscar = document.getElementById("filtro-buscar")
+    const buscarLimpiar = document.getElementById("filtro-buscar-limpiar")
     const limpiar = document.getElementById("filtro-limpiar")
 
     desde?.addEventListener("change", aplicarFiltro)
     hasta?.addEventListener("change", aplicarFiltro)
     cuenta?.addEventListener("change", aplicarFiltro)
     divisa?.addEventListener("change", aplicarFiltro)
-    buscar?.addEventListener("input", aplicarFiltro)
+
+    buscar?.addEventListener("input", () => {
+        if (buscarLimpiar) buscarLimpiar.hidden = !buscar.value.trim()
+        aplicarFiltro()
+    })
+    buscarLimpiar?.addEventListener("click", () => {
+        if (buscar) buscar.value = ""
+        if (buscarLimpiar) buscarLimpiar.hidden = true
+        aplicarFiltro()
+        buscar?.focus()
+    })
     limpiar?.addEventListener("click", () => {
         if (desde) desde.value = ""
         if (hasta) hasta.value = ""
         if (cuenta) cuenta.value = ""
         if (divisa) divisa.value = ""
         if (buscar) buscar.value = ""
+        if (buscarLimpiar) buscarLimpiar.hidden = true
         aplicarFiltro()
     })
 
-    // Acciones de editar/eliminar por delegación
+    // Interacción con las cards:
+    //   click     → abrir detalle (o seleccionar si ya hay selección activa)
+    //   dblclick  → seleccionar / deseleccionar
+    //   mantén    → seleccionar (clic sostenido)
+    //   swipe ←   → revelar acciones (editar / eliminar)
     const container = document.getElementById("lista-movimientos")
-    container?.addEventListener("click", manejarAccionCard)
+    container?.addEventListener("click", manejarClickCard)
+    container?.addEventListener("dblclick", manejarDobleClickCard)
+    vincularGestosCard(container)
+    configurarEventosGlobales()
 }
 
-function manejarAccionCard(evento) {
-    const boton = evento.target.closest(".card-action-btn")
-    if (!boton) return
+function configurarEventosGlobales() {
+    if (eventosGlobalesListos) return
+    eventosGlobalesListos = true
+    document.addEventListener("click", manejarClickFueraCards)
+    document.addEventListener("keydown", manejarTecladoSeleccion)
+}
 
-    const id = boton.dataset.id
-    const movimiento = movimientos.find(m => m.id === id)
-    if (!movimiento) return
+function marcarSupresorClick() {
+    supresorClick = true
+    clearTimeout(supresorClickTimer)
+    supresorClickTimer = setTimeout(() => { supresorClick = false }, 400)
+}
 
-    if (boton.dataset.accion === "editar") {
-        abrirFormularioMovimiento(movimiento.tipo, movimiento)
-    } else if (boton.dataset.accion === "eliminar") {
-        abrirModalEliminarMovimiento(movimiento)
+function consumirSupresorClick() {
+    if (!supresorClick) return false
+    supresorClick = false
+    clearTimeout(supresorClickTimer)
+    return true
+}
+
+function manejarClickCard(evento) {
+    // Botones de acción revelados por hover/swipe
+    const accionBtn = evento.target.closest(".card-action-btn")
+    if (accionBtn) {
+        evento.stopPropagation()
+        const card = accionBtn.closest(".card-item")
+        const m = movimientos.find(x => x.id === card?.dataset.id)
+        ocultarAccionesCards()
+        if (!m) return
+        if (accionBtn.dataset.accion === "editar") abrirFormularioMovimiento(m.tipo, m)
+        else abrirModalEliminarMovimiento(m)
+        return
     }
+
+    const card = evento.target.closest(".card-item")
+
+    // Un toque sobre la card con acciones reveladas solo las oculta.
+    if (cardConAcciones) {
+        const esLaMisma = card === cardConAcciones
+        ocultarAccionesCards()
+        if (esLaMisma) {
+            consumirSupresorClick()
+            return
+        }
+    }
+
+    // Click inmediatamente después de una selección por clic sostenido o swipe
+    if (consumirSupresorClick()) return
+
+    if (!card) return
+
+    const id = card.dataset.id
+
+    // Con una selección activa, un click alterna la selección del item.
+    if (seleccionados.size > 0) {
+        toggleSeleccion(id)
+        return
+    }
+
+    if (clickTimer) {
+        clearTimeout(clickTimer)
+        clickTimer = null
+    }
+
+    clickTimer = setTimeout(() => {
+        clickTimer = null
+        if (seleccionados.size === 0) abrirDetalleMovimiento(id)
+    }, 280)
+}
+
+function manejarDobleClickCard(evento) {
+    if (evento.target.closest(".card-action-btn")) return
+    const card = evento.target.closest(".card-item")
+    if (!card) return
+    if (clickTimer) {
+        clearTimeout(clickTimer)
+        clickTimer = null
+    }
+    toggleSeleccion(card.dataset.id)
+}
+
+function manejarClickFueraCards(evento) {
+    if (!document.getElementById("lista-movimientos")) return
+    if (evento.target.closest(".card-item")) return
+    if (evento.target.closest("#app-footer")) return
+    if (evento.target.closest(".modal-overlay")) return
+    ocultarAccionesCards()
+    limpiarSeleccion()
+}
+
+function manejarTecladoSeleccion(evento) {
+    if (!document.getElementById("lista-movimientos")) return
+    if (document.getElementById("modal-activo")) return
+
+    if (evento.key === "Escape") {
+        if (seleccionados.size > 0) {
+            ocultarAccionesCards()
+            limpiarSeleccion()
+        }
+        return
+    }
+
+    if (evento.key !== "Delete" && evento.key !== "Backspace") return
+    if (evento.target.matches("input, textarea, select")) return
+    if (seleccionados.size === 0) return
+    evento.preventDefault()
+    deseleccionarUltimo()
+}
+
+function vincularGestosCard(container) {
+    if (!container) return
+
+    let gesto = null
+
+    const cancelar = () => {
+        if (gesto?.timer) clearTimeout(gesto.timer)
+        gesto = null
+    }
+
+    container.addEventListener("pointerdown", (evento) => {
+        if (evento.pointerType === "mouse" && evento.button !== 0) return
+        if (evento.target.closest(".card-action-btn")) return
+
+        const card = evento.target.closest(".card-item")
+        if (!card) return
+
+        cancelar()
+        if (cardConAcciones && cardConAcciones !== card) ocultarAccionesCards()
+
+        gesto = {
+            card,
+            pointerId: evento.pointerId,
+            pointerType: evento.pointerType,
+            startX: evento.clientX,
+            startY: evento.clientY,
+            movido: false,
+            swipeRevelado: false,
+            timer: null
+        }
+
+        const duracion = evento.pointerType === "touch" ? 500 : 700
+        gesto.timer = setTimeout(() => {
+            if (!gesto) return
+            toggleSeleccion(card.dataset.id)
+            marcarSupresorClick()
+            cancelar()
+        }, duracion)
+    })
+
+    container.addEventListener("pointermove", (evento) => {
+        if (!gesto || evento.pointerId !== gesto.pointerId) return
+
+        const dx = evento.clientX - gesto.startX
+        const dy = evento.clientY - gesto.startY
+
+        if (!gesto.movido && Math.hypot(dx, dy) > 10) {
+            gesto.movido = true
+            if (gesto.timer) {
+                clearTimeout(gesto.timer)
+                gesto.timer = null
+            }
+        }
+
+        if (!gesto.movido || gesto.pointerType === "mouse") return
+
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+            gesto.swipeRevelado = true
+            if (dx < 0) mostrarAccionesCard(gesto.card)
+            else ocultarAccionesCards()
+        }
+    })
+
+    const finalizar = (evento) => {
+        if (!gesto || evento.pointerId !== gesto.pointerId) return
+        if (gesto.swipeRevelado) marcarSupresorClick()
+        cancelar()
+    }
+
+    container.addEventListener("pointerup", finalizar)
+    container.addEventListener("pointercancel", finalizar)
+}
+
+function mostrarAccionesCard(card) {
+    if (cardConAcciones && cardConAcciones !== card) {
+        cardConAcciones.classList.remove("acciones-visibles")
+    }
+    cardConAcciones = card
+    card.classList.add("acciones-visibles")
+}
+
+function ocultarAccionesCards() {
+    if (!cardConAcciones) return
+    cardConAcciones.classList.remove("acciones-visibles")
+    cardConAcciones = null
 }
 
 function aplicarFiltro() {
@@ -379,9 +594,12 @@ function aplicarFiltro() {
     }
 
     renderizarTotales(filtrados)
+    cardConAcciones = null
 
     if (filtrados.length === 0) {
-        container.innerHTML = `<p class="lista-vacia">No hay movimientos que coincidan con el filtro.</p>`
+        container.innerHTML = movimientos.length === 0
+            ? plantillaVacio()
+            : `<p class="lista-vacia">No hay movimientos que coincidan con el filtro.</p>`
         return
     }
 
@@ -592,7 +810,6 @@ function abrirModalEliminarMovimiento(m) {
             try {
                 await eliminarMovimiento(uid, m)
                 await cargarMovimientos()
-                aplicarFiltro()
                 mostrarNotificacion("exito", "Movimiento eliminado")
                 return true
             } catch (error) {
@@ -602,4 +819,293 @@ function abrirModalEliminarMovimiento(m) {
             }
         }
     })
+}
+
+// ============================================
+// MODAL DE DETALLE
+// ============================================
+// Un clic abre el mismo formulario que "Editar" pero con los campos
+// bloqueados. Desde ahí se puede habilitar la edición o eliminar.
+
+function abrirDetalleMovimiento(id) {
+    const m = movimientos.find(x => x.id === id)
+    if (!m) return
+    abrirFormularioDetalle(m)
+}
+
+async function abrirFormularioDetalle(m) {
+    uid = sesion.uid
+    const html = await generarFormularioMovimiento(m.tipo)
+    const config = CONFIG_MOVIMIENTOS[m.tipo]
+    const tipoNombre = config?.nombre || m.tipo || "Desconocido"
+
+    const modalEl = abrirModal({
+        titulo: `${tipoNombre} · ${formatearFecha(m.fechaRealizacion)}`,
+        contenido: `
+            ${html}
+            <div class="movimiento-detalle-acciones" id="detalle-acciones"></div>
+        `,
+        variante: "form",
+        confirmText: null,
+        cancelText: null,
+        cerrarAlClickFuera: true
+    })
+
+    rellenarFormulario(m.tipo, m)
+    vincularSimboloDivisa()
+    bloquearFormulario(true)
+    renderizarAccionesDetalle(modalEl, true)
+
+    const body = modalEl.querySelector(".modal-body")
+    body?.addEventListener("click", (evento) => {
+        const boton = evento.target.closest("[data-detalle-accion]")
+        if (!boton) return
+        manejarAccionDetalle(boton.dataset.detalleAccion, m, modalEl)
+    })
+}
+
+function renderizarAccionesDetalle(modalEl, bloqueado) {
+    const contenedor = modalEl.querySelector("#detalle-acciones")
+    if (!contenedor) return
+
+    contenedor.innerHTML = bloqueado
+        ? `
+            <button type="button" class="glass-btn danger" data-detalle-accion="eliminar">
+                ${icono("trash", 15)} Eliminar
+            </button>
+            <button type="button" class="glass-btn" data-detalle-accion="editar">
+                ${icono("pencil", 15)} Editar
+            </button>
+        `
+        : `
+            <button type="button" class="glass-btn" data-detalle-accion="cancelar">Cancelar</button>
+            <button type="button" class="glass-btn primary" data-detalle-accion="guardar">Guardar cambios</button>
+        `
+}
+
+function bloquearFormulario(bloquear) {
+    const form = document.getElementById("form-movimiento")
+    if (!form) return
+    form.querySelectorAll("input, select, textarea, button").forEach(el => {
+        el.disabled = bloquear
+    })
+    form.classList.toggle("form-bloqueado", bloquear)
+}
+
+async function manejarAccionDetalle(accion, m, modalEl) {
+    if (accion === "editar") {
+        bloquearFormulario(false)
+        renderizarAccionesDetalle(modalEl, false)
+        document.getElementById("campo-concepto")?.focus()
+        return
+    }
+
+    if (accion === "cancelar") {
+        abrirFormularioDetalle(m)
+        return
+    }
+
+    if (accion === "eliminar") {
+        cerrarModal()
+        abrirModalEliminarMovimiento(m)
+        return
+    }
+
+    if (accion === "guardar") {
+        const datos = recogerDatosFormulario(m.tipo)
+        if (!datos) return
+
+        if (!datos.fechaRealizacion) datos.fechaRealizacion = getFechaHoy()
+
+        try {
+            await actualizarMovimiento(uid, m.id, m, m.tipo, datos)
+            await cargarMovimientos()
+            mostrarNotificacion("exito", "Movimiento actualizado")
+            cerrarModal()
+        } catch (error) {
+            console.error("Error actualizando movimiento:", error)
+            mostrarNotificacion("error", `No se pudo actualizar: ${error.message || "error desconocido"}`)
+        }
+    }
+}
+
+// ============================================
+// SELECCIÓN (dblclick / clic sostenido / click en modo selección)
+// ============================================
+// La selección habilita los botones Editar (uno solo) / Eliminar del lastbar.
+// Escape o un click fuera de la lista limpian la selección.
+// Suprimir/Delete quita el último movimiento seleccionado.
+
+function toggleSeleccion(id) {
+    if (seleccionados.has(id)) {
+        seleccionados.delete(id)
+        const indice = ordenSeleccion.indexOf(id)
+        if (indice !== -1) ordenSeleccion.splice(indice, 1)
+    } else {
+        seleccionados.add(id)
+        if (!ordenSeleccion.includes(id)) ordenSeleccion.push(id)
+    }
+    actualizarSeleccionEnDOM()
+    actualizarEstadoLastbar()
+}
+
+function deseleccionarUltimo() {
+    const id = ordenSeleccion.pop()
+    if (!id) return
+    seleccionados.delete(id)
+    actualizarSeleccionEnDOM()
+    actualizarEstadoLastbar()
+}
+
+function limpiarSeleccion() {
+    if (seleccionados.size === 0) {
+        actualizarEstadoLastbar()
+        return
+    }
+    seleccionados.clear()
+    ordenSeleccion.length = 0
+    actualizarSeleccionEnDOM()
+    actualizarEstadoLastbar()
+}
+
+function actualizarSeleccionEnDOM() {
+    document.querySelectorAll(".card-item").forEach(card => {
+        card.classList.toggle("seleccionado", seleccionados.has(card.dataset.id))
+    })
+}
+
+function actualizarEstadoLastbar() {
+    const puedeEditar = seleccionados.size === 1
+    const puedeEliminar = seleccionados.size > 0
+
+    document.querySelectorAll('[data-accion="editar-movimiento"]').forEach(item => {
+        item.classList.toggle("desact", !puedeEditar)
+    })
+    document.querySelectorAll('[data-accion="eliminar-movimiento"]').forEach(item => {
+        item.classList.toggle("desact", !puedeEliminar)
+    })
+}
+
+export async function editarSeleccionados() {
+    if (seleccionados.size !== 1) return
+
+    const id = [...seleccionados][0]
+    const movimiento = movimientos.find(m => m.id === id)
+    if (!movimiento) return
+
+    limpiarSeleccion()
+    abrirFormularioMovimiento(movimiento.tipo, movimiento)
+}
+
+export async function eliminarSeleccionados() {
+    if (seleccionados.size === 0) return
+
+    const lista = [...seleccionados]
+        .map(id => movimientos.find(m => m.id === id))
+        .filter(Boolean)
+
+    limpiarSeleccion()
+    abrirModalEliminarVarios(lista)
+}
+
+function abrirModalEliminarVarios(lista) {
+    abrirModal({
+        titulo: "Eliminar movimientos",
+        contenido: `
+            <div class="modal-message">
+                <p class="modal-message-title-danger">¿Eliminar ${lista.length} movimiento(s)?</p>
+                <p class="modal-message-warning">
+                    Se revertirá su efecto en los saldos de tus cuentas.
+                </p>
+                <p class="modal-message-error">Esta acción no se puede deshacer.</p>
+            </div>
+        `,
+        variante: "confirm",
+        confirmText: "Eliminar",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            try {
+                for (const m of lista) {
+                    await eliminarMovimiento(uid, m)
+                }
+                await cargarMovimientos()
+                mostrarNotificacion("exito", `${lista.length} movimiento(s) eliminado(s)`)
+                return true
+            } catch (error) {
+                console.error("Error eliminando movimientos:", error)
+                mostrarNotificacion("error", `No se pudieron eliminar: ${error.message || "error desconocido"}`)
+                return false
+            }
+        }
+    })
+}
+
+// ============================================
+// EXTRACTO CSV (solo movimientos)
+// ============================================
+
+export async function exportarExtractoCSV() {
+    uid = sesion.uid
+    if (!uid) {
+        mostrarNotificacion("error", "No hay sesión activa")
+        return
+    }
+
+    try {
+        movimientos = await obtenerMovimientos(uid)
+        if (!movimientos || movimientos.length === 0) {
+            mostrarNotificacion("info", "No hay movimientos para exportar")
+            return
+        }
+
+        const nombrePorId = new Map(cuentas.map(c => [c.id, c.nombre]))
+
+        const filas = movimientos
+            .slice()
+            .sort((a, b) => {
+                const fa = (fechaDeMovimiento(a)?.getTime?.()) || 0
+                const fb = (fechaDeMovimiento(b)?.getTime?.()) || 0
+                return fb - fa
+            })
+            .map(m => [
+                formatearFecha(m.fechaRealizacion),
+                CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Desconocido",
+                m.concepto || m.activo || CONFIG_MOVIMIENTOS[m.tipo]?.nombre || "Sin concepto",
+                nombrePorId.get(m.cuenta || m.cuentaOrigen || m.tarjeta) || m.cuenta || m.cuentaOrigen || m.tarjeta || "",
+                `${esMovimientoPositivo(m.tipo) ? "+" : "-"}${Math.abs(montoDeMovimiento(m)).toFixed(2)}`,
+                (m.divisa || "PEN").toUpperCase()
+            ])
+
+        const cabecera = ["Fecha", "Tipo", "Concepto", "Cuenta", "Monto", "Divisa"]
+        const csv = [cabecera, ...filas]
+            .map(fila => fila.map(valor => escaparCSV(valor)).join(","))
+            .join("\r\n")
+
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+        descargarArchivo(url, `escinco_movimientos_${getFechaHoy()}.csv`)
+        URL.revokeObjectURL(url)
+
+        mostrarNotificacion("exito", `Extracto exportado (${movimientos.length} movimientos)`)
+    } catch (error) {
+        console.error("Error exportando CSV de movimientos:", error)
+        mostrarNotificacion("error", `No se pudo exportar el extracto: ${error.message || "error desconocido"}`)
+    }
+}
+
+function escaparCSV(valor) {
+    const texto = String(valor ?? "")
+    if (/[",\r\n]/.test(texto)) {
+        return `"${texto.replaceAll('"', '""')}"`
+    }
+    return texto
+}
+
+function descargarArchivo(url, nombre) {
+    const link = document.createElement("a")
+    link.href = url
+    link.download = nombre
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
 }

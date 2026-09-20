@@ -146,14 +146,14 @@ const LASTBARS = {
                         <path d="M12 8v8"/>
                     </svg>
                 </div>
-                <div class="item glass desact">
+                <div class="item glass desact" data-accion="editar-movimiento">
                     <span class="glass">Editar</span>
                     <svg id="icon-edit" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
                         <path d="m15 5 4 4"/>
                     </svg>
                 </div>
-                <div class="item glass desact">
+                <div class="item glass desact" data-accion="eliminar-movimiento">
                     <span class="glass">Eliminar</span>
                     <svg id="icon-trash" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M10 11v6"/>
@@ -327,9 +327,24 @@ const MAPA_ACCIONES = {
         abrirSelectorTipoMovimiento()
     },
 
-    "extracto": async () => {
-        const { accionExportar } = await import("../ui/exportar.js")
-        await accionExportar()
+    "extracto": async (pagina) => {
+        if (pagina === "movimientos") {
+            const { exportarExtractoCSV } = await import("../pages/movimientos.js")
+            await exportarExtractoCSV()
+        } else {
+            const { accionExportar } = await import("../ui/exportar.js")
+            await accionExportar()
+        }
+    },
+
+    "editar-movimiento": async () => {
+        const { editarSeleccionados } = await import("../pages/movimientos.js")
+        await editarSeleccionados()
+    },
+
+    "eliminar-movimiento": async () => {
+        const { eliminarSeleccionados } = await import("../pages/movimientos.js")
+        await eliminarSeleccionados()
     },
 
     "actualizar": async (pagina) => {
@@ -344,9 +359,13 @@ const MAPA_ACCIONES = {
                 await m.cargarPosiciones()
                 break
             }
-            case "trading": {
-                const m = await import("../pages/trading.js")
-                await m.recargarTrading()
+            case "inversiones": {
+                const m = await import("../pages/inversiones.js")
+                if (typeof m.actualizarPrecios === "function") {
+                    await m.actualizarPrecios()
+                } else {
+                    await m.cargarPosiciones()
+                }
                 break
             }
             default:

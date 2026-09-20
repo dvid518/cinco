@@ -20,10 +20,11 @@ import {
 } from "../services/EstrategiaServicio.js"
 import { DIAS_SEMANA } from "../models/Estrategia.js"
 import {
-    obtenerHistorialParaGrafico,
-    registrarPrecio
-} from "../services/HistorialServicio.js"
-import { crearGraficoLinea, destruirGrafico } from "../ui/graficos.js"
+    actualizarPrecioManual,
+    actualizarPrecioAutomatico,
+    historialParaGrafico
+} from "../services/PrecioServicio.js"
+import { crearGraficoEvolucionPrecio, destruirGrafico } from "../ui/graficos.js"
 import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { obtenerCuentas } from "../../firebase/firestore.js"
@@ -50,8 +51,6 @@ export function render() {
         </section>
     `)}
         <section id="panel" class="glass">
-            <div class="panel-header">
-                <h2>Inversiones</h2>
                 <div class="toggle-group" id="toggle-vista-inversiones">
                     <span class="toggle-option active" data-vista="posiciones">Posiciones</span>
                     <span class="toggle-option" data-vista="estrategias">Estrategias</span>
@@ -178,6 +177,26 @@ function plantillaPosicion(p) {
     const valor = p.valorTotal || 0
     const esFavorito = activo?.favorito === true
 
+    // Badge de fuente de precio
+    const fuente = activo?.fuente || "manual"
+    const fuenteLabel = fuente === "api" ? "Auto" : "Manual"
+    const fuenteClase = fuente === "api" ? "fuente-api" : "fuente-manual"
+
+    // Fecha de última actualización
+    let fechaActualizacion = ""
+    if (activo?.ultimaActualizacion) {
+        const fecha = activo.ultimaActualizacion instanceof Date
+            ? activo.ultimaActualizacion
+            : new Date(activo.ultimaActualizacion)
+        if (!Number.isNaN(fecha.getTime())) {
+            fechaActualizacion = fecha.toLocaleDateString("es-PE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "2-digit"
+            })
+        }
+    }
+
     return `
         <div class="posicion-item" data-posicion-id="${p.id}" data-activo-id="${p.activoId}">
             <button
@@ -191,9 +210,11 @@ function plantillaPosicion(p) {
                 <div class="posicion-nombre">
                     ${activo?.nombre || p.activoId}
                     <span class="posicion-simbolo">${activo?.simbolo || ""}</span>
+                    <span class="posicion-fuente ${fuenteClase}">${fuenteLabel}</span>
                 </div>
                 <div class="posicion-detalle">
                     ${p.cantidad.toFixed(4)} · Precio: ${activo?.ultimoPrecio?.toFixed(2) || "0.00"} ${p.divisa.toUpperCase()}
+                    ${fechaActualizacion ? ` · Act. ${fechaActualizacion}` : ""}
                 </div>
                 <div class="posicion-detalle posicion-acciones-hint">
                     ${icono("refresh-cw", 12)} Toca para ver gráfico, actualizar precio o eliminar
@@ -668,7 +689,8 @@ function formatearFechaEstrategia(fecha) {
 async function mostrarGraficoActivo(activoId, activo, posicion) {
     console.log("[INFO] Mostrando gráfico para:", activo?.simbolo || activoId)
 
-    const datos = await obtenerHistorialParaGrafico(uid, activoId, 7)
+    // Usar el nuevo servicio de precios
+    const datos = await historialParaGrafico(uid, activo, 7)
 
     const html = `
         <div class="grafico-container">
@@ -699,7 +721,7 @@ async function mostrarGraficoActivo(activoId, activo, posicion) {
     })
 
     setTimeout(async () => {
-        await crearGraficoLinea("grafico-activo", datos, {
+        await crearGraficoEvolucionPrecio("grafico-activo", datos, {
             label: activo?.simbolo || "Precio",
             simbolo: activo?.simbolo || ""
         })
@@ -715,15 +737,24 @@ async function mostrarGraficoActivo(activoId, activo, posicion) {
 }
 
 // ============================================
-// ACTUALIZAR PRECIO MANUAL
+// ACTUALIZAR PRECIO (MANUAL o API)
 // ============================================
 
 function abrirModalActualizarPrecio(activo, posicion) {
     const nombre = activo?.nombre || "activo"
     const precioActual = activo?.ultimoPrecio || posicion?.precioPromedio || ""
+    const esAuto = activo?.fuente === "api"
 
     const html = `
         <form class="form-movimiento">
+            ${esAuto ? `
+                <div class="modal-message">
+                    <p class="modal-message-desc">
+                        Este activo usa <strong>precio automático</strong>.
+                        Puedes actualizarlo desde la API o ingresar un precio manual.
+                    </p>
+                </div>
+            ` : ""}
             <div class="form-group">
                 <label for="precio-manual">Nuevo precio (${nombre})</label>
                 <input type="number" id="precio-manual" class="form-input" step="0.01" min="0.01" value="${precioActual}" placeholder="0.00" required>
@@ -746,8 +777,7 @@ function abrirModalActualizarPrecio(activo, posicion) {
             }
 
             try {
-                await actualizarPrecioActivo(uid, activo.id, precio)
-                await registrarPrecio(uid, activo.id, precio)
+                await actualizarPrecioManual(uid, activo, precio)
                 await cargarPosiciones()
                 mostrarNotificacion("exito", "Precio actualizado correctamente")
                 return true
@@ -870,8 +900,42 @@ function configurarEventos() {
 // ============================================
 // ACCIONES EXPORTADAS PARA LASTBAR
 // ============================================
-// (Compra, venta, actualizar y broker se invocan desde la
-//  delegación central de app.js)
+
+/**
+ * Acción "Actualizar" desde el lastbar.
+ * Refresca posiciones y, si hay activos automáticos, consulta la API.
+ */
+export async function actualizarPrecios() {
+    const posiciones = posicionesData?.posiciones || []
+    const automaticos = posiciones.filter(p => p.activo?.fuente === "api")
+
+    if (automaticos.length === 0) {
+        await cargarPosiciones()
+        mostrarNotificacion("exito", "Posiciones actualizadas")
+        return
+    }
+
+    let actualizados = 0
+    let errores = 0
+
+    for (const posicion of automaticos) {
+        try {
+            await actualizarPrecioAutomatico(uid, posicion.activo)
+            actualizados++
+        } catch (error) {
+            console.error(`Error actualizando ${posicion.activo?.simbolo}:`, error)
+            errores++
+        }
+    }
+
+    await cargarPosiciones()
+
+    if (errores > 0) {
+        mostrarNotificacion("error", `${actualizados} actualizados, ${errores} errores`)
+    } else {
+        mostrarNotificacion("exito", `${actualizados} precios actualizados`)
+    }
+}
 
 // ============================================
 // MODAL COMPRAR ACTIVO
@@ -985,7 +1049,6 @@ export function abrirModalCompra() {
                     fechaRealizacion: fecha ? parseFechaLocal(fecha) : new Date()
                 })
 
-                await registrarPrecio(uid, activo.id, precio)
                 await cargarPosiciones()
                 mostrarNotificacion("exito", "Compra registrada correctamente")
                 return true
@@ -1104,7 +1167,6 @@ export function abrirModalVenta() {
                     fechaRealizacion: fecha ? parseFechaLocal(fecha) : new Date()
                 })
 
-                await registrarPrecio(uid, posicion.activoId, precio)
                 await cargarPosiciones()
                 mostrarNotificacion("exito", "Venta registrada correctamente")
                 return true

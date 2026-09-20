@@ -93,8 +93,10 @@ p2pCompra, p2pVenta, compraTarjeta, pagoTarjeta, error.
 - Conversión manual con tipo de cambio configurable (`pen_usd`, modo manual).
 
 ### Datos
-- **Exportar** respaldo `.dvid` (formato ESCINCO v3.0.0).
-- **Importar** `.dvid` desde v2.0.0 (agrega sin borrar, con reporte).
+- **Exportar** respaldo `.dvid` (formato ESCINCO v4.0.0, incluye cuentas,
+  movimientos, activos, pendientes, posiciones, trades, ordenes, estrategias,
+  metas, historial, snapshots y preferencias).
+- **Importar** `.dvid` desde v4.0.0 (agrega sin borrar, con reporte).
 - **Eliminar** todos los datos + cuenta de Auth (confirmación doble).
 
 ### Experiencia

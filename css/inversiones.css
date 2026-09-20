@@ -404,3 +404,29 @@
     color: var(--textSecondary);
     padding: 8px 0;
 }
+
+/* ============================================
+   BADGE DE FUENTE DE PRECIO
+   ============================================ */
+
+   .posicion-fuente {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 50px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+}
+
+.posicion-fuente.fuente-manual {
+    background: var(--border);
+    color: var(--textSecondary);
+}
+
+.posicion-fuente.fuente-api {
+    background: var(--positive);
+    color: var(--onyx);
+}

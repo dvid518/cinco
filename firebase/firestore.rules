@@ -58,7 +58,7 @@ service cloud.firestore {
         && esMapa(data.preferencias);
     }
 
-    function validarUpdateDocUsuario(data) {
+    function validarUpdateDocUsuario() {
       // Sin hasOnly (documentos legacy pueden tener campos extra):
       // solo se valida el TIPO si el campo está presente.
       return true;
@@ -86,7 +86,7 @@ service cloud.firestore {
       allow create: if esPropietario(uid)
         && validarCreateDocUsuario(request.resource.data);
       allow update: if esPropietario(uid)
-        && validarUpdateDocUsuario(request.resource.data);
+        && validarUpdateDocUsuario();
       allow delete: if esPropietario(uid);
 
       // --------------------------------------------------------
@@ -433,14 +433,16 @@ service cloud.firestore {
         allow create: if esPropietario(uid)
           && request.resource.data.keys().hasOnly([
             'nombre', 'simbolo', 'tipo', 'ultimoPrecio', 'ultimaActualizacion',
-            'fechaCreacion', 'favorito'
+            'fechaCreacion', 'favorito', 'fuente', 'apiSimbolo'
           ])
           && request.resource.data.keys().hasAll(['nombre', 'simbolo'])
           && esTexto(request.resource.data.nombre)
           && esTexto(request.resource.data.simbolo)
           && esTexto(request.resource.data.tipo)
           && esNumero(request.resource.data.ultimoPrecio)
-          && (('favorito' in request.resource.data) ? esBool(request.resource.data.favorito) : true);
+          && (('favorito' in request.resource.data) ? esBool(request.resource.data.favorito) : true)
+          && (('fuente' in request.resource.data) ? esTexto(request.resource.data.fuente) : true)
+          && (('apiSimbolo' in request.resource.data) ? esTextoONulo(request.resource.data.apiSimbolo) : true);
 
         allow update: if esPropietario(uid)
           && ifPresenteTexto(request.resource.data, 'nombre')
@@ -448,7 +450,9 @@ service cloud.firestore {
           && ifPresenteTexto(request.resource.data, 'tipo')
           && ifPresenteNumero(request.resource.data, 'ultimoPrecio')
           && ifPresenteTimestamp(request.resource.data, 'ultimaActualizacion')
-          && ifPresenteBool(request.resource.data, 'favorito');
+          && ifPresenteBool(request.resource.data, 'favorito')
+          && ifPresenteTexto(request.resource.data, 'fuente')
+          && ifPresenteTextoONulo(request.resource.data, 'apiSimbolo');
 
         allow delete: if esPropietario(uid);
 

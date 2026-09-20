@@ -106,11 +106,12 @@ export async function actualizarActivo(uid, activoId, datos) {
     return resultado
 }
 
-export async function actualizarPrecioActivo(uid, activoId, precio) {
+export async function actualizarPrecioActivo(uid, activoId, precio, fuente = null) {
     const referencia = doc(db, "usuarios", uid, "activos", activoId)
     const resultado = await updateDoc(referencia, {
         ultimoPrecio: precio,
-        ultimaActualizacion: serverTimestamp()
+        ultimaActualizacion: serverTimestamp(),
+        ...(fuente ? { fuente } : {})
     })
     cacheCapa.invalidar(uid, "activos")
     // Las posiciones unen el activo: su valor/ganancia cambia

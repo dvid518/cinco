@@ -42,7 +42,6 @@ export function render() {
             </section>
         `)}
         <section id="panel" class="glass">
-            <h2>Cuentas</h2>
             <div class="lista-vacia"><div class="loading-spinner"></div></div>
         </section>
     `
@@ -180,7 +179,6 @@ function mostrarDetalleCuentaNormal(panel, c) {
 
     panel.innerHTML = `
         <div class="cuenta-detalle-header">
-            <h2>${c.nombre}</h2>
         </div>
         <div class="cuenta-detalle">
             <div class="saldo ${esPositivo ? "positive" : "negative"}">
@@ -225,7 +223,6 @@ function mostrarDetalleTarjeta(panel, c) {
 
     panel.innerHTML = `
         <div class="cuenta-detalle-header">
-            <h2>${c.nombre}</h2>
         </div>
         <div class="cuenta-detalle">
             <div class="saldo ${deuda > 0 ? "negative" : "positive"}">

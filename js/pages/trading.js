@@ -32,7 +32,6 @@ export function render() {
     `)}
         <section id="panel" class="glass">
             <div class="panel-header">
-                <h2>Trading</h2>
                 <div class="toggle-group" id="toggle-vista-trading">
                     <span class="toggle-option active" data-vista="trades">Trades</span>
                     <span class="toggle-option" data-vista="ordenes">Órdenes</span>

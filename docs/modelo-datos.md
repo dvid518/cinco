@@ -111,7 +111,8 @@ Campos adicionales para `tipo === "credito"`:
 
 Registro diario de cotización. ID = fecha; contiene el `precio` del día y
 metadatos de la consulta (`actualizacion`). Se alimenta al consultar precios
-(`HistorialServicio`) y se exporta hasta 36.000 días en el `.dvid`.
+(`HistorialServicio`) y se exporta hasta 9.999 días en el `.dvid` (máximo
+permitido por Firestore; 10.000 por consulta).
 
 ## `posiciones/{autoId}`
 
@@ -145,7 +146,8 @@ manual/automática según la frecuencia configurada.
 | `activa` | boolean | `true` activa, `false` pausada |
 | `fechaCreacion` | Timestamp | Alta (server) |
 
-Índice: `fechaCreacion` DESC (+ `__name__` DESC).
+Índice: no requiere índice compuesto; el `orderBy` por campo único usa el
+índice automático de `fechaCreacion`.
 
 ## `metas/{autoId}`
 
@@ -166,7 +168,8 @@ Metas de ahorro con seguimiento de progreso.
 modelo. Los aportes se registran como un movimiento `gasto` (ver
 `MetaServicio.aportarMeta`).
 
-Índice: `fechaCreacion` DESC (+ `__name__` DESC).
+Índice: no requiere índice compuesto; el `orderBy` por campo único usa el
+índice automático de `fechaCreacion`.
 
 ## `pendientes/{autoId}`
 
@@ -246,7 +249,8 @@ Condición de disparo (`Orden.debeDisparar`):
 El trade abierto usa el precio de mercado observado como `entrada` y guarda
 `ordenId` para la relación inversa.
 
-Índice: `fechaCreacion` DESC (+ `__name__` DESC).
+Índice: no requiere índice compuesto; el `orderBy` por campo único usa el
+índice automático de `fechaCreacion`.
 
 ## `config/version`
 
@@ -255,8 +259,17 @@ Documento único con la versión publicada; `VersionServicio` la compara con
 
 ## Formato de respaldo `.dvid`
 
-Versión **3.0.0** (`formato: "ESCINCO"`). Incluye `cuentas`, `movimientos`,
+Versión **4.0.0** (`formato: "ESCINCO"`). Incluye `cuentas`, `movimientos`,
 `activos`, `pendientes`, `posiciones` (con `activoSimbolo` en vez de
-`activoId`), `trades`, `historial` (por símbolo), `snapshots` y
-`preferencias`. Todas las fechas se exportan como ISO string. Se importan
-versiones desde 2.0.0 y la importación **agrega** datos (no borra).
+`activoId`), `trades`, `ordenes`, `estrategias`, `metas`, `historial` (por
+símbolo), `snapshots` y `preferencias`. Todas las fechas se exportan como ISO
+string. Se importan versiones desde 2.0.0 (compatible hacia atrás). Los
+respaldos 2.x/3.x no contenían `ordenes`, `estrategias` ni `metas`, por lo que
+se importan sin ellos (solo se restaura lo que incluyen); los respaldos 4.0.0
+los importan completos. La importación **agrega** datos (no borra).
+
+Evolución del formato:
+- **2.0.0** → cuentas, movimientos, activos, pendientes, snapshots.
+- **3.0.0** → + posiciones, trades, historial, preferencias; timestamps
+  normalizados (ISO) para roundtrip fiel.
+- **4.0.0** → + ordenes, estrategias, metas.

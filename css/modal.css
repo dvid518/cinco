@@ -227,8 +227,7 @@
 
 /* Símbolo de divisa junto al label Monto */
 .simbolo-divisa {
-    font-weight: 600;
-    color: var(--positive);
+    color: inherit;
 }
 
 #campo-cuenta {

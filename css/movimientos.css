@@ -136,3 +136,225 @@
 .movimiento-item .monto.negative {
     color: var(--negative);
 }
+
+/* --------------------------------------------
+   LISTA · scroll estilo configuración
+   El panel (#panel) es el único que hace scroll,
+   con su scrollbar sutil ya definido en navegacion.css.
+   -------------------------------------------- */
+
+#lista-movimientos {
+    flex: none;
+    overflow: visible;
+}
+
+#lista-movimientos::after {
+    display: none;
+}
+
+/* --------------------------------------------
+   CAMPOS DE BÚSQUEDA Y LIMPIAR
+   -------------------------------------------- */
+
+.campo-buscar {
+    position: relative;
+    flex: 0 1 220px;
+    min-width: 150px;
+    max-width: 100%;
+}
+
+.campo-buscar .filtro-buscar {
+    width: 100%;
+    padding-right: 38px;
+}
+
+.campo-buscar-limpiar {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--textSecondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.campo-buscar-limpiar[hidden] {
+    display: none;
+}
+
+.campo-buscar-limpiar:hover {
+    color: var(--text);
+    background: var(--lightHover);
+}
+
+.filtros .btn-icon.filtro-limpiar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    padding: 0;
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    color: var(--textSecondary);
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: all 0.3s ease;
+}
+
+.filtros .btn-icon.filtro-limpiar:hover {
+    color: var(--text);
+    border-color: var(--text);
+    background-color: var(--lightHover);
+    transform: scale(1.05);
+}
+
+/* --------------------------------------------
+   CARD · interacción, selección y acciones
+   -------------------------------------------- */
+
+#lista-movimientos .card-item {
+    --card-acciones-w: 104px;
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+    cursor: pointer;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#lista-movimientos .card-item-main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    background: inherit;
+    transition: transform 0.25s ease;
+    will-change: transform;
+}
+
+#lista-movimientos .card-item-acciones {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: var(--card-acciones-w);
+    padding: 0 12px;
+    box-sizing: border-box;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+}
+
+#lista-movimientos .card-item.acciones-visibles .card-item-main,
+#lista-movimientos .card-item:focus-within .card-item-main {
+    transform: translateX(calc(-1 * var(--card-acciones-w)));
+}
+
+#lista-movimientos .card-item.acciones-visibles .card-item-acciones,
+#lista-movimientos .card-item:focus-within .card-item-acciones {
+    transform: translateX(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #lista-movimientos .card-item:hover .card-item-main {
+        transform: translateX(calc(-1 * var(--card-acciones-w)));
+    }
+
+    #lista-movimientos .card-item:hover .card-item-acciones {
+        transform: translateX(0);
+    }
+}
+
+#lista-movimientos .card-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--background);
+    color: var(--textSecondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#lista-movimientos .card-action-btn:hover {
+    color: var(--text);
+    border-color: var(--text);
+    background: var(--lightHover);
+}
+
+#lista-movimientos .card-action-btn.danger:hover {
+    color: var(--negative);
+    border-color: var(--negative);
+}
+
+.card-item.seleccionado {
+    border-color: var(--border);
+    background: var(--lightHover);
+    box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* --------------------------------------------
+   MODAL DE DETALLE · formulario bloqueado
+   -------------------------------------------- */
+
+.form-movimiento.form-bloqueado .form-input:disabled,
+.form-movimiento.form-bloqueado .btn-calendario:disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.form-movimiento.form-bloqueado .btn-calendario:disabled:hover {
+    background: transparent;
+    color: var(--textSecondary);
+}
+
+.form-movimiento.form-bloqueado select.form-input:disabled {
+    cursor: default;
+}
+
+.movimiento-detalle-acciones {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.movimiento-detalle-acciones .glass-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.movimiento-detalle-acciones .glass-btn.primary {
+    background: var(--border);
+    border-color: var(--border);
+    color: var(--textAlt);
+}
+
+.movimiento-detalle-acciones .glass-btn.primary:hover {
+    color: var(--textSecondary);
+}

@@ -190,10 +190,8 @@
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    padding: 16px;
     background: var(--surface);
     border-radius: 25px;
-    border: 1px solid var(--border);
 }
 
 .filtros input,
@@ -217,6 +215,8 @@
 .filtros input:hover,
 .filtros select:hover {
     border-color: var(--text);
+    background-color: var(--lightHover);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .filtros input:focus,
@@ -276,53 +276,6 @@
 .totales-divisa {
     color: var(--text);
     font-weight: 600;
-}
-
-/* --------------------------------------------
-   ACCIONES DE CARD (editar / eliminar)
-   -------------------------------------------- */
-
-.card-item-acciones {
-    display: flex;
-    gap: 6px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.card-item:hover .card-item-acciones {
-    opacity: 1;
-}
-
-.card-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--textSecondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.card-action-btn:hover {
-    color: var(--text);
-    border-color: var(--text);
-    background: var(--lightHover);
-}
-
-.card-action-btn[data-accion="eliminar"]:hover {
-    color: var(--negative);
-    border-color: var(--negative);
-    background: var(--lightHover);
-}
-
-@media (max-width: 640px) {
-    .card-item-acciones {
-        opacity: 1;
-    }
 }
 
 /* --------------------------------------------

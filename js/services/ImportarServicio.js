@@ -16,8 +16,10 @@ import { cacheCapa } from "../core/cache.js"
 // IMPORTAR SERVICIO
 // ============================================
 
-// Versión mínima del formato aceptado. La 3.x agrega posiciones,
-// trades, historial y preferencias; la 2.x sigue siendo compatible.
+// Versión mínima del formato aceptado (compatible hacia atrás con la 2.x).
+// La 3.x agrega posiciones, trades, historial y preferencias; la 4.x agrega
+// ordenes, estrategias y metas. Los respaldos antiguos se importan sin esos
+// datos (los importadores son no-op cuando la sección falta).
 const VERSION_MINIMA = [2, 0, 0]
 
 /**
@@ -73,6 +75,9 @@ export async function importarDVID(uid, archivo) {
             pendientes: datos.pendientes?.length || 0,
             posiciones: datos.posiciones?.length || 0,
             trades: datos.trades?.length || 0,
+            ordenes: datos.ordenes?.length || 0,
+            estrategias: datos.estrategias?.length || 0,
+            metas: datos.metas?.length || 0,
             historial: datos.historial?.length || 0,
             snapshots: datos.snapshots?.length || 0
         })
@@ -84,6 +89,9 @@ export async function importarDVID(uid, archivo) {
             pendientes: 0,
             posiciones: 0,
             trades: 0,
+            ordenes: 0,
+            estrategias: 0,
+            metas: 0,
             historial: 0,
             snapshots: 0,
             errores: []
@@ -120,17 +128,32 @@ export async function importarDVID(uid, archivo) {
         await importarTrades(uid, datos.trades, resultado)
 
         // --------------------------------------
-        // 7. HISTORIAL DE PRECIOS (por símbolo)
+        // 7. ÓRDENES
+        // --------------------------------------
+        await importarOrdenes(uid, datos.ordenes, resultado)
+
+        // --------------------------------------
+        // 8. ESTRATEGIAS
+        // --------------------------------------
+        await importarEstrategias(uid, datos.estrategias, resultado)
+
+        // --------------------------------------
+        // 9. METAS
+        // --------------------------------------
+        await importarMetas(uid, datos.metas, resultado)
+
+        // --------------------------------------
+        // 10. HISTORIAL DE PRECIOS (por símbolo)
         // --------------------------------------
         await importarHistorial(uid, datos.historial, resultado)
 
         // --------------------------------------
-        // 8. SNAPSHOTS
+        // 11. SNAPSHOTS
         // --------------------------------------
         await importarSnapshots(uid, datos.snapshots, resultado)
 
         // --------------------------------------
-        // 9. PREFERENCIAS
+        // 12. PREFERENCIAS
         // --------------------------------------
         await importarPreferencias(uid, datos.preferencias, resultado)
 
@@ -317,6 +340,69 @@ async function importarTrades(uid, trades, resultado) {
     }
 }
 
+async function importarOrdenes(uid, ordenes, resultado) {
+    if (!ordenes || ordenes.length === 0) return
+
+    const CAMPOS_FECHA = ["fechaCreacion", "fechaEjecucion"]
+
+    for (const orden of ordenes) {
+        try {
+            const { id, ...datosLimpios } = orden
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "ordenes")
+            await addDoc(referencia, {
+                ...datos,
+                fechaCreacion: datos.fechaCreacion || serverTimestamp()
+            })
+            resultado.ordenes++
+        } catch (error) {
+            resultado.errores.push(`Orden: ${error.message}`)
+        }
+    }
+}
+
+async function importarEstrategias(uid, estrategias, resultado) {
+    if (!estrategias || estrategias.length === 0) return
+
+    const CAMPOS_FECHA = ["fechaCreacion", "proximaEjecucion", "ultimaEjecucion"]
+
+    for (const estrategia of estrategias) {
+        try {
+            const { id, ...datosLimpios } = estrategia
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "estrategias")
+            await addDoc(referencia, {
+                ...datos,
+                fechaCreacion: datos.fechaCreacion || serverTimestamp()
+            })
+            resultado.estrategias++
+        } catch (error) {
+            resultado.errores.push(`Estrategia: ${error.message}`)
+        }
+    }
+}
+
+async function importarMetas(uid, metas, resultado) {
+    if (!metas || metas.length === 0) return
+
+    const CAMPOS_FECHA = ["fechaCreacion", "fechaLimite"]
+
+    for (const meta of metas) {
+        try {
+            const { id, ...datosLimpios } = meta
+            const datos = deserializarFechas(datosLimpios, CAMPOS_FECHA)
+            const referencia = collection(db, "usuarios", uid, "metas")
+            await addDoc(referencia, {
+                ...datos,
+                fechaCreacion: datos.fechaCreacion || serverTimestamp()
+            })
+            resultado.metas++
+        } catch (error) {
+            resultado.errores.push(`Meta: ${error.message}`)
+        }
+    }
+}
+
 async function importarHistorial(uid, historial, resultado) {
     if (!historial || historial.length === 0) return
 
@@ -403,7 +489,8 @@ async function importarPreferencias(uid, preferencias, resultado) {
 function invalidarCaches(uid) {
     for (const prefijo of [
         "cuentas", "movimientos", "activos", "posiciones",
-        "trades", "pendientes", "snapshots", "historial"
+        "trades", "ordenes", "estrategias", "metas",
+        "pendientes", "snapshots", "historial"
     ]) {
         try {
             if (prefijo === "historial") {
@@ -447,6 +534,7 @@ export async function previsualizarImportacion(archivo) {
     return {
         formato: datos.formato,
         version: datos.version,
+        versionMinima: VERSION_MINIMA.join("."),
         fechaExportacion: datos.fechaExportacion,
         resumen: {
             cuentas: datos.cuentas?.length || 0,
@@ -455,6 +543,9 @@ export async function previsualizarImportacion(archivo) {
             pendientes: datos.pendientes?.length || 0,
             posiciones: datos.posiciones?.length || 0,
             trades: datos.trades?.length || 0,
+            ordenes: datos.ordenes?.length || 0,
+            estrategias: datos.estrategias?.length || 0,
+            metas: datos.metas?.length || 0,
             historial: datos.historial?.length || 0,
             snapshots: datos.snapshots?.length || 0
         }

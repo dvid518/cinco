@@ -10,6 +10,9 @@ import { obtenerPosiciones } from "../repositories/PosicionRepositorio.js"
 import { obtenerTrades } from "../repositories/TradeRepositorio.js"
 import { obtenerSnapshots } from "../repositories/SnapshotRepositorio.js"
 import { obtenerHistorial } from "../repositories/HistorialRepositorio.js"
+import { obtenerOrdenes } from "../repositories/OrdenRepositorio.js"
+import { obtenerEstrategias } from "../repositories/EstrategiaRepositorio.js"
+import { obtenerMetas } from "../repositories/MetaRepositorio.js"
 
 // ============================================
 // EXPORTAR SERVICIO
@@ -19,8 +22,12 @@ import { obtenerHistorial } from "../repositories/HistorialRepositorio.js"
 //  2.0.0 → cuentas, movimientos, activos, pendientes, snapshots
 //  3.0.0 → + posiciones, trades, historial, preferencias
 //          + timestamps normalizados (ISO) para roundtrip fiel
-const VERSION_DVID = "3.0.0"
-const DIAS_HISTORIAL = 36000
+//  4.0.0 → + ordenes, estrategias, metas
+const VERSION_DVID = "4.0.0"
+
+// Firestore rechaza limit() > 10000 (límite duro por consulta), aunque la
+// colección tenga pocos documentos. 9999 días (~27 años) cubre todo caso real.
+const DIAS_HISTORIAL = 9999
 
 /**
  * Convierte fechas (Date o Timestamp de Firestore) y estructuras anidadas
@@ -72,7 +79,10 @@ export async function exportarDVID(uid) {
             posicionesRaw,
             trades,
             snapshots,
-            preferencias
+            preferencias,
+            ordenes,
+            estrategias,
+            metas
         ] = await Promise.all([
             obtenerCuentas(uid),
             obtenerMovimientos(uid),
@@ -80,7 +90,10 @@ export async function exportarDVID(uid) {
             obtenerPosiciones(uid),
             obtenerTrades(uid),
             obtenerSnapshots(uid, 365),      // últimos 365 días
-            obtenerPreferencias(uid)
+            obtenerPreferencias(uid),
+            obtenerOrdenes(uid),
+            obtenerEstrategias(uid),
+            obtenerMetas(uid)
         ])
 
         // Al reimportar los activos pueden crear nuevos IDs, así que las
@@ -106,7 +119,7 @@ export async function exportarDVID(uid) {
         }
 
         const datos = {
-            formato: "ESCINCO",
+            formato: "escinco",
             version: VERSION_DVID,
             fechaExportacion: new Date().toISOString(),
             uid,
@@ -116,6 +129,9 @@ export async function exportarDVID(uid) {
             pendientes: serializarFechas(pendientes),
             posiciones: serializarFechas(posiciones),
             trades: serializarFechas(trades),
+            ordenes: serializarFechas(ordenes),
+            estrategias: serializarFechas(estrategias),
+            metas: serializarFechas(metas),
             historial: serializarFechas(historial),
             snapshots: serializarFechas(snapshots),
             preferencias: serializarFechas(preferencias)

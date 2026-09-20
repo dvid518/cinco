@@ -118,3 +118,7 @@ function mostrarAvisoActualizacion() {
         }
     })
 }
+
+if (typeof window !== "undefined") {
+    window.mostrarAvisoActualizacion = mostrarAvisoActualizacion
+}

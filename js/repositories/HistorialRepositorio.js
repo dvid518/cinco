@@ -75,6 +75,30 @@ export async function cerrarDia(uid, activoId, fecha) {
 }
 
 // --------------------------------------------
+// GUARDAR PRECIO HISTÓRICO (para una fecha concreta)
+// --------------------------------------------
+// Lo usa la estrategia automática para rellenar el historial
+// con los días devueltos por la API. No pisa un día ya guardado.
+
+export async function guardarPrecioHistorico(uid, activoId, fecha, precio) {
+    const referencia = refDia(uid, activoId, fecha)
+
+    const existente = await getDoc(referencia)
+
+    if (!existente.exists()) {
+        await setDoc(referencia, {
+            fecha: fecha,
+            precio: precio,
+            cerrado: false,
+            actualizacion: serverTimestamp()
+        })
+        cacheCapa.invalidarPrefijo(uid, `historial:${activoId}`)
+    }
+
+    return fecha
+}
+
+// --------------------------------------------
 // OBTENER HISTORIAL DE UN ACTIVO (últimos N días)
 // --------------------------------------------
 
