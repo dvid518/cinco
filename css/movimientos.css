@@ -34,7 +34,6 @@
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    background: var(--surface);
 }
 
 /* Misma altura (y border-box) en TODOS los controles y sus wrappers. */

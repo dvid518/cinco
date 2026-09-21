@@ -3,7 +3,7 @@ import { sesion } from "../core/sesion.js"
 import { getFechaHoy } from "../core/fechas.js"
 import { icono } from "../core/iconos.js"
 import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
-import { abrirModal, cerrarModal } from "../ui/modal.js"
+import { abrirModal, cerrarModal, estaAbierto } from "../ui/modal.js"
 import {
     generarFormularioMovimiento,
     recogerDatosFormulario,
@@ -36,14 +36,21 @@ const FILTROS_DISPONIBLES = [
     { filtro: "gasto", label: "Gastos", icono: "arrow-up-right", tipos: ["gasto"] },
     { filtro: "transferencia", label: "Transferencias", icono: "arrow-left-right", tipos: ["transferencia"] },
     { filtro: "cambioDivisa", label: "Cambio divisa", icono: "refresh-cw", tipos: ["cambioDivisa"] },
-    { filtro: "inversiones", label: "Inversiones", icono: "chart-candlestick", tipos: ["compraActivo", "ventaActivo"] },
-    { filtro: "p2p", label: "P2P", icono: "coins", tipos: ["p2pCompra", "p2pVenta"] },
+    { filtro: "inversiones", label: "Inversiones", icono: "chart-candlestick", tipos: ["compraActivo", "ventaActivo"], pagina: "inversiones" },
+    { filtro: "p2p", label: "P2P", icono: "coins", tipos: ["p2pCompra", "p2pVenta"], pagina: "trading" },
     { filtro: "tarjetas", label: "Tarjetas", icono: "credit-card", tipos: ["compraTarjeta", "pagoTarjeta"] },
     { filtro: "error", label: "Errores", icono: "alert-triangle", tipos: ["error"] }
 ]
 
+// Filtros visibles según las páginas habilitadas: sin inversiones ni
+// trading, se ocultan sus filtros (sus movimientos se ven en "Todos").
+function filtrosVisibles() {
+    const paginas = sesion.getPaginasVisibles()
+    return FILTROS_DISPONIBLES.filter(f => !f.pagina || paginas[f.pagina] !== false)
+}
+
 export function render() {
-    const botones = FILTROS_DISPONIBLES
+    const botones = filtrosVisibles()
         .map(f => `
             <button class="glass${f.filtro === "todos" ? " act" : ""}" data-filtro="${f.filtro}">
                 ${icono(f.icono, 18)}<span>${f.label}</span>
@@ -202,7 +209,7 @@ function plantillaVacio() {
 
 function plantillaMovimiento(m) {
     const monto = montoDeMovimiento(m)
-    const esPositivo = esMovimientoPositivo(m.tipo)
+    const esPositivo = esMovimientoPositivo(m)
     const signo = esPositivo ? "+" : "-"
     const clase = esPositivo ? "positive" : "negative"
     const tipoNombre = CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Desconocido"
@@ -234,11 +241,14 @@ function plantillaMovimiento(m) {
     `
 }
 
-function esMovimientoPositivo(tipo) {
+function esMovimientoPositivo(m) {
+    if (m?.tipo === TIPOS_MOVIMIENTO.ERROR) {
+        return m.operacion === "sumar"
+    }
     return (
-        tipo === "ingreso" ||
-        tipo === "ventaActivo" ||
-        tipo === "p2pVenta"
+        m?.tipo === "ingreso" ||
+        m?.tipo === "ventaActivo" ||
+        m?.tipo === "p2pVenta"
     )
 }
 
@@ -249,7 +259,7 @@ function montoDeMovimiento(m) {
     if (m.cantidad && m.precio) {
         const total = Number(m.cantidad) * Number(m.precio)
         const comision = Number(m.comision) || 0
-        return esMovimientoPositivo(m.tipo) ? (total - comision) : (total + comision)
+        return esMovimientoPositivo(m) ? (total - comision) : (total + comision)
     }
     if (m.montoOrigen) return Number(m.montoOrigen) || 0
     if (m.montoDestino) return Number(m.montoDestino) || 0
@@ -423,7 +433,7 @@ function manejarClickFueraCards(evento) {
 
 function manejarTecladoSeleccion(evento) {
     if (!document.getElementById("lista-movimientos")) return
-    if (document.getElementById("modal-activo")) return
+    if (estaAbierto()) return
 
     if (evento.key === "Escape") {
         if (seleccionados.size > 0) {
@@ -624,7 +634,7 @@ function renderizarTotales(filtrados) {
             porDivisa[divisa] = { positivo: 0, negativo: 0 }
         }
         const monto = montoDeMovimiento(m)
-        if (esMovimientoPositivo(m.tipo)) {
+        if (esMovimientoPositivo(m)) {
             porDivisa[divisa].positivo += monto
         } else {
             porDivisa[divisa].negativo += monto
@@ -672,32 +682,97 @@ function fechaDeMovimiento(m) {
 // LASTBAR (handlers centralizados en app.js)
 // ============================================
 
+// Tipos que se pueden crear según las páginas visibles:
+//  · activos   → requieren la página "inversiones"
+//  · p2p       → requieren la página "trading"
+//  · compraTarjeta NO aparece: comprar con tarjeta es un gasto desde la
+//    cuenta de la tarjeta (aumenta su deuda), no un tipo aparte.
+function tiposDisponiblesParaCrear() {
+    const paginas = sesion.getPaginasVisibles()
+    const tipos = [
+        TIPOS_MOVIMIENTO.INGRESO,
+        TIPOS_MOVIMIENTO.GASTO,
+        TIPOS_MOVIMIENTO.TRANSFERENCIA,
+        TIPOS_MOVIMIENTO.CAMBIO_DIVISA
+    ]
+
+    if (paginas.inversiones !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.COMPRA_ACTIVO, TIPOS_MOVIMIENTO.VENTA_ACTIVO)
+    }
+    if (paginas.trading !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.P2P_COMPRA, TIPOS_MOVIMIENTO.P2P_VENTA)
+    }
+
+    tipos.push(TIPOS_MOVIMIENTO.PAGO_TARJETA, TIPOS_MOVIMIENTO.ERROR)
+
+    return tipos
+}
+
+// Tipos destacados (grandes, con círculo e ícono) frente a los secundarios.
+const TIPOS_DESTACADOS = [
+    TIPOS_MOVIMIENTO.INGRESO,
+    TIPOS_MOVIMIENTO.GASTO
+]
+
+const ICONO_TIPO_MOVIMIENTO = {
+    [TIPOS_MOVIMIENTO.INGRESO]: "arrow-down-left",
+    [TIPOS_MOVIMIENTO.GASTO]: "arrow-up-right"
+}
+
 export function abrirSelectorTipoMovimiento() {
     // Garantizar uid actual para quien invoque desde otra página
     uid = sesion.uid
-    const tipos = Object.values(TIPOS_MOVIMIENTO)
-    const opciones = tipos
-        .map(t => {
-            const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || t
-            return `<button class="tipo-movimiento-btn" data-tipo="${t}" type="button">${nombre}</button>`
-        })
-        .join("")
+
+    const disponibles = tiposDisponiblesParaCrear()
+    const destacados = TIPOS_DESTACADOS.filter(t => disponibles.includes(t))
+    const secundarios = disponibles.filter(t => !TIPOS_DESTACADOS.includes(t))
+
+    const botonDestacado = t => {
+        const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || t
+        return `
+        <div class="tipo-movimiento-btn tipo-principal" data-tipo="${t}">
+            <button type="button" class="tipo-icono" aria-label="Crear ${nombre}">
+                ${icono(ICONO_TIPO_MOVIMIENTO[t] || "plus-circle", 24)}
+            </button>
+            <span class="tipo-texto">${nombre}</span>
+        </div>
+    `
+    }
+    const botonSecundario = t => {
+        const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || t
+        return `<button class="tipo-movimiento-btn tipo-secundario" data-tipo="${t}" type="button">${nombre}</button>`
+    }
 
     abrirModal({
         titulo: "Seleccionar tipo",
-        contenido: `<div class="selector-tipos">${opciones}</div>`,
+        contenido: `
+            <div class="selector-tipos selector-tipos-destacados">
+                ${destacados.map(botonDestacado).join("")}
+            </div>
+            ${secundarios.length > 0 ? `
+            <div class="selector-tipos selector-tipos-secundarios">
+                ${secundarios.map(botonSecundario).join("")}
+            </div>` : ""}
+        `,
         variante: "narrow",
         confirmText: null,
         cancelText: null,
         cerrarAlClickFuera: true
     })
 
-    document.querySelectorAll(".tipo-movimiento-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const tipo = btn.dataset.tipo
-            cerrarModal()
-            abrirFormularioMovimiento(tipo, null)
-        })
+    const abrirFormularioPorTipo = tipo => {
+        cerrarModal()
+        abrirFormularioMovimiento(tipo, null)
+    }
+
+    document.querySelectorAll(".tipo-principal").forEach(cont => {
+        const tipo = cont.dataset.tipo
+        const iconoBtn = cont.querySelector(".tipo-icono")
+        iconoBtn?.addEventListener("click", () => abrirFormularioPorTipo(tipo))
+    })
+
+    document.querySelectorAll(".tipo-secundario").forEach(btn => {
+        btn.addEventListener("click", () => abrirFormularioPorTipo(btn.dataset.tipo))
     })
 }
 
@@ -1082,7 +1157,7 @@ export async function exportarExtractoCSV() {
                 CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Desconocido",
                 m.concepto || m.activo || CONFIG_MOVIMIENTOS[m.tipo]?.nombre || "Sin concepto",
                 nombrePorId.get(m.cuenta || m.cuentaOrigen || m.tarjeta) || m.cuenta || m.cuentaOrigen || m.tarjeta || "",
-                `${esMovimientoPositivo(m.tipo) ? "+" : "-"}${Math.abs(montoDeMovimiento(m)).toFixed(2)}`,
+                `${esMovimientoPositivo(m) ? "+" : "-"}${Math.abs(montoDeMovimiento(m)).toFixed(2)}`,
                 (m.divisa || "PEN").toUpperCase()
             ])
 

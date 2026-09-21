@@ -68,6 +68,7 @@
 
 :root {
     --onyx: #141414;
+    --lightOnyx: #14141430;
     --graphite: #2C2C2C;
     --lightGraphite: #2C2C2C36;
     --slateGrey: #738391;
@@ -86,8 +87,6 @@
 
     --font-primary: "Inter", Arial, sans-serif;
     --font-secondary: "Roboto Mono", "Courier New", monospace;
-
-    --anillo-positivo: rgba(0, 230, 149, 0.1);
 }
 
 /* Tema oscuro */
@@ -113,7 +112,7 @@
     --borderAlt: var(--slateGrey);
 
     --shadow: var(--lightPaleSky);
-    --blurBackground: var(--lightGraphite);
+    --blurBackground: var(--lightOnyx);
 }
 
 /* Tema claro */
@@ -267,6 +266,12 @@ input[type="number"] {
     font-size: 14px;
     transition: all 0.3s ease;
     outline: none;
+}
+
+.form-input:hover {
+    background-color: var(--lightHover);
+    border-color: var(--text);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .form-input::placeholder {

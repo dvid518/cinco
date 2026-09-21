@@ -132,6 +132,7 @@
 
 .select:hover {
     border-color: var(--text);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 /* ========================================
@@ -154,7 +155,7 @@
     background: var(--lightHover);
     border-color: var(--text);
     transform: scale(1.02);
-    box-shadow: 0 0 5px var(--shadow);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .glass-btn.danger {

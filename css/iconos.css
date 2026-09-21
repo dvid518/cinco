@@ -21,13 +21,6 @@
     color: var(--text);
 }
 
-#lastbar-item-tema:hover,
-#lastbar-item-tema:focus-visible {
-    box-shadow: 0 0 0 2px var(--anillo-positivo);
-    background-color: var(--lightHover);
-    outline: none;
-}
-
 #lastbar-item-tema:focus-visible .lucide {
     color: var(--positive);
 }

@@ -249,7 +249,7 @@ function abrirFormularioCrearPendiente() {
             if (!datos) return false
 
             try {
-                await crearPendiente(uid, datos)
+                await crearPendiente(sesion.uid, datos)
                 mostrarNotificacion("exito", "Pendiente creado correctamente")
                 return true
             } catch (error) {
@@ -325,6 +325,46 @@ function recogerDatosFormularioPendiente() {
 // CONSOLIDAR PENDIENTE
 // ============================================
 
+/**
+ * Pre-rellena el formulario de movimiento con los datos del pendiente
+ * (concepto, monto, divisa y vencimiento), dejándolo modificable.
+ * La divisa se refleja preseleccionando la cuenta de esa moneda, para que
+ * el símbolo del label y el movimiento guardado coincidan con el pendiente.
+ */
+function prellenarFormularioConPendiente({ concepto = "", monto, divisa, fechaVencimiento }) {
+    const campoMonto = document.getElementById('campo-monto')
+    const campoCantidad = document.getElementById('campo-cantidad')
+    const campoConcepto = document.getElementById('campo-concepto')
+    const campoFecha = document.getElementById('campo-fecha')
+
+    if (monto != null && !Number.isNaN(monto)) {
+        if (campoMonto) campoMonto.value = monto
+        if (campoCantidad) campoCantidad.value = monto
+    }
+    if (campoConcepto) campoConcepto.value = concepto
+
+    // Preseleccionar la cuenta que use la divisa del pendiente (si existe).
+    if (divisa) {
+        const campoCuenta = document.getElementById('campo-cuenta') || document.getElementById('campo-cuentaOrigen')
+        if (campoCuenta) {
+            const moneda = String(divisa).toLowerCase()
+            const opcion = [...campoCuenta.options].find(o => (o.dataset.moneda || "").toLowerCase() === moneda)
+            if (opcion) campoCuenta.value = opcion.value
+        }
+    }
+
+    // El vencimiento es una buena sugerencia, pero solo si no quedó en el
+    // pasado respecto al límite "máximo: hoy" del campo fecha.
+    if (fechaVencimiento && campoFecha && !campoFecha.disabled) {
+        const fecha = fechaVencimiento instanceof Date
+            ? fechaVencimiento.toISOString().split("T")[0]
+            : String(fechaVencimiento).slice(0, 10)
+        if (fecha && campoFecha.max && fecha <= campoFecha.max) {
+            campoFecha.value = fecha
+        }
+    }
+}
+
 export async function abrirConsolidacionPendiente(pendiente, uidOrigen = sesion.uid) {
     const uid = uidOrigen || sesion.uid
     const tiposCompatibles = obtenerTiposCompatibles(pendiente.tipo)
@@ -362,13 +402,13 @@ export async function abrirConsolidacionPendiente(pendiente, uidOrigen = sesion.
         }
     })
 
-    // Prefill con los datos del pendiente
-    const campoMonto = document.getElementById('campo-monto')
-    const campoCantidad = document.getElementById('campo-cantidad')
-    const campoConcepto = document.getElementById('campo-concepto')
-    if (campoMonto) campoMonto.value = pendiente.monto
-    if (campoCantidad && pendiente.monto) campoCantidad.value = pendiente.monto
-    if (campoConcepto) campoConcepto.value = pendiente.concepto
+    // Prefill con los datos del pendiente (modificables)
+    prellenarFormularioConPendiente({
+        concepto: pendiente.concepto,
+        monto: pendiente.monto,
+        divisa: pendiente.divisa,
+        fechaVencimiento: pendiente.fechaVencimiento
+    })
 
     vincularSimboloDivisa()
 }
@@ -467,14 +507,12 @@ async function procesarGrupoConsolidacion(grupos, indice, uid) {
         }
     })
 
-    const campoMonto = document.getElementById('campo-monto')
-    const campoConcepto = document.getElementById('campo-concepto')
-    if (campoMonto) campoMonto.value = total.toFixed(2)
-    if (campoConcepto) {
-        campoConcepto.value = cantidad === 1
-            ? grupo.lista[0].concepto
-            : `Consolidación de ${cantidad} pendientes`
-    }
+    prellenarFormularioConPendiente({
+        concepto: cantidad === 1 ? grupo.lista[0].concepto : `Consolidación de ${cantidad} pendientes`,
+        monto: total,
+        divisa: grupo.divisa,
+        fechaVencimiento: cantidad === 1 ? grupo.lista[0].fechaVencimiento : null
+    })
 
     vincularSimboloDivisa()
 }

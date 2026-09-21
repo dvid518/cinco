@@ -1,6 +1,7 @@
 import { login, loginConGoogle, observeAuth, obtenerMetodosDeEmail } from "../../firebase/auth.js"
 import { initTemaLocal } from "../core/tema.js"
 import { initPWA } from "../core/pwa.js"
+import { initDoodles } from "../ui/doodles.js"
 import { icono } from "../core/iconos.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 
@@ -19,6 +20,7 @@ const botonGoogle = document.getElementById("login-google")
 
 initTemaLocal()
 initPWA()
+initDoodles({ logoSpin: true })
 
 // ============================================
 // LOGIN CON EMAIL + CONTRASEÑA

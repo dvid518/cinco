@@ -199,9 +199,17 @@ async function actualizarSaldos(uid, tipo, datos) {
             await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "sumar")
             break
 
-        case TIPOS_MOVIMIENTO.GASTO:
-            await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "restar")
+        case TIPOS_MOVIMIENTO.GASTO: {
+            const cuenta = await obtenerCuenta(uid, datos.cuenta)
+            if (cuenta?.tipo === "credito") {
+                // Comprar con una tarjeta de crédito es un gasto que
+                // aumenta su deuda (no mueve saldoInicial).
+                await actualizarDeudaTarjeta(uid, datos.cuenta, datos.monto, "aumentar")
+            } else {
+                await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "restar")
+            }
             break
+        }
 
         case TIPOS_MOVIMIENTO.TRANSFERENCIA:
             await actualizarSaldoCuenta(uid, datos.cuentaOrigen, datos.monto, "restar")
@@ -249,7 +257,11 @@ async function actualizarSaldos(uid, tipo, datos) {
             break
 
         case TIPOS_MOVIMIENTO.ERROR:
-            // Sin efecto en saldos
+            if (datos.operacion === "sumar") {
+                await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "sumar")
+            } else if (datos.operacion === "restar") {
+                await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "restar")
+            }
             break
 
         default:
@@ -267,9 +279,15 @@ async function revertirSaldos(uid, tipo, datos) {
             await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "restar")
             break
 
-        case TIPOS_MOVIMIENTO.GASTO:
-            await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "sumar")
+        case TIPOS_MOVIMIENTO.GASTO: {
+            const cuenta = await obtenerCuenta(uid, datos.cuenta)
+            if (cuenta?.tipo === "credito") {
+                await actualizarDeudaTarjeta(uid, datos.cuenta, datos.monto, "reducir")
+            } else {
+                await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "sumar")
+            }
             break
+        }
 
         case TIPOS_MOVIMIENTO.TRANSFERENCIA:
             await actualizarSaldoCuenta(uid, datos.cuentaOrigen, datos.monto, "sumar")
@@ -302,6 +320,14 @@ async function revertirSaldos(uid, tipo, datos) {
         case TIPOS_MOVIMIENTO.PAGO_TARJETA:
             await actualizarDeudaTarjeta(uid, datos.tarjeta, datos.monto, "aumentar")
             await actualizarSaldoCuenta(uid, datos.cuentaOrigen, datos.monto, "sumar")
+            break
+
+        case TIPOS_MOVIMIENTO.ERROR:
+            if (datos.operacion === "sumar") {
+                await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "restar")
+            } else if (datos.operacion === "restar") {
+                await actualizarSaldoCuenta(uid, datos.cuenta, datos.monto, "sumar")
+            }
             break
 
         default:

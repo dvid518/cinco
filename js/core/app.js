@@ -4,6 +4,7 @@ import { initRouter } from "./router.js"
 import { obtenerPreferencias } from "../../firebase/firestore.js"
 import { initTemaLocal, sincronizarTemaFirestore } from "./tema.js"
 import { initPWA } from "./pwa.js"
+import { initDoodles } from "../ui/doodles.js"
 import { configurarDelegacionLastbar } from "./lastbar.js"
 import { configurarColapsoSidebar } from "../ui/colapsoSidebar.js"
 
@@ -15,6 +16,9 @@ let avisoBootVisible = false
 // Aplicar tema ANTES de cualquier otra cosa (evita flash)
 initTemaLocal()
 initPWA()
+
+// Escincos doodles (solo el tap de 5 dedos; el spin del logo es de login/register)
+initDoodles({ logoSpin: false })
 
 export async function initApp() {
     if (bootEnProgreso) return

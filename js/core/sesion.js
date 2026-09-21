@@ -15,6 +15,10 @@ class Sesion {
                 inactividadMinutos: 15,
                 cerrarAlCerrarPestana: true
             },
+            accesibilidad: {
+                modalesPersistentes: false,
+                doodles: false
+            },
             movimientosRecientes: 5
         }
         // Intentar cargar preferencias guardadas al instanciar
@@ -80,6 +84,12 @@ class Sesion {
             this.preferencias.seg = {
                 ...this.preferencias.seg,
                 ...preferencias.seg
+            }
+        }
+        if (preferencias?.accesibilidad) {
+            this.preferencias.accesibilidad = {
+                ...this.preferencias.accesibilidad,
+                ...preferencias.accesibilidad
             }
         }
         if (preferencias?.movimientosRecientes !== undefined) {
@@ -170,6 +180,10 @@ class Sesion {
             seg: {
                 inactividadMinutos: 15,
                 cerrarAlCerrarPestana: true
+            },
+            accesibilidad: {
+                modalesPersistentes: false,
+                doodles: false
             },
             movimientosRecientes: 5
         }

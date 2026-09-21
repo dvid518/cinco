@@ -3,7 +3,7 @@ import { cacheCapa } from "../core/cache.js"
 import { activarSpinLogo, desactivarSpinLogo, navigateTo } from "../core/router.js"
 import { obtenerCuentas, obtenerMovimientos } from "../../firebase/firestore.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
-import { CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
+import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import {
     registrarSnapshot,
     obtenerPatrimonioParaGrafico,
@@ -24,7 +24,7 @@ import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { parseFechaLocal, fechaLocalISO } from "../core/fechas.js"
 import { icono } from "../core/iconos.js"
-import { ICONOS_META } from "../models/Meta.js"
+
 import {
     obtenerMetas,
     crearMeta,
@@ -73,7 +73,7 @@ function obtenerPeriodo(id) {
 export function render() {
     return `
         <div class="dashboard">
-            <div class="card primary patrimonio-card">
+            <div class="glass card primary patrimonio-card">
                 <div class="card-header">
                     <span class="card-title">Patrimonio Total</span>
                     <select class="divisa-select" id="divisa-select" aria-label="Divisa">
@@ -86,32 +86,32 @@ export function render() {
                 <div class="card-sub" id="patrimonio-detalle">—</div>
             </div>
 
-            <div class="card card-navegable positive" id="card-cuentas" role="button" tabindex="0" title="Ver cuentas">
+            <div class="glass card card-navegable positive" id="card-cuentas" role="button" tabindex="0" title="Ver cuentas">
                 <div class="card-title">Cuentas</div>
                 <div class="card-value" id="total-cuentas">0</div>
                 <div class="card-sub">Activas y tarjetas</div>
             </div>
 
-            <div class="card card-navegable" id="card-inversiones" role="button" tabindex="0" title="Ver inversiones">
+            <div class="glass card card-navegable" id="card-inversiones" role="button" tabindex="0" title="Ver inversiones">
                 <div class="card-title">Inversiones</div>
                 <div class="card-value" id="inversiones-valor">—</div>
                 <div class="card-sub" id="inversiones-detalle">—</div>
             </div>
 
-            <div class="card card-navegable" id="card-vencimientos" role="button" tabindex="0" title="Ver pendientes">
+            <div class="glass card card-navegable" id="card-vencimientos" role="button" tabindex="0" title="Ver pendientes">
                 <div class="card-title">Próximos vencimientos</div>
                 <div class="card-value" id="vencimientos-cantidad">—</div>
                 <div class="card-sub" id="vencimientos-detalle">—</div>
             </div>
 
-            <div class="card card-navegable movimientos-card" id="card-movimientos" role="button" tabindex="0" title="Ver movimientos">
+            <div class="glass card card-navegable movimientos-card" id="card-movimientos" role="button" tabindex="0" title="Ver movimientos">
                 <div class="card-title">Últimos movimientos</div>
                 <div class="movimientos-lista" id="movimientos-lista">
                     <p class="card-vacio">Cargando...</p>
                 </div>
             </div>
 
-            <div class="card card-navegable favoritos-card" id="card-favoritos" role="button" tabindex="0" title="Ver inversiones">
+            <div class="glass card card-navegable favoritos-card" id="card-favoritos" role="button" tabindex="0" title="Ver inversiones">
                 <div class="card-header">
                     <span class="card-title">Favoritos</span>
                     <span class="card-badge" id="favoritos-cantidad">0</span>
@@ -121,7 +121,7 @@ export function render() {
                 </div>
             </div>
 
-            <div class="card metas-card" id="card-metas">
+            <div class="glass card metas-card" id="card-metas">
                 <div class="card-header">
                     <span class="card-title">Metas de ahorro</span>
                     <button type="button" class="glass-btn btn-meta-nueva" id="btn-nueva-meta">
@@ -133,7 +133,7 @@ export function render() {
                 </div>
             </div>
 
-            <div class="card grafico-patrimonio-card">
+            <div class="glass card grafico-patrimonio-card">
                 <div class="card-header">
                     <span class="card-title">Evolución patrimonial</span>
                     <div class="toggle-group grafico-periodos" id="grafico-periodos">
@@ -527,7 +527,7 @@ function actualizarMovimientos() {
 
 function plantillaMovimiento(m) {
     const monto = montoDeMovimiento(m)
-    const esPositivo = esMovimientoPositivo(m.tipo)
+    const esPositivo = esMovimientoPositivo(m)
     const signo = esPositivo ? "+" : "-"
     const clase = esPositivo ? "positive" : "negative"
     const tipoNombre = CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Movimiento"
@@ -543,11 +543,15 @@ function plantillaMovimiento(m) {
     `
 }
 
-function esMovimientoPositivo(tipo) {
+function esMovimientoPositivo(m) {
+    if (m?.tipo === TIPOS_MOVIMIENTO.ERROR) {
+        return m.operacion === "sumar"
+    }
+    if (!m?.tipo) return false
     return (
-        tipo === "ingreso" ||
-        tipo === "ventaActivo" ||
-        tipo === "p2pVenta"
+        m.tipo === "ingreso" ||
+        m.tipo === "ventaActivo" ||
+        m.tipo === "p2pVenta"
     )
 }
 
@@ -558,7 +562,7 @@ function montoDeMovimiento(m) {
     if (m.cantidad && m.precio) {
         const total = Number(m.cantidad) * Number(m.precio)
         const comision = Number(m.comision) || 0
-        return esMovimientoPositivo(m.tipo) ? (total - comision) : (total + comision)
+        return esMovimientoPositivo(m) ? (total - comision) : (total + comision)
     }
     if (m.montoOrigen) return Number(m.montoOrigen) || 0
     if (m.montoDestino) return Number(m.montoDestino) || 0
@@ -811,15 +815,8 @@ function formatearFecha(fecha) {
     return d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
-function opcionesIconos(seleccionado) {
-    return ICONOS_META
-        .map(i => `<option value="${i.valor}" ${i.valor === seleccionado ? "selected" : ""}>${i.etiqueta}</option>`)
-        .join("")
-}
-
 function abrirModalMeta(meta = null) {
     const esEdicion = !!meta
-    const valorIcono = meta?.icono || "target"
     const valorDivisa = meta?.divisa || getDivisaPrincipal()
     const valorFecha = meta?.fechaLimite ? fechaLocalISO(new Date(meta.fechaLimite)) : ""
 
@@ -839,29 +836,30 @@ function abrirModalMeta(meta = null) {
                     <input type="number" id="meta-actual" class="form-input" step="0.01" min="0" placeholder="0.00" value="${meta?.montoActual ?? 0}">
                 </div>
             </div>
-            <div class="form-grupo-doble">
-                <div class="form-group">
-                    <label for="meta-divisa">Divisa *</label>
-                    <select id="meta-divisa" class="form-input">
-                        ${["pen", "usd", "usdt"].map(d => `<option value="${d}" ${d === valorDivisa ? "selected" : ""}>${d.toUpperCase()}</option>`).join("")}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="meta-fecha">Fecha límite</label>
-                    <input type="date" id="meta-fecha" class="form-input" value="${valorFecha}">
-                </div>
+            <div class="form-group">
+                <label for="meta-divisa">Divisa *</label>
+                <select id="meta-divisa" class="form-input">
+                    ${["pen", "usd", "usdt"].map(d => `<option value="${d}" ${d === valorDivisa ? "selected" : ""}>${d.toUpperCase()}</option>`).join("")}
+                </select>
             </div>
-            <div class="form-grupo-doble">
-                <div class="form-group">
-                    <label for="meta-icono">Icono</label>
-                    <select id="meta-icono" class="form-input">${opcionesIconos(valorIcono)}</select>
-                </div>
-                <div class="form-group">
-                    <label for="meta-activa">Estado</label>
-                    <select id="meta-activa" class="form-input">
-                        <option value="true" ${meta?.activa !== false ? "selected" : ""}>Activa</option>
-                        <option value="false" ${meta?.activa === false ? "selected" : ""}>Pausada</option>
-                    </select>
+            <div class="form-group">
+                <label for="meta-fecha">Fecha límite</label>
+                <div class="campo-fecha">
+                    <input type="date" id="meta-fecha" class="form-input" value="${valorFecha}">
+                    <button type="button" class="btn-calendario" aria-label="Abrir calendario">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days preview-icon">
+                            <path d="M8 2v4"/>
+                            <path d="M16 2v4"/>
+                            <rect width="18" height="18" x="3" y="4" rx="2"/>
+                            <path d="M3 10h18"/>
+                            <path d="M8 14h.01"/>
+                            <path d="M12 14h.01"/>
+                            <path d="M16 14h.01"/>
+                            <path d="M8 18h.01"/>
+                            <path d="M12 18h.01"/>
+                            <path d="M16 18h.01"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </form>
@@ -878,8 +876,6 @@ function abrirModalMeta(meta = null) {
             const montoActual = parseFloat(document.getElementById("meta-actual")?.value) || 0
             const divisa = document.getElementById("meta-divisa")?.value
             const fechaValor = document.getElementById("meta-fecha")?.value
-            const iconoValor = document.getElementById("meta-icono")?.value
-            const activa = document.getElementById("meta-activa")?.value === "true"
 
             if (!nombre) {
                 mostrarNotificacion("error", "El nombre es obligatorio")
@@ -895,9 +891,7 @@ function abrirModalMeta(meta = null) {
                 montoObjetivo,
                 montoActual,
                 divisa,
-                fechaLimite: fechaValor ? parseFechaLocal(fechaValor) : null,
-                icono: iconoValor,
-                activa
+                fechaLimite: fechaValor ? parseFechaLocal(fechaValor) : null
             }
 
             try {

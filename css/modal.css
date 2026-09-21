@@ -7,8 +7,6 @@
     position: fixed;
     inset: 0;
     background: var(--blurBackground);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     z-index: 1000;
     display: flex;
     align-items: center;
@@ -17,8 +15,19 @@
     animation: fadeIn 0.2s ease;
 }
 
+.modal-overlay.modal-overlay-ventana {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    pointer-events: none;
+    z-index: calc(1000 + var(--z-modal, 0));
+}
+
+.modal-overlay.modal-overlay-ventana .modal {
+    pointer-events: auto;
+}
+
 .modal {
-    background: var(--background);
     color: var(--text);
     border-radius: 20px;
     max-width: 560px;
@@ -27,7 +36,9 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border);
-    box-shadow: 0 24px 64px var(--shadow);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 0 20px var(--shadow);
+    -webkit-backdrop-filter: blur(24px);
     animation: slideUp 0.3s ease;
 
     /* Posición dinámica del drag */
@@ -278,17 +289,53 @@
     background: var(--lightHover);
 }
 
-/* Modal procesando confirmación: blur en toda la pantalla + sin
-   interacción (evita doble envío mientras el servidor responde) */
+/* Modal procesando confirmación: se difumina SOLO el cuerpo del modal y se
+   muestra el escinco girando en su centro. El overlay no difumina ni tapa la
+   pantalla (la interfaz sigue visible y navegable con scroll), pero SÍ captura
+   los clics para que no se pueda interactuar con los botones de detrás mien-
+   tras la acción se procesa. El propio modal queda sin interacción (botones
+   desactivados + pointer-events none). */
 .modal-overlay.modal-procesando {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    pointer-events: auto;
 }
 
 .modal-overlay.modal-procesando .modal {
-    filter: blur(4px);
-    opacity: 0.9;
+    position: relative;
     pointer-events: none;
+    filter: none;
+    opacity: 1;
+    z-index: calc(1000 + var(--z-modal, 0));
+}
+
+.modal-overlay.modal-procesando .modal-body {
+    filter: blur(3px);
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.modal-procesando-logo {
+    position: absolute;
+    top: 48%;
+    left: 50%;
+    display: flex;
+    width: 72px;
+    height: 72px;
+    align-items: center;
+    justify-content: center;
+    color: var(--textSecondary);
+    pointer-events: none;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+}
+
+.modal-procesando-logo svg {
+    width: 48px;
+    height: 48px;
+    color: var(--textSecondary);
+    animation: loading 5s infinite;
 }
 
 /* Select personalizado */
@@ -325,6 +372,31 @@
         opacity: 1;
         transform: translate(var(--modal-x, 0), var(--modal-y, 0)) scale(1);
     }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 1;
+        transform: translate(var(--modal-x, 0), var(--modal-y, 0)) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translate(var(--modal-x, 0), calc(var(--modal-y, 0) + 20px)) scale(0.98);
+    }
+}
+
+.modal-overlay.cerrando {
+    animation: fadeOut 0.2s ease forwards;
+    pointer-events: none;
+}
+
+.modal-overlay.cerrando .modal {
+    animation: slideDown 0.3s ease forwards;
 }
 
 /* ============================================
@@ -486,8 +558,9 @@
     text-transform: uppercase;
 }
 
-.input-error {
-    border-color: var(--negative) !important;
+.form-group .form-input.input-error,
+.form-group .form-input.input-error:focus {
+    border-color: var(--negative);
 }
 
 /* ============================================

@@ -21,6 +21,10 @@
     flex-shrink: 0;
 }
 
+.pendiente-crear-btn {
+    box-shadow: 0 0 10px var(--shadow);
+}
+
 /* --------------------------------------------
    CONSOLIDACIÓN EN LOTE
    -------------------------------------------- */
@@ -178,7 +182,15 @@
     gap: 8px;
 }
 
-.tipo-movimiento-btn {
+.selector-tipos-destacados {
+    gap: 12px;
+}
+
+.selector-tipos-secundarios {
+    margin-top: 12px;
+}
+
+.tipo-movimiento-btn:not(.tipo-principal) {
     padding: 10px 14px;
     border-radius: 40px;
     background: var(--surface);
@@ -191,9 +203,50 @@
     transition: all 0.2s ease;
 }
 
-.tipo-movimiento-btn:hover {
+.tipo-movimiento-btn.tipo-principal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+    background: transparent;
+}
+
+.tipo-movimiento-btn.tipo-principal .tipo-icono {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
     background: var(--lightHover);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tipo-movimiento-btn.tipo-principal .tipo-icono:hover {
+    background: var(--lightHover);
+    color: var(--text);
     border-color: var(--text);
+    transform: rotate(-45deg);
     box-shadow: 0 0 10px var(--shadow);
+}
+
+.tipo-movimiento-btn.tipo-principal .tipo-texto {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.tipo-movimiento-btn.tipo-secundario:hover {
+    box-shadow: 0 0 10px var(--shadow);
+    background: var(--lightHover);
+}
+
+.tipo-movimiento-btn:hover {
     transform: scale(1.02);
 }

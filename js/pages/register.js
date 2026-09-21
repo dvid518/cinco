@@ -1,6 +1,7 @@
 import { registrarConEmail, registrarConGoogle, observeAuth } from "../../firebase/auth.js"
 import { initTemaLocal } from "../core/tema.js"
 import { initPWA } from "../core/pwa.js"
+import { initDoodles } from "../ui/doodles.js"
 import { icono } from "../core/iconos.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 
@@ -21,6 +22,7 @@ const botonGoogle = document.getElementById("register-google")
 
 initTemaLocal()
 initPWA()
+initDoodles({ logoSpin: true })
 
 // ============================================
 // REGISTRO CON EMAIL + CONTRASEÑA

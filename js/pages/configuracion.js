@@ -41,17 +41,18 @@ export function render() {
     return `
         ${envolverSidebar(`
             <section id="sidebar">
-                <button class="glass act" data-section="apariencia">${icono("palette", 18)}<span>Apariencia</span></button>
+            <button class="glass act" data-section="cuenta">${icono("circle-user", 18)}<span>Cuenta</span></button>
+                <button class="glass" data-section="apariencia">${icono("palette", 18)}<span>Apariencia</span></button>
                 <button class="glass" data-section="moneda">${icono("coins", 18)}<span>Moneda</span></button>
-                <button class="glass" data-section="cuenta">${icono("circle-user", 18)}<span>Cuenta</span></button>
                 <button class="glass" data-section="seguridad">${icono("shield", 18)}<span>Seguridad</span></button>
+                <button class="glass" data-section="accesibilidad">${icono("accessibility", 18)}<span>Accesibilidad</span></button>
                 <button class="glass" data-section="datos">${icono("database", 18)}<span>Datos</span></button>
             </section>
         `)}
         <section id="panel" class="glass">
 
             <!-- APARIENCIA -->
-            <div class="panel-section" id="section-apariencia">
+            <div class="panel-section hidden-section" id="section-apariencia">
 
                 <div class="config-group">
                     <span class="config-label">Tema</span>
@@ -168,7 +169,7 @@ export function render() {
             </div>
 
             <!-- CUENTA -->
-            <div class="panel-section hidden-section" id="section-cuenta">
+            <div class="panel-section" id="section-cuenta">
 
                 <div class="config-group">
                     <span class="config-label">Usuario</span>
@@ -233,9 +234,42 @@ export function render() {
                     <span class="config-label">Operaciones sensibles</span>
                     <span class="config-hint">
                         Eliminar la cuenta, eliminar todos los datos y cambiar la contraseña piden
-                        confirmar tu identidad si la sesión tiene más de 5 minutos. Exportar o
-                        importar un respaldo no requiere confirmación adicional.
+                        confirmar tu identidad si la sesión tiene más de 5 minutos.
                     </span>
+                </div>
+            </div>
+
+            <!-- ACCESIBILIDAD -->
+            <div class="panel-section hidden-section" id="section-accesibilidad">
+
+                <div class="config-group">
+                    <span class="config-label">Modales persistentes</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Habilitar ventanas de modales que no bloquean la app</span>
+                            <label class="switch">
+                                <input type="checkbox" id="acc-modales-persistentes">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <span class="config-hint">
+                        Desactiva el overlay oscuro de los modales: podrás seguir usando la aplicación
+                        mientras están abiertos y abrir varios a la vez, como ventanas.
+                    </span>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Habilitar escinco doodles</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Habilitar doodles</span>
+                            <label class="switch">
+                                <input type="checkbox" id="acc-doodles">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -613,6 +647,17 @@ async function cargarPreferencias() {
             segCerrarPestana.checked = seg.cerrarAlCerrarPestana !== false
         }
 
+        // Accesibilidad
+        const acc = prefs?.accesibilidad || {}
+        const modalesPersistentes = document.getElementById("acc-modales-persistentes")
+        if (modalesPersistentes) {
+            modalesPersistentes.checked = acc.modalesPersistentes === true
+        }
+        const accDoodles = document.getElementById("acc-doodles")
+        if (accDoodles) {
+            accDoodles.checked = acc.doodles === true
+        }
+
         actualizarEstadoGuardar()
     } catch (error) {
         console.error("Error cargando preferencias:", error)
@@ -635,18 +680,23 @@ function hayCambiosEnVivo() {
     const base = sesion.getPreferencias() || {}
     const basePaginas = base.paginas || {}
     const segBase = base.seg || {}
+    const accBase = base.accesibilidad || {}
     const tc = getTipoCambio()
     const modoTCUI = getModoTipoCambioUI()
     const nombreBase = (sesion.getUsuario()?.nombre || "Usuario").trim()
 
     const segInactividadUI = parseInt(document.getElementById("seg-inactividad")?.value, 10)
     const segCerrarUI = document.getElementById("seg-cerrar-pestana")?.checked
+    const accModalesUI = document.getElementById("acc-modales-persistentes")?.checked
+    const accDoodlesUI = document.getElementById("acc-doodles")?.checked
     const movRecientesUI = leerCantidadMovimientos()
 
     return (
         (nombrePendiente !== null && nombrePendiente !== nombreBase) ||
         (Number.isFinite(segInactividadUI) && segInactividadUI !== (segBase.inactividadMinutos ?? 15)) ||
         (segCerrarUI !== undefined && segCerrarUI !== (segBase.cerrarAlCerrarPestana !== false)) ||
+        (accModalesUI !== undefined && accModalesUI !== (accBase.modalesPersistentes === true)) ||
+        (accDoodlesUI !== undefined && accDoodlesUI !== (accBase.doodles === true)) ||
         (movRecientesUI !== null && movRecientesUI !== (base.movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT)) ||
         (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
         (document.getElementById("toggle-movimientos")?.checked !== (basePaginas.movimientos !== false)) ||
@@ -667,7 +717,9 @@ function configurarDetectorCambios() {
         "divisa-principal",
         "tc-pen-usd",
         "seg-inactividad",
-        "seg-cerrar-pestana"
+        "seg-cerrar-pestana",
+        "acc-modales-persistentes",
+        "acc-doodles"
     ]
 
     ids.forEach(id => {
@@ -837,6 +889,11 @@ async function guardarPreferencias() {
         cerrarAlCerrarPestana: document.getElementById("seg-cerrar-pestana")?.checked !== false
     }
 
+    const accesibilidad = {
+        modalesPersistentes: document.getElementById("acc-modales-persistentes")?.checked === true,
+        doodles: document.getElementById("acc-doodles")?.checked === true
+    }
+
     const preferencias = {
         tema: temaActual,
         movimientosRecientes: leerCantidadMovimientos() ?? (sesion.getPreferencias().movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT),
@@ -850,7 +907,8 @@ async function guardarPreferencias() {
         },
         divisaPrincipal,
         tipoCambio,
-        seg
+        seg,
+        accesibilidad
     }
 
     try {
@@ -875,7 +933,8 @@ async function guardarPreferencias() {
             tema: preferencias.tema,
             movimientosRecientes: preferencias.movimientosRecientes,
             paginas: preferencias.paginas,
-            seg: preferencias.seg
+            seg: preferencias.seg,
+            accesibilidad: preferencias.accesibilidad
         })
         sesion.setPreferencias(preferencias)
 

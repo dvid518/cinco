@@ -56,6 +56,8 @@
 
 .login-form input:hover {
     background-color: var(--lightHover);
+    box-shadow: 0 0 15px var(--shadow);
+    border-color: var(--border);
     transform: scale(1.02);
 }
 
@@ -68,6 +70,8 @@
 }
 
 .login-form button.submit:hover {
+    box-shadow: 0 0 15px var(--shadow);
+    border-color: var(--border);
     width: 60px;
 }
 
@@ -127,6 +131,8 @@
 
 .google-btn:hover {
     background: var(--lightHover);
+    box-shadow: 0 0 15px var(--shadow);
+    border-color: var(--border);
     transform: scale(1.02);
 }
 

@@ -132,6 +132,16 @@ function generarCampo(campo, contexto, opcional) {
                     <input type="number" id="campo-monto" class="form-input" step="0.01" min="0.01" placeholder="0.00"${req}>
                 </div>
             `
+        case "operacion":
+            return `
+                <div class="form-group${ancho}">
+                    <label for="campo-operacion">Operación</label>
+                    <select id="campo-operacion" class="form-input"${req}>
+                        <option value="sumar">Suma al saldo (+)</option>
+                        <option value="restar">Resta del saldo (−)</option>
+                    </select>
+                </div>
+            `
         case "montoOrigen":
             return `
                 <div class="form-group${ancho}">

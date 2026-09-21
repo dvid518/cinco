@@ -142,6 +142,7 @@ export const CONFIG_MOVIMIENTOS = {
         nombre: "Error",
         camposObligatorios: [
             "cuenta",
+            "operacion",
             "monto"
         ]
     }

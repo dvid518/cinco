@@ -1,8 +1,35 @@
-let modalAbierto = false
-let escHandlerActivo = null
-let tabHandlerActivo = null
-let prevFocus = null
-let dragState = null
+import { mostrarNotificacion } from "./notificaciones.js"
+import { sesion } from "../core/sesion.js"
+import { LOGO_ESCINCO } from "../core/iconos.js"
+
+// ============================================
+// ESTADO
+// ============================================
+// Pila de modales abiertos. En modo estándar siempre hay 0 o 1;
+// con "modales persistentes" pueden apilarse varias ventanas.
+const modales = []
+let zContador = 0
+
+function modoPersistenteActivo() {
+    try {
+        return sesion.getPreferencias()?.accesibilidad?.modalesPersistentes === true
+    } catch {
+        return false
+    }
+}
+
+function esFrente(overlay) {
+    const ultimo = modales[modales.length - 1]
+    return !!ultimo && ultimo.overlay === overlay
+}
+
+function sobreponer(overlay) {
+    const idx = modales.findIndex(m => m.overlay === overlay)
+    if (idx === -1) return
+    const [registro] = modales.splice(idx, 1)
+    modales.push(registro)
+    overlay.style.setProperty("--z-modal", ++zContador)
+}
 
 /**
  * @param {Object} opciones
@@ -29,21 +56,25 @@ export function abrirModal(opciones) {
         cerrarConEsc = true
     } = opciones
 
-    // Eliminar modal previo
-    cerrarModal({ silencioso: true })
+    const persistente = modoPersistenteActivo()
+
+    // Modo estándar: un solo modal a la vez. Eliminar el previo.
+    if (!persistente) {
+        cerrarModal({ silencioso: true })
+    }
 
     const overlay = document.createElement("div")
-    overlay.className = "modal-overlay"
-    overlay.id = "modal-activo"
+    overlay.className = "modal-overlay" + (persistente ? " modal-overlay-ventana" : "")
+    overlay.style.setProperty("--z-modal", ++zContador)
 
     const mostrarCancelar = !!onCancel
     const mostrarConfirmar = !!onConfirm
 
     overlay.innerHTML = `
-        <div class="modal modal-${variante}" role="dialog" aria-modal="true">
+        <div class="modal modal-${variante}" role="dialog" aria-modal="true" tabindex="-1">
             <div class="modal-header">
                 <h2 class="modal-title">${titulo}</h2>
-                <button class="modal-close" id="modal-close-btn" type="button" aria-label="Cerrar">
+                <button class="modal-close" type="button" aria-label="Cerrar">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
                         <path d="M18 6 6 18"/>
                         <path d="m6 6 12 12"/>
@@ -65,53 +96,84 @@ export function abrirModal(opciones) {
     `
 
     document.body.appendChild(overlay)
-    modalAbierto = true
 
-    prevFocus = document.activeElement
+    // En modo persistente, cada nueva ventana baja un poco de la anterior
+    // para que se aprecien varias a la vez (como ventanas en cascada).
+    if (persistente) {
+        const n = modales.length
+        aplicarOffset(overlay.querySelector(".modal"), n * 28, n * 28)
+    }
+
+    const modalEl = overlay.querySelector(".modal")
+    const prevFocus = document.activeElement
 
     // --------------------------------------------
     // EVENTOS
     // --------------------------------------------
 
-    const closeBtn = overlay.querySelector("#modal-close-btn")
+    const closeBtn = overlay.querySelector(".modal-close")
     const cancelBtn = overlay.querySelector("#modal-cancel")
     const confirmBtn = overlay.querySelector("#modal-confirm")
-    const modalEl = overlay.querySelector(".modal")
     let procesando = false
 
     const cerrar = (motivo = "cancelar") => {
         if (procesando) return
-        if (motivo === "cancelar" && typeof onCancel === "function") {
-            onCancel()
+        try {
+            if (motivo === "cancelar" && typeof onCancel === "function") {
+                onCancel()
+            }
+        } catch (error) {
+            // Un fallo en onCancel no debe impedir que el modal se cierre.
+            console.error("Error en onCancel:", error)
+        } finally {
+            cerrarModal({ overlay })
         }
-        cerrarModal()
     }
 
     const confirmar = async () => {
         if (typeof onConfirm !== "function") {
-            cerrarModal()
+            cerrarModal({ overlay })
             return
         }
         if (procesando) return
 
-        // Mientras procesa: blur sobre todo el modal + bloqueo de interacción
-        // para evitar doble envío (misma acción ejecutada dos veces).
+        // Mientras procesa: blur del modal + escinco girando, pero sin bloquear
+        // la interfaz de fondo (el usuario puede seguir navegando). El modal
+        // queda sin interacción (procesando=true + botones desactivados).
         procesando = true
         overlay.classList.add("modal-procesando")
         confirmBtn?.setAttribute("disabled", "true")
         cancelBtn?.setAttribute("disabled", "true")
         closeBtn?.setAttribute("disabled", "true")
 
-        const resultado = await onConfirm()
+        // Logo escinco con la animación del router (spin) centrado en el modal.
+        const logoProcesando = document.createElement("div")
+        logoProcesando.className = "modal-procesando-logo"
+        logoProcesando.setAttribute("aria-hidden", "true")
+        logoProcesando.innerHTML = LOGO_ESCINCO
+        modalEl.appendChild(logoProcesando)
 
-        procesando = false
-        overlay.classList.remove("modal-procesando")
-        confirmBtn?.removeAttribute("disabled")
-        cancelBtn?.removeAttribute("disabled")
-        closeBtn?.removeAttribute("disabled")
+        let resultado
+        try {
+            resultado = await onConfirm()
+        } catch (error) {
+            // Un error inesperado en onConfirm no debe dejar el modal
+            // congelado (blur + botones desactivados para siempre).
+            console.error("Error en onConfirm:", error)
+            mostrarNotificacion("error", error.message || "Error inesperado al procesar la acción")
+            cerrarModal({ overlay })
+            return
+        } finally {
+            procesando = false
+            overlay.classList.remove("modal-procesando")
+            logoProcesando.remove()
+            confirmBtn?.removeAttribute("disabled")
+            cancelBtn?.removeAttribute("disabled")
+            closeBtn?.removeAttribute("disabled")
+        }
 
         if (resultado !== false) {
-            cerrarModal()
+            cerrarModal({ overlay })
         }
     }
 
@@ -130,47 +192,70 @@ export function abrirModal(opciones) {
     const enfocables = obtenerEnfocables()
     ;(enfocables[0] || modalEl).focus?.()
 
-    tabHandlerActivo = (e) => {
-        if (e.key !== "Tab") return
+    // En modo persistente no se atrapa el foco: el usuario interactúa con
+    // la aplicación mientras las ventanas están abiertas.
+    let tabHandler = null
+    if (!persistente) {
+        tabHandler = (e) => {
+            if (e.key !== "Tab") return
 
-        const lista = obtenerEnfocables()
-        if (lista.length === 0) return
+            const lista = obtenerEnfocables()
+            if (lista.length === 0) return
 
-        const primero = lista[0]
-        const ultimo = lista[lista.length - 1]
-        const activo = document.activeElement
+            const primero = lista[0]
+            const ultimo = lista[lista.length - 1]
+            const activo = document.activeElement
 
-        if (e.shiftKey) {
-            if (activo === primero || !modalEl.contains(activo)) {
+            if (e.shiftKey) {
+                if (activo === primero || !modalEl.contains(activo)) {
+                    e.preventDefault()
+                    ultimo.focus()
+                }
+            } else if (activo === ultimo || !modalEl.contains(activo)) {
                 e.preventDefault()
-                ultimo.focus()
+                primero.focus()
             }
-        } else if (activo === ultimo || !modalEl.contains(activo)) {
-            e.preventDefault()
-            primero.focus()
         }
+        document.addEventListener("keydown", tabHandler)
     }
-    document.addEventListener("keydown", tabHandlerActivo)
 
-    // Click fuera del modal
-    if (cerrarAlClickFuera) {
+    // Click fuera del modal (solo en modo estándar; en persistente el
+    // usuario sigue interactuando con la app y las ventanas se cierran
+    // con ESC o con la X).
+    if (cerrarAlClickFuera && !persistente) {
         overlay.addEventListener("click", (e) => {
             if (e.target === overlay) cerrar("cancelar")
         })
     }
 
-    // ESC
+    // ESC: en modo persistente cierra únicamente la ventana en primer plano.
+    let escHandler = null
     if (cerrarConEsc) {
-        escHandlerActivo = (e) => {
-            if (e.key === "Escape") {
+        escHandler = (e) => {
+            if (e.key === "Escape" && (!persistente || esFrente(overlay))) {
                 cerrar("cancelar")
             }
         }
-        document.addEventListener("keydown", escHandlerActivo)
+        document.addEventListener("keydown", escHandler)
+    }
+
+    // Traer al frente al hacer clic en la ventana (modo persistente).
+    if (persistente) {
+        overlay.addEventListener("pointerdown", () => sobreponer(overlay), true)
     }
 
     // Drag desde el header
-    activarDrag(modalEl, overlay)
+    const limpiarDrag = activarDrag(modalEl, overlay)
+
+    const registro = {
+        overlay,
+        modalEl,
+        escHandler,
+        tabHandler,
+        prevFocus,
+        limpiarDrag
+    }
+    modales.push(registro)
 
     return modalEl
 }
@@ -179,34 +264,59 @@ export function abrirModal(opciones) {
 // CERRAR MODAL
 // --------------------------------------------
 
-export function cerrarModal({ silencioso = false } = {}) {
-    const modal = document.getElementById("modal-activo")
-    if (!modal) {
-        modalAbierto = false
+// Cierra una ventana concreta (`overlay`) o la que está en primer plano.
+export function cerrarModal({ silencioso = false, overlay = null } = {}) {
+    const idx = overlay
+        ? modales.findIndex(m => m.overlay === overlay)
+        : modales.length - 1
+
+    if (idx === -1) {
         return
     }
 
-    modal.remove()
-    modalAbierto = false
+    const [registro] = modales.splice(idx, 1)
+    const modal = registro.overlay
 
-    if (escHandlerActivo) {
-        document.removeEventListener("keydown", escHandlerActivo)
-        escHandlerActivo = null
+    if (registro.escHandler) {
+        document.removeEventListener("keydown", registro.escHandler)
     }
 
-    if (tabHandlerActivo) {
-        document.removeEventListener("keydown", tabHandlerActivo)
-        tabHandlerActivo = null
+    if (registro.tabHandler) {
+        document.removeEventListener("keydown", registro.tabHandler)
     }
 
-    if (dragState) {
-        desactivarDrag()
+    registro.limpiarDrag?.()
+
+    // Animación de salida: se espera a que termine antes de quitar el nodo.
+    // En silencioso (p.ej. reemplazo al abrir otro) el nodo se elimina al instante.
+    if (silencioso || modal.classList.contains("cerrando")) {
+        modal.remove()
+    } else {
+        let cerrado = false
+        const terminar = () => {
+            if (cerrado) return
+            cerrado = true
+            clearTimeout(fallback)
+            modal.remove()
+        }
+        modal.classList.add("cerrando")
+        modal.addEventListener("animationend", terminar, { once: true })
+        modal.addEventListener("animationcancel", terminar, { once: true })
+        // Red de seguridad por si el navegador no dispara animationend
+        const fallback = setTimeout(terminar, 400)
     }
 
-    if (prevFocus && typeof prevFocus.focus === "function" && prevFocus.isConnected) {
-        prevFocus.focus()
+    // Foco: si quedan ventanas, devolver el foco a la nueva primera plana;
+    // si no, al elemento que tenía el foco antes de abrir.
+    const siguiente = modales[modales.length - 1]
+    if (siguiente) {
+        const enfocables = siguiente.modalEl?.querySelector(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+        )
+        ;(enfocables || siguiente.modalEl)?.focus?.()
+    } else if (registro.prevFocus && typeof registro.prevFocus.focus === "function" && registro.prevFocus.isConnected) {
+        registro.prevFocus.focus()
     }
-    prevFocus = null
 
     if (!silencioso) {
         // Hook para limpieza externa si se necesita
@@ -214,7 +324,7 @@ export function cerrarModal({ silencioso = false } = {}) {
 }
 
 export function estaAbierto() {
-    return modalAbierto
+    return modales.length > 0
 }
 
 // --------------------------------------------
@@ -252,13 +362,14 @@ vincularBotonesCalendario()
 // Usa CSS variables --modal-x y --modal-y
 // para no romper la regla "sin style inline".
 // El CSS aplica: transform: translate(var(--modal-x, 0), var(--modal-y, 0))
+// Devuelve una función para limpiar sus listeners.
 // --------------------------------------------
 
 function activarDrag(modalEl, overlay) {
-    if (!modalEl) return
+    if (!modalEl) return null
 
     const header = modalEl.querySelector(".modal-header")
-    if (!header) return
+    if (!header) return null
 
     let startX = 0
     let startY = 0
@@ -273,8 +384,8 @@ function activarDrag(modalEl, overlay) {
         const punto = obtenerPunto(e)
         startX = punto.x
         startY = punto.y
-        startOffsetX = dragState?.offsetX || 0
-        startOffsetY = dragState?.offsetY || 0
+        startOffsetX = leerOffset(modalEl, "--modal-x")
+        startOffsetY = leerOffset(modalEl, "--modal-y")
         arrastrando = true
 
         header.classList.add("dragging")
@@ -309,23 +420,11 @@ function activarDrag(modalEl, overlay) {
     header.addEventListener("mousedown", onDown)
     header.addEventListener("touchstart", onDown, { passive: true })
 
-    // Guardamos referencia para poder desactivar si hiciera falta
-    dragState = {
-        modalEl,
-        overlay,
-        desactivar: () => {
-            header.removeEventListener("mousedown", onDown)
-            header.removeEventListener("touchstart", onDown)
-            onUp()
-        }
+    return () => {
+        header.removeEventListener("mousedown", onDown)
+        header.removeEventListener("touchstart", onDown)
+        onUp()
     }
-}
-
-function desactivarDrag() {
-    if (dragState?.desactivar) {
-        dragState.desactivar()
-    }
-    dragState = null
 }
 
 function obtenerPunto(evento) {
@@ -339,4 +438,9 @@ function aplicarOffset(modalEl, x, y) {
     // Escribimos las CSS variables en el elemento, no style inline de propiedades
     modalEl.style.setProperty("--modal-x", `${x}px`)
     modalEl.style.setProperty("--modal-y", `${y}px`)
+}
+
+function leerOffset(modalEl, propiedad) {
+    const valor = modalEl.style.getPropertyValue(propiedad)
+    return valor ? parseFloat(valor) || 0 : 0
 }
