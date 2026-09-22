@@ -156,8 +156,10 @@ export function render() {
                     </div>
 
                     <div class="tc-auto-box" id="tc-input-auto" hidden>
-                        <p class="exchange-note" id="tc-valor-auto"></p>
-                        <p class="exchange-note" id="tc-fecha-auto"></p>
+                        <div class="exchange-notes">
+                            <p class="exchange-note" id="tc-valor-auto"></p>
+                            <p class="exchange-note" id="tc-fecha-auto"></p>
+                        </div>
                         <div class="tc-auto-actions">
                             <button class="glass-btn" id="tc-actualizar-btn">
                                 <span class="tc-btn-text">Actualizar ahora</span>

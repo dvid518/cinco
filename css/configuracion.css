@@ -237,13 +237,20 @@
 
 .tc-auto-box {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 6px;
     width: 100%;
+    justify-content: space-between;
+}
+
+.exchange-notes {
+    display: flex;
+    flex-direction: column;
 }
 
 .exchange-note {
     margin: 0;
+    width: fit-content;
     font-size: 13px;
     color: var(--textSecondary);
 }

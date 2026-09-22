@@ -25,17 +25,32 @@ import {
     historialParaGrafico
 } from "../services/PrecioServicio.js"
 import { crearGraficoEvolucionPrecio, destruirGrafico } from "../ui/graficos.js"
-import { abrirModal } from "../ui/modal.js"
+import { abrirModal, estaAbierto } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { obtenerCuentas, restaurarDocumento } from "../../firebase/firestore.js"
 import { icono } from "../core/iconos.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
+import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 
 let uid = null
 let posicionesData = null
 let estrategiasData = []
 let vistaActual = "posiciones"
+
+let clickTimer = null
+
+// Selección de tarjetas (mismas reglas que movimientos/pendientes/metas):
+// dblclick o clic sostenido alternan, modo "un click" selecciona con un
+// toque y al repetir deselecciona, Shift añade/quita, Escape limpia y
+// Delete/Backspace quita la última. Solo interacción: sin contador ni
+// eliminación en lote.
+let seleccionadas = new Set()
+let ordenSeleccion = []
+let supresorClick = false
+let supresorClickTimer = null
+let eventosSeleccionListos = false
+let cardConAcciones = null
 
 // ============================================
 // RENDER
@@ -73,7 +88,7 @@ export function render() {
                 </div>
             </div>
             <div class="estrategias-acciones" id="estrategias-acciones" hidden>
-                <button type="button" class="glass-btn" id="btn-nueva-estrategia">
+                <button type="button" class="glass-btn btn-nueva-estrategia" id="btn-nueva-estrategia">
                     ${icono("plus-circle", 16)} Nueva estrategia
                 </button>
             </div>
@@ -150,13 +165,19 @@ function renderizarPosiciones() {
 
     const posiciones = posicionesData?.posiciones || []
 
+    // Podar ids de selección que ya no existen en la lista actual.
+    const vivas = new Set(posiciones.map(p => p.id))
+    seleccionadas = new Set([...seleccionadas].filter(id => vivas.has(id)))
+    ordenSeleccion = ordenSeleccion.filter(id => vivas.has(id))
+
     if (posiciones.length === 0) {
         container.innerHTML = plantillaVacio()
         return
     }
 
     container.innerHTML = posiciones.map(plantillaPosicion).join("")
-    enlazarClicksPosiciones(container, posiciones)
+    enlazarListaPosiciones(container)
+    cardConAcciones = null
 }
 
 function plantillaVacio() {
@@ -200,7 +221,7 @@ function plantillaPosicion(p) {
     }
 
     return `
-        <div class="posicion-item" data-posicion-id="${p.id}" data-activo-id="${p.activoId}">
+        <div class="posicion-item${seleccionadas.has(p.id) ? " seleccionado" : ""}" data-posicion-id="${p.id}" data-activo-id="${p.activoId}">
             <button
                 type="button"
                 class="posicion-favorito ${esFavorito ? "es-favorito" : ""}"
@@ -219,62 +240,419 @@ function plantillaPosicion(p) {
                     ${fechaActualizacion ? ` · Act. ${fechaActualizacion}` : ""}
                 </div>
             </div>
-            <div class="posicion-valores">
-                <div class="posicion-valor">
-                    ${valor.toFixed(2)} ${p.divisa.toUpperCase()}
-                </div>
-                <div class="posicion-rendimiento ${esGanancia ? "positive" : "negative"}">
-                    ${esGanancia ? "+" : ""}${rendimiento.toFixed(2)}%
+            <div class="card-item-valor-wrap">
+                    <div class="posicion-valores">
+                        <div class="posicion-valor">
+                            ${valor.toFixed(2)} ${p.divisa.toUpperCase()}
+                        </div>
+                        <div class="posicion-rendimiento ${esGanancia ? "positive" : "negative"}">
+                            ${esGanancia ? "+" : ""}${rendimiento.toFixed(2)}%
+                        </div>
+                    </div>
+                    <div class="card-item-acciones">
+                        <button type="button" class="card-action-btn" data-accion="precio" data-posicion-id="${p.id}" title="Actualizar precio" aria-label="Actualizar precio">${icono("refresh-cw", 16)}</button>
+                        <button type="button" class="card-action-btn danger" data-accion="eliminar" data-posicion-id="${p.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
+                    </div>
                 </div>
             </div>
-        </div>
     `
 }
 
-function enlazarClicksPosiciones(container, posiciones) {
-    container.querySelectorAll(".posicion-item").forEach(item => {
-        item.addEventListener("click", async () => {
-            const activoId = item.dataset.activoId
-            const posicion = posiciones.find(p => p.activoId === activoId)
-            if (posicion) {
-                await mostrarGraficoActivo(activoId, posicion.activo, posicion)
-            }
-        })
+// Resuelve una card de posiciones o de estrategias: su id de selección y la
+// acción de detalle (gráfico / edición) que se abre en el modo clásico.
+function resolverTarjetaInversiones(card) {
+    if (card.classList.contains("estrategia-item")) {
+        const estrategia = estrategiasData.find(e => e.id === card.dataset.id)
+        return estrategia
+            ? { id: estrategia.id, abrirDetalle: () => abrirModalEstrategia(estrategia) }
+            : null
+    }
+    const posicion = buscarPosicion(card.dataset.posicionId)
+    return posicion
+        ? { id: posicion.id, abrirDetalle: () => mostrarGraficoActivo(posicion.activoId, posicion.activo, posicion) }
+        : null
+}
+
+// Acciones de las posiciones (análogo a movimientos/trading): delegan por
+// data-accion sobre la card, respetando el estado de selección.
+function ejecutarAccionPosicion(accion, posicionId) {
+    const posicion = buscarPosicion(posicionId)
+    if (!posicion) return
+    if (accion === "precio") {
+        abrirModalActualizarPrecio(posicion.activo, posicion)
+    } else if (accion === "eliminar") {
+        confirmarEliminarPosicion(posicion)
+    }
+}
+
+function mostrarAccionesCard(card) {
+    if (cardConAcciones && cardConAcciones !== card) {
+        cardConAcciones.classList.remove("acciones-visibles")
+    }
+    card.classList.add("acciones-visibles")
+    cardConAcciones = card
+}
+
+function ocultarAccionesCards() {
+    if (!cardConAcciones) return
+    cardConAcciones.classList.remove("acciones-visibles")
+    cardConAcciones = null
+}
+
+function enlazarListaPosiciones(container) {
+    if (!container || container.dataset.listaEnlazada) return
+    container.dataset.listaEnlazada = "1"
+
+    container.addEventListener("click", (evento) => {
+        const favorito = evento.target.closest(".posicion-favorito")
+        if (favorito) {
+            evento.stopPropagation()
+            alternarFavorito(favorito.dataset.activoId)
+            return
+        }
+
+        const accionBtn = evento.target.closest(".card-item-acciones .card-action-btn")
+        if (accionBtn && accionBtn.dataset.posicionId) {
+            evento.stopPropagation()
+            ejecutarAccionPosicion(accionBtn.dataset.accion, accionBtn.dataset.posicionId)
+            return
+        }
+        if (evento.target.closest(".card-item-acciones")) return
+
+        const card = evento.target.closest(".posicion-item, .estrategia-item")
+        if (!card) return
+
+        ocultarAccionesCards()
+
+        // Click inmediatamente tras selección por clic sostenido.
+        if (consumirSupresorClick()) return
+
+        const tarjeta = resolverTarjetaInversiones(card)
+        if (!tarjeta) return
+
+        if (modoUnClickSeleccion()) {
+            seleccionarPorUnClick(tarjeta.id, evento.shiftKey)
+            return
+        }
+
+        if (seleccionadas.size > 0) {
+            toggleSeleccion(tarjeta.id)
+            return
+        }
+
+        // Clásico sin selección: un click abre el detalle de la card.
+        if (clickTimer) {
+            clearTimeout(clickTimer)
+            clickTimer = null
+        }
+
+        clickTimer = setTimeout(() => {
+            clickTimer = null
+            if (seleccionadas.size === 0) tarjeta.abrirDetalle()
+        }, 280)
     })
 
-    container.querySelectorAll(".posicion-favorito").forEach(boton => {
-        boton.addEventListener("click", async (evento) => {
-            evento.stopPropagation()
-            await alternarFavorito(boton.dataset.activoId)
-        })
+    container.addEventListener("dblclick", (evento) => {
+        if (evento.target.closest(".posicion-favorito, .card-item-acciones")) return
+        const card = evento.target.closest(".posicion-item, .estrategia-item")
+        if (!card) return
+
+        if (clickTimer) {
+            clearTimeout(clickTimer)
+            clickTimer = null
+        }
+
+        const tarjeta = resolverTarjetaInversiones(card)
+        if (!tarjeta) return
+
+        // Con la opción activa el click ya selecciona; el doble click abre el detalle.
+        if (modoUnClickSeleccion()) {
+            limpiarSeleccion()
+            tarjeta.abrirDetalle()
+            return
+        }
+
+        toggleSeleccion(tarjeta.id)
     })
+
+    vincularGestosPosiciones(container)
+}
+
+// ============================================
+// POSICIONES
+// ============================================
+
+function buscarPosicion(id) {
+    return (posicionesData?.posiciones || []).find(p => p.id === id) || null
+}
+
+// ============================================
+// SELECCIÓN DE POSICIONES
+// ============================================
+// Mismas reglas que movimientos/pendientes/metas: dblclick o clic sostenido
+// alternan, modo "un click" selecciona con un toque y al repetir deselecciona
+// (Shift añade/quita), Escape limpia y Delete/Backspace quita la última.
+// Solo interacción: no hay contador ni botón de eliminación en lote.
+
+function modoUnClickSeleccion() {
+    return sesion.getPreferencias()?.accesibilidad?.unClickSeleccion === true
+}
+
+function marcarSupresorClick() {
+    supresorClick = true
+    clearTimeout(supresorClickTimer)
+    supresorClickTimer = setTimeout(() => { supresorClick = false }, 400)
+}
+
+function consumirSupresorClick() {
+    if (!supresorClick) return false
+    supresorClick = false
+    clearTimeout(supresorClickTimer)
+    return true
+}
+
+function toggleSeleccion(id) {
+    if (seleccionadas.has(id)) {
+        seleccionadas.delete(id)
+        const indice = ordenSeleccion.indexOf(id)
+        if (indice !== -1) ordenSeleccion.splice(indice, 1)
+    } else {
+        seleccionadas.add(id)
+        if (!ordenSeleccion.includes(id)) ordenSeleccion.push(id)
+    }
+    aplicarSeleccionDOM()
+}
+
+// Modo "un click": un click (sin modificador) selecciona y deselecciona las
+// demás; repetir el click sobre el único seleccionado lo deselecciona.
+// Shift + click añade o quita.
+function seleccionarPorUnClick(id, conShift) {
+    if (conShift) {
+        toggleSeleccion(id)
+        return
+    }
+    if (seleccionadas.size === 1 && seleccionadas.has(id)) {
+        seleccionadas.clear()
+        ordenSeleccion.length = 0
+        aplicarSeleccionDOM()
+        return
+    }
+    seleccionadas.clear()
+    ordenSeleccion.length = 0
+    seleccionadas.add(id)
+    ordenSeleccion.push(id)
+    aplicarSeleccionDOM()
+}
+
+function deseleccionarUltima() {
+    const id = ordenSeleccion.pop()
+    if (!id) return
+    seleccionadas.delete(id)
+    aplicarSeleccionDOM()
+}
+
+function limpiarSeleccion() {
+    if (seleccionadas.size === 0) return
+    seleccionadas.clear()
+    ordenSeleccion.length = 0
+    aplicarSeleccionDOM()
+}
+
+function aplicarSeleccionDOM() {
+    document.querySelectorAll("#lista-posiciones .posicion-item, #lista-posiciones .estrategia-item").forEach(card => {
+        const id = card.dataset.posicionId || card.dataset.id
+        card.classList.toggle("seleccionado", seleccionadas.has(id))
+    })
+}
+
+function configurarEventosSeleccionGlobal() {
+    if (eventosSeleccionListos) return
+    eventosSeleccionListos = true
+    document.addEventListener("click", manejarClickFueraCards)
+    document.addEventListener("keydown", manejarTecladoSeleccionCards)
+}
+
+function manejarClickFueraCards(evento) {
+    if (vistaActual !== "posiciones" && vistaActual !== "estrategias") return
+    if (!document.getElementById("lista-posiciones")) return
+    if (evento.target.closest("#lista-posiciones")) return
+    if (evento.target.closest("#app-footer")) return
+    if (evento.target.closest(".modal-overlay")) return
+    ocultarAccionesCards()
+    limpiarSeleccion()
+}
+
+function manejarTecladoSeleccionCards(evento) {
+    if (vistaActual !== "posiciones" && vistaActual !== "estrategias") return
+    if (!document.getElementById("lista-posiciones")) return
+    if (estaAbierto()) return
+
+    if (evento.key === "Escape") {
+        if (seleccionadas.size > 0) limpiarSeleccion()
+        return
+    }
+
+    if (evento.key !== "Delete" && evento.key !== "Backspace") return
+    if (evento.target.matches("input, textarea, select")) return
+    if (seleccionadas.size === 0) return
+    evento.preventDefault()
+    deseleccionarUltima()
+}
+
+// Clic sostenido sobre una card → seleccionar (en móvil). Swipe horizontal
+// → revelar/ocultar las acciones de la card (patrón movimientos/trading).
+function vincularGestosPosiciones(container) {
+    let gesto = null
+
+    const cancelar = () => {
+        if (gesto?.timer) clearTimeout(gesto.timer)
+        gesto = null
+    }
+
+    container.addEventListener("pointerdown", (evento) => {
+        if (evento.pointerType === "mouse" && evento.button !== 0) return
+        if (evento.target.closest(".posicion-favorito, .card-item-acciones")) return
+
+        const card = evento.target.closest(".posicion-item, .estrategia-item")
+        if (!card) return
+
+        cancelar()
+
+        gesto = {
+            card,
+            pointerId: evento.pointerId,
+            pointerType: evento.pointerType,
+            startX: evento.clientX,
+            startY: evento.clientY,
+            movido: false,
+            timer: null
+        }
+
+        const duracion = evento.pointerType === "touch" ? 500 : 700
+        gesto.timer = setTimeout(() => {
+            if (!gesto) return
+            toggleSeleccion(card.dataset.posicionId || card.dataset.id)
+            marcarSupresorClick()
+            cancelar()
+        }, duracion)
+    })
+
+    container.addEventListener("pointermove", (evento) => {
+        if (!gesto || evento.pointerId !== gesto.pointerId) return
+        const dx = evento.clientX - gesto.startX
+        const dy = evento.clientY - gesto.startY
+        if (!gesto.movido && Math.hypot(dx, dy) > 10) {
+            gesto.movido = true
+            if (gesto.timer) {
+                clearTimeout(gesto.timer)
+                gesto.timer = null
+            }
+        }
+    })
+
+    const finalizar = (evento) => {
+        if (!gesto || evento.pointerId !== gesto.pointerId) return
+        const dx = evento.clientX - gesto.startX
+        const dy = evento.clientY - gesto.startY
+        cancelar()
+
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx < 0) {
+                mostrarAccionesCard(gesto.card)
+            } else {
+                ocultarAccionesCards()
+            }
+            marcarSupresorClick()
+        }
+    }
+
+    container.addEventListener("pointerup", finalizar)
+    container.addEventListener("pointercancel", finalizar)
 }
 
 // ============================================
 // FAVORITO DE ACTIVO
 // ============================================
 
-async function alternarFavorito(activoId) {
-    const posicion = (posicionesData?.posiciones || []).find(p => p.activoId === activoId)
-    const activo = posicion?.activo
+// Favoritos con respuesta visual inmediata y escritura con debounce:
+// el toggle aplica al instante y los clicks en ráfaga se juntan en un solo
+// guardado, por eso aparece una sola notificación al confirmarse.
+const favoritosPendientes = {}
+const timersFavorito = {}
+const semillasFavorito = {}
+const escriturasFavorito = new Set()
+
+function activoFavorito(activoId) {
+    return (posicionesData?.posiciones || []).find(p => p.activoId === activoId)?.activo || null
+}
+
+function aplicarFavoritoEnBotones(activoId) {
+    const favorito = activoFavorito(activoId)?.favorito === true
+    document.querySelectorAll(`.posicion-favorito[data-activo-id="${activoId}"]`).forEach(boton => {
+        boton.classList.toggle("es-favorito", favorito)
+        const etiqueta = favorito ? "Quitar de favoritos" : "Marcar como favorito"
+        boton.setAttribute("aria-label", etiqueta)
+        boton.setAttribute("title", etiqueta)
+    })
+}
+
+function alternarFavorito(activoId) {
+    const activo = activoFavorito(activoId)
     if (!activo) return
 
-    const nuevoEstado = !(activo.favorito === true)
+    const nuevo = !(activo.favorito === true)
+    activo.favorito = nuevo
+    favoritosPendientes[activoId] = nuevo
+    if (!(activoId in semillasFavorito)) semillasFavorito[activoId] = !nuevo
+
+    aplicarFavoritoEnBotones(activoId)
+
+    clearTimeout(timersFavorito[activoId])
+    timersFavorito[activoId] = setTimeout(() => {
+        delete timersFavorito[activoId]
+        escribirFavorito(activoId)
+    }, 400)
+}
+
+async function escribirFavorito(activoId) {
+    const objetivo = favoritosPendientes[activoId]
+    if (objetivo === undefined) return
+    delete favoritosPendientes[activoId]
+
+    // Ya hay una escritura en curso: se reencola el último estado pedido.
+    if (escriturasFavorito.has(activoId)) {
+        favoritosPendientes[activoId] = objetivo
+        return
+    }
+
+    escriturasFavorito.add(activoId)
 
     try {
-        await marcarFavoritoActivo(uid, activoId, nuevoEstado)
-        activo.favorito = nuevoEstado
-        const boton = document.querySelector(`.posicion-favorito[data-activo-id="${activoId}"]`)
-        if (boton) {
-            boton.classList.toggle("es-favorito", nuevoEstado)
-            const etiqueta = nuevoEstado ? "Quitar de favoritos" : "Marcar como favorito"
-            boton.setAttribute("aria-label", etiqueta)
-            boton.setAttribute("title", etiqueta)
+        await marcarFavoritoActivo(uid, activoId, objetivo)
+        const activo = activoFavorito(activoId)
+        if (activo) activo.favorito = objetivo
+        aplicarFavoritoEnBotones(activoId)
+
+        // Si el usuario ya pidió otro estado mientras guardábamos, se saltea
+        // esta notificación intermedia; el write encadenado emite la final.
+        if (!(activoId in favoritosPendientes)) {
+            mostrarNotificacion("exito", objetivo ? "Agregado a favoritos" : "Quitado de favoritos")
         }
-        mostrarNotificacion("exito", nuevoEstado ? "Agregado a favoritos" : "Quitado de favoritos")
+
+        // Si durante la escritura se pidió otro estado, escribirlo también.
+        if (activoId in favoritosPendientes) {
+            escribirFavorito(activoId)
+        }
     } catch (error) {
         console.error("Error actualizando favorito:", error)
+        const activo = activoFavorito(activoId)
+        if (activo) activo.favorito = semillasFavorito[activoId] === true
+        aplicarFavoritoEnBotones(activoId)
+        delete favoritosPendientes[activoId]
         mostrarNotificacion("error", "No se pudo actualizar el favorito")
+    } finally {
+        escriturasFavorito.delete(activoId)
+        delete semillasFavorito[activoId]
     }
 }
 
@@ -305,6 +683,7 @@ function actualizarBotonesVista() {
 
 function cambiarVista(vista) {
     vistaActual = vista === "estrategias" ? "estrategias" : "posiciones"
+    limpiarSeleccion()
     actualizarBotonesVista()
 
     if (vistaActual === "estrategias") {
@@ -322,6 +701,11 @@ function renderizarEstrategias() {
     const container = document.getElementById("lista-posiciones")
     if (!container) return
 
+    // Podar ids de selección que ya no existen en la lista actual.
+    const vivas = new Set(estrategiasData.map(e => e.id))
+    seleccionadas = new Set([...seleccionadas].filter(id => vivas.has(id)))
+    ordenSeleccion = ordenSeleccion.filter(id => vivas.has(id))
+
     if (estrategiasData.length === 0) {
         container.innerHTML = `
             <p class="lista-vacia">
@@ -338,28 +722,34 @@ function renderizarEstrategias() {
 
     container.innerHTML = estrategiasData.map(plantillaEstrategia).join("")
     enlazarAccionesEstrategias(container)
+    cardConAcciones = null
 }
 
 function plantillaEstrategia(estrategia) {
+    const simboloDivisa = DIVISAS_SYMBOLS[String(estrategia.divisa).toLowerCase()] || String(estrategia.divisa).toUpperCase()
+
     return `
-        <div class="estrategia-item ${estrategia.activa ? "" : "pausada"}" data-id="${estrategia.id}">
+        <div class="estrategia-item ${estrategia.activa ? "" : "pausada"}${seleccionadas.has(estrategia.id) ? " seleccionado" : ""}" data-id="${estrategia.id}">
             <div class="estrategia-info">
                 <div class="estrategia-nombre">
                     ${estrategia.nombre}
                     <span class="estrategia-simbolo">${estrategia.activoSimbolo}</span>
                 </div>
                 <div class="estrategia-detalle">
-                    ${estrategia.montoFormateado} ${estrategia.divisa.toUpperCase()} · ${estrategia.frecuenciaTexto}
-                </div>
-                <div class="estrategia-detalle">
-                    Próxima ejecución: ${formatearFechaEstrategia(estrategia.proximaEjecucion)} · ${estrategia.estadoTexto}
+                    ${estrategia.frecuenciaTexto} · ${estrategia.divisa.toUpperCase()}
                 </div>
             </div>
-            <div class="estrategia-acciones">
-                <button type="button" class="glass btn-sm estrategia-ejecutar" data-id="${estrategia.id}">Ejecutar ahora</button>
-                <button type="button" class="glass btn-sm estrategia-editar" data-id="${estrategia.id}">Editar</button>
-                <button type="button" class="glass btn-sm estrategia-pausar" data-id="${estrategia.id}">${estrategia.activa ? "Pausar" : "Reanudar"}</button>
-                <button type="button" class="glass btn-sm btn-danger estrategia-eliminar" data-id="${estrategia.id}">Eliminar</button>
+            <div class="card-item-valor-wrap">
+                <div class="posicion-valores">
+                    <div class="posicion-valor">${simboloDivisa} ${estrategia.montoFormateado}</div>
+                    <div class="posicion-rendimiento">${estrategia.activa ? "Activa" : "Pausada"}</div>
+                </div>
+                <div class="card-item-acciones">
+                    <button type="button" class="card-action-btn estrategia-ejecutar" data-accion="ejecutar" data-id="${estrategia.id}" title="Ejecutar ahora" aria-label="Ejecutar ahora">${icono("play", 16)}</button>
+                    <button type="button" class="card-action-btn estrategia-editar" data-accion="editar" data-id="${estrategia.id}" title="Editar" aria-label="Editar">${icono("pencil", 16)}</button>
+                    <button type="button" class="card-action-btn estrategia-pausar" data-accion="${estrategia.activa ? "pausar" : "reanudar"}" data-id="${estrategia.id}" title="${estrategia.activa ? "Pausar" : "Reanudar"}" aria-label="${estrategia.activa ? "Pausar" : "Reanudar"}">${icono(estrategia.activa ? "pause" : "play", 16)}</button>
+                    <button type="button" class="card-action-btn danger estrategia-eliminar" data-accion="eliminar" data-id="${estrategia.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
+                </div>
             </div>
         </div>
     `
@@ -866,8 +1256,10 @@ function actualizarResumen() {
     }
 
     if (rendimientoTotal) {
+        const divisaRaw = posicionesData?.posiciones?.[0]?.divisa || "usd"
+        const simbolo = DIVISAS_SYMBOLS[String(divisaRaw).toLowerCase()] || String(divisaRaw).toUpperCase()
         const ganancia = posicionesData?.gananciaTotal || 0
-        rendimientoTotal.textContent = `${ganancia >= 0 ? "+" : ""}${ganancia.toFixed(2)}`
+        rendimientoTotal.textContent = `${simbolo} ${ganancia >= 0 ? "+" : ""}${ganancia.toFixed(2)}`
         rendimientoTotal.className = `resumen-valor ${ganancia >= 0 ? "positive" : "negative"}`
     }
 
@@ -881,6 +1273,8 @@ function actualizarResumen() {
 // ============================================
 
 function configurarEventos() {
+    configurarEventosSeleccionGlobal()
+
     document.querySelectorAll("#sidebar button").forEach(btn => {
         btn.addEventListener("click", () => {
             document.querySelectorAll("#sidebar button").forEach(b => b.classList.remove("act"))
@@ -907,8 +1301,13 @@ function configurarEventos() {
                 return
             }
 
+            // Podar ids de selección que quedaron fuera del filtro.
+            const vivas = new Set(filtradas.map(p => p.id))
+            seleccionadas = new Set([...seleccionadas].filter(id => vivas.has(id)))
+            ordenSeleccion = ordenSeleccion.filter(id => vivas.has(id))
+
             container.innerHTML = filtradas.map(plantillaPosicion).join("")
-            enlazarClicksPosiciones(container, filtradas)
+            enlazarListaPosiciones(container)
         })
     })
 

@@ -253,7 +253,7 @@
 .tipo-movimiento-btn:not(.tipo-principal) {
     padding: 10px 14px;
     border-radius: 40px;
-    background: var(--surface);
+    background: var(--background);
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-primary);
@@ -282,7 +282,7 @@
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: var(--lightHover);
+    background: var(--background);
     border: 1px solid var(--border);
     color: var(--text);
     cursor: pointer;

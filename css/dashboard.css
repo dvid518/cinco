@@ -257,9 +257,8 @@
     border-color: var(--negative);
 }
 
-.btn-consolidar-vencimiento {
-    flex-shrink: 0;
-    margin-left: 8px;
+.vencimientos-lista .card-item.clickeable {
+    cursor: pointer;
 }
 
 /* ============================================

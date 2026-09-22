@@ -1,5 +1,6 @@
 import { actualizarMeta } from "../repositories/MetaRepositorio.js"
 import { registrarMovimiento } from "./MovimientoServicio.js"
+import { obtenerCuenta } from "../../firebase/firestore.js"
 import { TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 
 // ============================================
@@ -26,6 +27,19 @@ export async function aportarMeta(uid, meta, { monto, cuentaId, fecha = new Date
     }
     if (!cuentaId) {
         throw new Error("Selecciona una cuenta de origen")
+    }
+
+    const cuenta = await obtenerCuenta(uid, cuentaId)
+    if (!cuenta) {
+        throw new Error("Cuenta de origen no encontrada")
+    }
+
+    const monedaCuenta = (cuenta.moneda || "pen").toLowerCase()
+    const divisaMeta = (meta.divisa || "pen").toLowerCase()
+    if (monedaCuenta !== divisaMeta) {
+        throw new Error(
+            `La cuenta "${cuenta.nombre}" está en ${monedaCuenta.toUpperCase()} y la meta en ${divisaMeta.toUpperCase()}. Selecciona una cuenta en ${divisaMeta.toUpperCase()}.`
+        )
     }
 
     await registrarMovimiento(uid, TIPOS_MOVIMIENTO.GASTO, {

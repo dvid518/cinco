@@ -325,7 +325,8 @@ async function obtenerPendientesConVencimiento() {
                 divisa: p.divisa,
                 diasRestantes: dias,
                 vencido: dias < 0,
-                icono: ""
+                icono: "",
+                pendiente: p
             }
         })
         .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
@@ -347,7 +348,8 @@ async function obtenerMetasConVencimiento() {
                 divisa: m.divisa,
                 diasRestantes: dias,
                 vencido: dias < 0,
-                icono: ""
+                icono: "",
+                meta: m
             }
         })
         .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
@@ -663,28 +665,11 @@ async function abrirModalVencimientos() {
         `
     } else {
         contenido = `<div class="lista-cards vencimientos-lista">
-            ${items.map(v => `
-                <div class="card-item ${v.vencido ? "vencido" : ""}">
-                    <div class="card-item-info">
-                        <span class="card-item-titulo">${v.titulo} ${v.vencido ? "· VENCIDO" : ""}</span>
-                        <span class="card-item-detalle">
-                            ${v.subtitulo} · ${textoDias(v.diasRestantes)}
-                        </span>
-                    </div>
-                    <span class="card-item-valor ${v.vencido ? "negative" : ""}">
-                        ${v.monto.toFixed(2)} ${(v.divisa || "PEN").toUpperCase()}
-                    </span>
-                    ${v.tipo === "pendiente" ? `
-                        <button class="btn-sm btn-consolidar-vencimiento" data-id="${v.id}" type="button">
-                            ${v.esCobrar ? "Cobrar" : "Pagar"}
-                        </button>
-                    ` : ""}
-                </div>
-            `).join("")}
+            ${items.map(plantillaVencimiento).join("")}
         </div>`
     }
 
-    abrirModal({
+    const modalEl = abrirModal({
         titulo: "Próximos vencimientos",
         contenido,
         variante: "info",
@@ -692,23 +677,60 @@ async function abrirModalVencimientos() {
         onConfirm: () => true
     })
 
-    document.querySelectorAll(".btn-consolidar-vencimiento").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const opcion = vencimientosData.items.find(v => v.id === btn.dataset.id)
-            if (!opcion) return
-
-            const pendiente = {
-                id: opcion.id,
-                concepto: opcion.titulo,
-                tipo: opcion.esCobrar,
-                monto: opcion.monto,
-                divisa: opcion.divisa
-            }
-
-            const { abrirConsolidacionPendiente } = await import("../ui/pendientes.js")
-            abrirConsolidacionPendiente(pendiente, uid)
-        })
+    // Click en una tarjeta abre el modal específico: aporte para metas,
+    // vista detalle para pendientes. Sin botones dentro de las tarjetas.
+    const lista = modalEl?.querySelector(".vencimientos-lista")
+    lista?.addEventListener("keydown", (evento) => {
+        if (evento.key !== "Enter" && evento.key !== " ") return
+        const card = evento.target.closest(".card-item")
+        if (!card) return
+        evento.preventDefault()
+        card.click()
     })
+    lista?.addEventListener("click", async (evento) => {
+        const card = evento.target.closest(".card-item")
+        if (!card) return
+
+        const opcion = vencimientosData.items.find(
+            v => v.tipo === card.dataset.tipo && v.id === card.dataset.id
+        )
+        if (!opcion) return
+
+        if (opcion.tipo === "meta") {
+            const { abrirModalAporteMeta } = await import("../ui/metas.js")
+            abrirModalAporteMeta(opcion.meta)
+            return
+        }
+
+        if (opcion.tipo === "pendiente") {
+            const { abrirVistaPendiente } = await import("../ui/pendientes.js")
+            abrirVistaPendiente(opcion.pendiente, uid)
+        }
+    })
+}
+
+function plantillaVencimiento(v) {
+    const esPendiente = v.tipo === "pendiente"
+    const accionable = esPendiente || v.tipo === "meta"
+    const signo = esPendiente ? (v.esCobrar ? "+" : "-") : ""
+    const claseValor = esPendiente
+        ? (v.esCobrar ? "positive" : "negative")
+        : (v.vencido ? "negative" : "")
+
+    return `
+        <div class="card-item vencimiento-item ${v.vencido ? "vencido" : ""} ${accionable ? "clickeable" : ""}"
+            data-tipo="${v.tipo}" data-id="${v.id}" role="button" tabindex="0">
+            <div class="card-item-info">
+                <span class="card-item-titulo">${v.titulo} ${v.vencido ? "· VENCIDO" : ""}</span>
+                <span class="card-item-detalle">
+                    ${v.subtitulo} · ${textoDias(v.diasRestantes)}
+                </span>
+            </div>
+            <span class="card-item-valor ${claseValor}">
+                ${signo ? `${signo} ` : ""}${v.monto.toFixed(2)} ${(v.divisa || "PEN").toUpperCase()}
+            </span>
+        </div>
+    `
 }
 
 function textoDias(dias) {

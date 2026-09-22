@@ -81,6 +81,15 @@
     transition: all 0.3s ease;
 }
 
+.user-container a,
+.logo-container a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
 .tab:hover {
     box-shadow: 0 0 20px var(--shadow);
     border-color: var(--border);
@@ -262,6 +271,7 @@
     background-color: var(--lightHover);
     transform: scale(1.02);
     box-shadow: 0 0 20px var(--shadow);
+    border-color: var(--border);
 }
 
 .sidebar-wrap .sidebar-toggle svg {

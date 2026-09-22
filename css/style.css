@@ -71,19 +71,24 @@
     --lightOnyx: #14141430;
     --graphite: #2C2C2C;
     --lightGraphite: #2C2C2C36;
+
     --slateGrey: #738391;
     --lightSlateGrey: #7383915f;
+
     --cottonCandy: #FFA4A4;
     --lightGreen: #BFFFC5;
+    --banana: #ffd181;
+
     --paleSky: #D0DCE8;
     --lightPaleSky: #d0dce85f;
     --whiteSmoke: #F3F3F3;
     --lightWhiteSmoke: #F3F3F336;
     --smoke: #cfcfcf;
+
     --raspberryRed: #DC0051;
     --tropicalMint: #00a269;
-
     --mustard: #f5a623;
+
 
     --font-primary: "Inter", Arial, sans-serif;
     --font-secondary: "Roboto Mono", "Courier New", monospace;
@@ -105,17 +110,17 @@
 
     --positive: var(--lightGreen);
     --negative: var(--cottonCandy);
-
+    --ambar: var(--banana);
+    
     --positiveAlt: var(--tropicalMint);
     --negativeAlt: var(--raspberryRed);
-
+    --ambarAlt: var(--mustard);
+    
     --border: var(--paleSky);
     --borderAlt: var(--slateGrey);
 
     --shadow: var(--lightPaleSky);
     --blurBackground: var(--lightOnyx);
-
-    --ambar: var(--mustard);
 }
 
 /* Tema claro */
@@ -134,17 +139,17 @@
 
     --positive: var(--tropicalMint);
     --negative: var(--raspberryRed);
-
+    --ambar: var(--mustard);
+    
     --positiveAlt: var(--lightGreen);
     --negativeAlt: var(--cottonCandy);
+    --ambarAlt: var(--banana);
 
     --border: var(--slateGrey);
     --borderAlt: var(--graphite);
 
     --shadow: var(--lightSlateGrey);
     --blurBackground: var(--lightPaleSky);
-
-    --ambar: var(--mustard);
 }
 
 /* ============================================
@@ -389,7 +394,7 @@ option {
 
 /* Texto */
 .text-secondary   { color: var(--textSecondary); }
-.text-muted       { color: var(--textSecondary); opacity: 0.7; }
+.text-muted       { opacity: 0.7; }
 .text-positive    { color: var(--positive); }
 .text-negative    { color: var(--negative); }
 .text-sm          { font-size: 12px; }

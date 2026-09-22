@@ -267,18 +267,29 @@ export async function mostrarPendientes() {
         const modoUnClick = () => sesion.getPreferencias()?.accesibilidad?.unClickSeleccion === true
 
         const actualizarBotonLote = () => {
-            const btn = document.getElementById('btn-eliminar-lote')
-            if (!btn) return
+            const btn = modalEl.querySelector('#btn-eliminar-lote')
+            const contador = modalEl.querySelector('#pendientes-contador')
             const cantidad = seleccionados.size
-            btn.disabled = cantidad === 0
-            btn.textContent = cantidad > 0
-                ? `Eliminar ${cantidad} seleccionado${cantidad !== 1 ? 's' : ''}`
-                : 'Eliminar seleccionados'
+
+            if (btn) {
+                btn.disabled = cantidad === 0
+                btn.textContent = cantidad > 0
+                    ? `Eliminar ${cantidad} seleccionado${cantidad !== 1 ? 's' : ''}`
+                    : 'Eliminar seleccionados'
+            }
+
+            // Contador dinámico: mientras hay selección muestra cuántos hay
+            // seleccionados; si no, el total de pendientes de la lista.
+            if (contador) {
+                contador.textContent = cantidad > 0
+                    ? `${cantidad} seleccionado${cantidad !== 1 ? 's' : ''}`
+                    : `${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''}`
+            }
         }
 
         const html = `
             <div class="pendientes-cabecera">
-                <span class="pendientes-contador">
+                <span class="pendientes-contador" id="pendientes-contador">
                     ${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''}
                 </span>
                 <div class="pendientes-cabecera-acciones">
@@ -320,6 +331,13 @@ export async function mostrarPendientes() {
             card?.classList.toggle("seleccionado", seleccionados.has(id))
         }
 
+        // Pone todas las cards al día con el estado de la selección.
+        const sincronizarEstadoCards = () => {
+            lista?.querySelectorAll(".card-item").forEach(card => {
+                card.classList.toggle("seleccionado", seleccionados.has(card.dataset.id))
+            })
+        }
+
         const toggleSeleccion = id => {
             if (seleccionados.has(id)) {
                 seleccionados.delete(id)
@@ -333,19 +351,27 @@ export async function mostrarPendientes() {
             actualizarBotonLote()
         }
 
-        // Modo "un click para seleccionar": un click (sin modificador) reemplaza
-        // la selección con ese pendiente; Shift + click añade o quita.
+        // Modo "un click para seleccionar": un click (sin modificador)
+        // selecciona ese pendiente y deselecciona los demás; repetir el click
+        // sobre el único seleccionado lo deselecciona. Shift + click añade o quita.
         const seleccionarPorUnClick = (id, conShift) => {
             if (conShift) {
                 toggleSeleccion(id)
                 return
             }
-            if (seleccionados.size === 1 && seleccionados.has(id)) return
+            // Click sobre el único seleccionado → deseleccionar.
+            if (seleccionados.size === 1 && seleccionados.has(id)) {
+                seleccionados.clear()
+                ordenSeleccion.length = 0
+                sincronizarEstadoCards()
+                actualizarBotonLote()
+                return
+            }
             seleccionados.clear()
             ordenSeleccion.length = 0
             seleccionados.add(id)
             ordenSeleccion.push(id)
-            actualizarEstadoCard(id)
+            sincronizarEstadoCards()
             actualizarBotonLote()
         }
 
@@ -390,12 +416,12 @@ export async function mostrarPendientes() {
             card.classList.add("acciones-visibles")
         }
 
-        document.getElementById('btn-crear-pendiente')?.addEventListener('click', () => {
+        modalEl?.querySelector('#btn-crear-pendiente')?.addEventListener('click', () => {
             cerrarModal()
             abrirFormularioCrearPendiente()
         })
 
-        document.getElementById('btn-eliminar-lote')?.addEventListener('click', () => {
+        modalEl?.querySelector('#btn-eliminar-lote')?.addEventListener('click', () => {
             const elegidos = pendientes.filter(p => seleccionados.has(p.id))
             if (elegidos.length === 0) {
                 mostrarNotificacion("info", "Selecciona al menos un pendiente")
@@ -608,6 +634,109 @@ function abrirFormularioEditarPendiente(pendiente, uidOrigen = sesion.uid) {
             setTimeout(() => mostrarPendientes(), 100)
         }
     })
+}
+
+// ============================================
+// VISTA / DETALLE DE PENDIENTE
+// ============================================
+// Un clic abre el mismo formulario que "Editar" pero con los campos
+// bloqueados. Desde ahí se puede habilitar la edición, consolidar o
+// eliminar (mismo patrón que el detalle de movimientos).
+
+export function abrirVistaPendiente(pendiente, uidOrigen = sesion.uid) {
+    const uidV = uidOrigen || sesion.uid
+
+    const modalEl = abrirModal({
+        titulo: `Pendiente: ${pendiente.concepto}`,
+        contenido: `
+            ${htmlFormularioPendiente(pendiente)}
+            <div class="movimiento-detalle-acciones" id="detalle-pendiente-acciones"></div>
+        `,
+        variante: "form",
+        confirmText: null,
+        cancelText: null,
+        cerrarAlClickFuera: true
+    })
+
+    bloquearFormularioPendiente(true)
+    renderizarAccionesVistaPendiente(modalEl, true)
+
+    const body = modalEl.querySelector(".modal-body")
+    body?.addEventListener("click", (evento) => {
+        const boton = evento.target.closest("[data-pendiente-accion]")
+        if (!boton) return
+        manejarAccionVistaPendiente(boton.dataset.pendienteAccion, pendiente, modalEl, uidV)
+    })
+}
+
+function bloquearFormularioPendiente(bloquear) {
+    const form = document.getElementById("form-crear-pendiente")
+    if (!form) return
+    form.querySelectorAll("input, select, textarea, button").forEach(el => {
+        el.disabled = bloquear
+    })
+    form.classList.toggle("form-bloqueado", bloquear)
+}
+
+function renderizarAccionesVistaPendiente(modalEl, bloqueado) {
+    const contenedor = modalEl.querySelector("#detalle-pendiente-acciones")
+    if (!contenedor) return
+
+    contenedor.innerHTML = bloqueado
+        ? `
+            <button type="button" class="glass-btn" data-pendiente-accion="editar">
+                ${icono("pencil", 15)} Editar
+            </button>
+            <button type="button" class="glass-btn" data-pendiente-accion="consolidar">
+                ${icono("circle-check", 15)} Consolidar
+            </button>
+            <button type="button" class="glass-btn danger" data-pendiente-accion="eliminar">
+                ${icono("trash", 15)} Eliminar
+            </button>
+        `
+        : `
+            <button type="button" class="glass-btn" data-pendiente-accion="cancelar">Cancelar</button>
+            <button type="button" class="modal-btn modal-btn-primary" data-pendiente-accion="guardar">Guardar cambios</button>
+        `
+}
+
+async function manejarAccionVistaPendiente(accion, pendiente, modalEl, uid) {
+    if (accion === "editar") {
+        bloquearFormularioPendiente(false)
+        renderizarAccionesVistaPendiente(modalEl, false)
+        document.getElementById("pendiente-concepto")?.focus()
+        return
+    }
+
+    if (accion === "cancelar") {
+        abrirVistaPendiente(pendiente, uid)
+        return
+    }
+
+    if (accion === "consolidar") {
+        cerrarModal()
+        await abrirConsolidacionPendiente(pendiente, uid)
+        return
+    }
+
+    if (accion === "eliminar") {
+        cerrarModal()
+        confirmarEliminacionPendiente(pendiente, uid)
+        return
+    }
+
+    if (accion === "guardar") {
+        const datos = recogerDatosFormularioPendiente()
+        if (!datos) return
+        try {
+            await actualizarPendiente(uid, pendiente.id, datos)
+            mostrarNotificacion("exito", "Pendiente actualizado")
+            cerrarModal()
+        } catch (error) {
+            console.error('Error actualizando pendiente:', error)
+            mostrarNotificacion("error", `Error: ${error.message}`)
+        }
+    }
 }
 
 function recogerDatosFormularioPendiente() {

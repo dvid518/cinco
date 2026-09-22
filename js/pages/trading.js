@@ -7,7 +7,7 @@ import {
     borrarOrden,
     evaluarOrdenesPendientes
 } from "../services/OrdenServicio.js"
-import { abrirModal, cerrarModal } from "../ui/modal.js"
+import { abrirModal, cerrarModal, estaAbierto } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { restaurarDocumento } from "../../firebase/firestore.js"
@@ -20,6 +20,19 @@ let datosTrades = null
 let filtroActual = 'todos'
 let ordenesData = []
 let vistaActual = "trades"
+
+// Selección de tarjetas (mismas reglas que movimientos/pendientes/metas):
+// dblclick o clic sostenido alternan, modo "un click" selecciona con un
+// toque y al repetir deselecciona, Shift añade/quita, Escape limpia y
+// Delete/Backspace quita la última. Solo interacción: sin contador ni
+// eliminación en lote.
+let seleccionadas = new Set()
+let ordenSeleccion = []
+let supresorClick = false
+let supresorClickTimer = null
+let clickTimer = null
+let cardConAcciones = null
+let eventosSeleccionListos = false
 
 export function render() {
     return `
@@ -153,7 +166,14 @@ function renderizarTrades() {
     const container = document.getElementById('lista-trades')
     if (!container) return
 
-    if (!datosTrades || datosTrades.trades.length === 0) {
+    const lista = datosTrades?.trades || []
+
+    // Podar ids de selección que ya no existen en la lista actual.
+    const vivas = new Set(lista.map(t => t.id))
+    seleccionadas = new Set([...seleccionadas].filter(id => vivas.has(id)))
+    ordenSeleccion = ordenSeleccion.filter(id => vivas.has(id))
+
+    if (lista.length === 0) {
         container.innerHTML = `
             <p class="lista-vacia">
                 No hay trades registrados.
@@ -164,97 +184,61 @@ function renderizarTrades() {
         return
     }
 
-    container.innerHTML = datosTrades.trades.map(t => {
+    container.innerHTML = lista.map(t => {
         const pnl = t.pnl
         const pnlPct = t.pnlPorcentaje
         const esGanancia = pnl >= 0
         const simbolo = DIVISAS_SYMBOLS[t.divisa] || '$'
 
         return `
-            <div class="posicion-item trade-item" data-trade-id="${t.id}">
-                <div class="posicion-info">
-                    <div class="posicion-nombre">
-                        ${t.activo}
-                        <span class="posicion-simbolo">${t.tipoLabel}</span>
-                    </div>
-                    <div class="posicion-detalle">
-                        Entrada: ${simbolo} ${t.entrada.toFixed(2)} · Lotaje: ${t.lotaje}
-                        ${t.sl ? ` · SL: ${t.sl.toFixed(2)}` : ''}
-                        ${t.tp ? ` · TP: ${t.tp.toFixed(2)}` : ''}
-                    </div>
-                    ${t.estaCerrado ? `
+            <div class="posicion-item trade-item${seleccionadas.has(t.id) ? " seleccionado" : ""}" data-trade-id="${t.id}">
+                <div class="card-item-main">
+                    <div class="posicion-info">
+                        <div class="posicion-nombre">
+                            ${t.activo}
+                            <span class="posicion-simbolo">${t.tipoLabel}</span>
+                        </div>
                         <div class="posicion-detalle">
-                            Salida: ${simbolo} ${t.salida.toFixed(2)}
+                            Lotaje: ${t.lotaje} · ${t.estaCerrado ? "Cerrado" : "Abierto"}
                         </div>
-                    ` : t.precioActual ? `
-                        <div class="posicion-detalle">
-                            Mercado: ${simbolo} ${t.precioActual.toFixed(2)}
+                    </div>
+                    <div class="card-item-valor-wrap">
+                        <div class="posicion-valores">
+                            ${t.estaCerrado ? `
+                                <div class="posicion-valor ${esGanancia ? 'positive' : 'negative'}">
+                                    ${esGanancia ? '+' : ''}${simbolo} ${pnl.toFixed(2)}
+                                </div>
+                                <div class="posicion-rendimiento ${esGanancia ? 'positive' : 'negative'}">
+                                    ${esGanancia ? '+' : ''}${pnlPct.toFixed(2)}%
+                                </div>
+                            ` : t.pnlFlotante !== null && t.pnlFlotante !== undefined ? `
+                                <div class="posicion-valor ${t.pnlFlotante >= 0 ? 'positive' : 'negative'}">
+                                    ${t.pnlFlotante >= 0 ? '+' : ''}${simbolo} ${t.pnlFlotante.toFixed(2)}
+                                </div>
+                                <div class="posicion-rendimiento ${t.pnlFlotante >= 0 ? 'positive' : 'negative'}">
+                                    P&L flotante
+                                </div>
+                            ` : `
+                                <div class="posicion-valor">Abierto</div>
+                            `}
                         </div>
-                    ` : ''}
-                    ${t.nota ? `
-                        <div class="posicion-detalle trade-nota">${t.nota.replace(/</g, "&lt;")}</div>
-                    ` : ''}
-                </div>
-                <div class="posicion-valores">
-                    ${t.estaCerrado ? `
-                        <div class="posicion-valor ${esGanancia ? 'positive' : 'negative'}">
-                            ${esGanancia ? '+' : ''}${pnl.toFixed(2)}
+                        <div class="card-item-acciones">
+                            ${t.estaAbierto ? `
+                                <button type="button" class="card-action-btn" data-accion="cerrar" data-id="${t.id}" title="Cerrar" aria-label="Cerrar">${icono("x", 16)}</button>
+                            ` : `
+                                <button type="button" class="card-action-btn" data-accion="reabrir" data-id="${t.id}" title="Reabrir" aria-label="Reabrir">${icono("refresh-cw", 16)}</button>
+                            `}
+                            <button type="button" class="card-action-btn" data-accion="editar" data-id="${t.id}" title="Editar" aria-label="Editar">${icono("pencil", 16)}</button>
+                            <button type="button" class="card-action-btn danger" data-accion="eliminar" data-id="${t.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
                         </div>
-                        <div class="posicion-rendimiento ${esGanancia ? 'positive' : 'negative'}">
-                            ${esGanancia ? '+' : ''}${pnlPct.toFixed(2)}%
-                        </div>
-                    ` : t.pnlFlotante !== null && t.pnlFlotante !== undefined ? `
-                        <div class="posicion-valor ${t.pnlFlotante >= 0 ? 'positive' : 'negative'}">
-                            ${t.pnlFlotante >= 0 ? '+' : ''}${t.pnlFlotante.toFixed(2)}
-                        </div>
-                        <div class="posicion-rendimiento ${t.pnlFlotante >= 0 ? 'positive' : 'negative'}">
-                            P&L flotante
-                        </div>
-                    ` : `
-                        <div class="posicion-valor">Abierto</div>
-                    `}
-                    <div class="trade-acciones">
-                        ${t.estaAbierto ? `
-                            <button class="glass-btn trade-cerrar" data-id="${t.id}">Cerrar</button>
-                        ` : `
-                            <button class="glass-btn trade-reabrir" data-id="${t.id}">Reabrir</button>
-                        `}
-                        <button class="glass-btn trade-editar" data-id="${t.id}">Editar</button>
-                        <button class="glass-btn danger trade-eliminar" data-id="${t.id}">Eliminar</button>
                     </div>
                 </div>
             </div>
         `
     }).join('')
 
-    // Eventos
-    container.querySelectorAll('.trade-cerrar').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            abrirModalCerrarTrade(btn.dataset.id)
-        })
-    })
-
-    container.querySelectorAll('.trade-reabrir').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            abrirModalReabrirTrade(btn.dataset.id)
-        })
-    })
-
-    container.querySelectorAll('.trade-editar').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            abrirModalEditarTrade(btn.dataset.id)
-        })
-    })
-
-    container.querySelectorAll('.trade-eliminar').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            confirmarEliminarTrade(btn.dataset.id)
-        })
-    })
+    // Las acciones ahora las maneja el contenedor (delegadas).
+    cardConAcciones = null
 }
 
 // ============================================
@@ -265,7 +249,14 @@ function renderizarOrdenes() {
     const container = document.getElementById('lista-trades')
     if (!container) return
 
-    if (!ordenesData || ordenesData.length === 0) {
+    const lista = ordenesData || []
+
+    // Podar ids de selección que ya no existen en la lista actual.
+    const vivas = new Set(lista.map(o => o.id))
+    seleccionadas = new Set([...seleccionadas].filter(id => vivas.has(id)))
+    ordenSeleccion = ordenSeleccion.filter(id => vivas.has(id))
+
+    if (lista.length === 0) {
         container.innerHTML = `
             <p class="lista-vacia">
                 No hay órdenes registradas.
@@ -276,13 +267,13 @@ function renderizarOrdenes() {
         return
     }
 
-    container.innerHTML = ordenesData.map(o => {
+    container.innerHTML = lista.map(o => {
         const simbolo = DIVISAS_SYMBOLS[o.divisa] || '$'
         const claseDireccion = o.direccion === "long" ? "positive" : "negative"
         const claseEstado = o.estaPendiente ? "pendiente" : (o.fueEjecutada ? "ejecutada" : "cancelada")
 
         return `
-            <div class="posicion-item trade-item orden-item" data-orden-id="${o.id}">
+            <div class="posicion-item trade-item orden-item${seleccionadas.has(o.id) ? " seleccionado" : ""}" data-orden-id="${o.id}">
                 <div class="posicion-info">
                     <div class="posicion-nombre">
                         ${o.activo}
@@ -295,40 +286,31 @@ function renderizarOrdenes() {
                     ${o.fueEjecutada && o.precioEjecucion ? `
                         <div class="posicion-detalle">
                             Ejecutada a ${simbolo} ${o.precioEjecucion.toFixed(2)}
+                    </div>
+                ` : ''}
+                ${o.nota ? `
+                    <div class="posicion-detalle trade-nota">${o.nota.replace(/</g, "&lt;")}</div>
+                ` : ''}
+                <div class="card-item-valor-wrap">
+                    <div class="posicion-valores">
+                        <div class="posicion-valor ${claseDireccion}">
+                            ${o.direccion === "long" ? "Largo" : "Corto"}
                         </div>
-                    ` : ''}
-                    ${o.nota ? `
-                        <div class="posicion-detalle trade-nota">${o.nota.replace(/</g, "&lt;")}</div>
-                    ` : ''}
-                </div>
-                <div class="posicion-valores">
-                    <div class="posicion-valor ${claseDireccion}">
-                        ${o.direccion === "long" ? "Largo" : "Corto"}
                     </div>
-                    <div class="orden-acciones">
+                    <div class="card-item-acciones">
                         ${o.estaPendiente ? `
-                            <button class="glass-btn orden-cancelar" data-id="${o.id}">Cancelar</button>
+                            <button type="button" class="card-action-btn" data-accion="cancelar" data-id="${o.id}" title="Cancelar" aria-label="Cancelar">${icono("x", 16)}</button>
                         ` : ''}
-                        <button class="glass-btn danger orden-eliminar" data-id="${o.id}">Eliminar</button>
+                        <button type="button" class="card-action-btn danger" data-accion="eliminar" data-id="${o.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
                     </div>
                 </div>
+            </div>
             </div>
         `
     }).join('')
 
-    container.querySelectorAll('.orden-cancelar').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            confirmarCancelarOrden(btn.dataset.id)
-        })
-    })
-
-    container.querySelectorAll('.orden-eliminar').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation()
-            confirmarEliminarOrden(btn.dataset.id)
-        })
-    })
+    // Las acciones ahora las maneja el contenedor (delegadas).
+    cardConAcciones = null
 }
 
 function actualizarResumen() {
@@ -415,6 +397,9 @@ function cambiarVista(vista) {
 // ============================================
 
 function configurarEventos() {
+    configurarEventosSeleccionGlobal()
+    enlazarSeleccionTarjetas()
+
     document.querySelectorAll('#sidebar button').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('#sidebar button').forEach(b => b.classList.remove('act'))
@@ -435,6 +420,305 @@ function configurarEventos() {
     document.getElementById('btn-nueva-orden')?.addEventListener('click', () => {
         abrirModalNuevaOrden()
     })
+}
+
+// ============================================
+// SELECCIÓN DE TARJETAS (Trades y Órdenes)
+// ============================================
+// Mismas reglas que movimientos/pendientes/metas: dblclick o clic sostenido
+// alternan, modo "un click" selecciona con un toque y al repetir deselecciona
+// (Shift añade/quita), Escape limpia y Delete/Backspace quita la última.
+// Solo interacción: no hay contador ni botón de eliminación en lote.
+
+function modoUnClickSeleccion() {
+    return sesion.getPreferencias()?.accesibilidad?.unClickSeleccion === true
+}
+
+function marcarSupresorClick() {
+    supresorClick = true
+    clearTimeout(supresorClickTimer)
+    supresorClickTimer = setTimeout(() => { supresorClick = false }, 400)
+}
+
+function consumirSupresorClick() {
+    if (!supresorClick) return false
+    supresorClick = false
+    clearTimeout(supresorClickTimer)
+    return true
+}
+
+function toggleSeleccion(id) {
+    if (seleccionadas.has(id)) {
+        seleccionadas.delete(id)
+        const indice = ordenSeleccion.indexOf(id)
+        if (indice !== -1) ordenSeleccion.splice(indice, 1)
+    } else {
+        seleccionadas.add(id)
+        if (!ordenSeleccion.includes(id)) ordenSeleccion.push(id)
+    }
+    aplicarSeleccionDOM()
+}
+
+// Modo "un click": un click (sin modificador) selecciona y deselecciona las
+// demás; repetir el click sobre el único seleccionado lo deselecciona.
+// Shift + click añade o quita.
+function seleccionarPorUnClick(id, conShift) {
+    if (conShift) {
+        toggleSeleccion(id)
+        return
+    }
+    if (seleccionadas.size === 1 && seleccionadas.has(id)) {
+        seleccionadas.clear()
+        ordenSeleccion.length = 0
+        aplicarSeleccionDOM()
+        return
+    }
+    seleccionadas.clear()
+    ordenSeleccion.length = 0
+    seleccionadas.add(id)
+    ordenSeleccion.push(id)
+    aplicarSeleccionDOM()
+}
+
+function deseleccionarUltima() {
+    const id = ordenSeleccion.pop()
+    if (!id) return
+    seleccionadas.delete(id)
+    aplicarSeleccionDOM()
+}
+
+function limpiarSeleccion() {
+    if (seleccionadas.size === 0) return
+    seleccionadas.clear()
+    ordenSeleccion.length = 0
+    ocultarAccionesCards()
+    aplicarSeleccionDOM()
+}
+
+function aplicarSeleccionDOM() {
+    document.querySelectorAll("#lista-trades .trade-item").forEach(card => {
+        const id = card.dataset.tradeId || card.dataset.ordenId
+        card.classList.toggle("seleccionado", seleccionadas.has(id))
+    })
+}
+
+function configurarEventosSeleccionGlobal() {
+    if (eventosSeleccionListos) return
+    eventosSeleccionListos = true
+    document.addEventListener("click", manejarClickFueraTarjetas)
+    document.addEventListener("keydown", manejarTecladoSeleccionTarjetas)
+}
+
+function manejarClickFueraTarjetas(evento) {
+    if (!document.getElementById("lista-trades")) return
+    if (evento.target.closest("#lista-trades")) return
+    if (evento.target.closest("#app-footer")) return
+    if (evento.target.closest(".modal-overlay")) return
+    ocultarAccionesCards()
+    limpiarSeleccion()
+}
+
+function manejarTecladoSeleccionTarjetas(evento) {
+    if (!document.getElementById("lista-trades")) return
+    if (estaAbierto()) return
+
+    if (evento.key === "Escape") {
+        if (seleccionadas.size > 0) {
+            ocultarAccionesCards()
+            limpiarSeleccion()
+        }
+        return
+    }
+
+    if (evento.key !== "Delete" && evento.key !== "Backspace") return
+    if (evento.target.matches("input, textarea, select")) return
+    if (seleccionadas.size === 0) return
+    evento.preventDefault()
+    deseleccionarUltima()
+}
+
+// Listeners delegados sobre la lista (persisten entre renders). Los botones
+// de acción (revelados por hover/swipe) y las reglas de selección se
+// manejan acá.
+function enlazarSeleccionTarjetas() {
+    const container = document.getElementById("lista-trades")
+    if (!container || container.dataset.seleccionLista) return
+    container.dataset.seleccionLista = "1"
+
+    container.addEventListener("click", manejarClickTarjeta)
+    container.addEventListener("dblclick", manejarDobleClickTarjeta)
+    vincularGestosTarjetas(container)
+}
+
+function manejarClickTarjeta(evento) {
+    // Botones de acción revelados por hover/swipe.
+    const accionBtn = evento.target.closest(".card-action-btn")
+    if (accionBtn) {
+        evento.stopPropagation()
+        const card = accionBtn.closest(".trade-item")
+        ocultarAccionesCards()
+        if (!card) return
+        ejecutarAccionTarjeta(accionBtn.dataset.accion, card.dataset.tradeId || card.dataset.ordenId)
+        return
+    }
+
+    const card = evento.target.closest(".trade-item")
+
+    // Un toque sobre la card con acciones reveladas solo las oculta.
+    if (cardConAcciones) {
+        const esLaMisma = card === cardConAcciones
+        ocultarAccionesCards()
+        if (esLaMisma) {
+            consumirSupresorClick()
+            return
+        }
+    }
+
+    // Click inmediatamente tras selección por clic sostenido o swipe.
+    if (consumirSupresorClick()) return
+
+    if (!card) return
+
+    const id = card.dataset.tradeId || card.dataset.ordenId
+    if (!id) return
+
+    if (modoUnClickSeleccion()) {
+        seleccionarPorUnClick(id, evento.shiftKey)
+        return
+    }
+
+    if (seleccionadas.size > 0) {
+        toggleSeleccion(id)
+        return
+    }
+
+    // Clásico sin selección: un click en un trade abre su edición.
+    if (card.dataset.tradeId) {
+        if (clickTimer) {
+            clearTimeout(clickTimer)
+            clickTimer = null
+        }
+        clickTimer = setTimeout(() => {
+            clickTimer = null
+            if (seleccionadas.size === 0) abrirModalEditarTrade(card.dataset.tradeId)
+        }, 280)
+    }
+}
+
+function manejarDobleClickTarjeta(evento) {
+    if (evento.target.closest(".glass-btn, .card-action-btn")) return
+    const card = evento.target.closest(".trade-item")
+    if (!card) return
+
+    if (clickTimer) {
+        clearTimeout(clickTimer)
+        clickTimer = null
+    }
+
+    // Con la opción activa el click ya selecciona; el doble click abre la edición.
+    if (modoUnClickSeleccion()) {
+        limpiarSeleccion()
+        if (card.dataset.tradeId) abrirModalEditarTrade(card.dataset.tradeId)
+        return
+    }
+
+    const id = card.dataset.tradeId || card.dataset.ordenId
+    if (id) toggleSeleccion(id)
+}
+
+function ejecutarAccionTarjeta(accion, id) {
+    if (!id) return
+    if (accion === "cerrar") abrirModalCerrarTrade(id)
+    else if (accion === "reabrir") abrirModalReabrirTrade(id)
+    else if (accion === "editar") abrirModalEditarTrade(id)
+    else if (accion === "eliminar") confirmarEliminarTrade(id)
+    else if (accion === "cancelar") confirmarCancelarOrden(id)
+}
+
+function mostrarAccionesCard(card) {
+    if (cardConAcciones && cardConAcciones !== card) {
+        cardConAcciones.classList.remove("acciones-visibles")
+    }
+    cardConAcciones = card
+    card.classList.add("acciones-visibles")
+}
+
+function ocultarAccionesCards() {
+    if (!cardConAcciones) return
+    cardConAcciones.classList.remove("acciones-visibles")
+    cardConAcciones = null
+}
+
+// Clic sostenido → seleccionar; swipe horizontal → revelar acciones (en móvil).
+function vincularGestosTarjetas(container) {
+    let gesto = null
+
+    const cancelar = () => {
+        if (gesto?.timer) clearTimeout(gesto.timer)
+        gesto = null
+    }
+
+    container.addEventListener("pointerdown", (evento) => {
+        if (evento.pointerType === "mouse" && evento.button !== 0) return
+        if (evento.target.closest(".glass-btn, .card-action-btn")) return
+
+        const card = evento.target.closest(".trade-item")
+        if (!card) return
+
+        cancelar()
+        if (cardConAcciones && cardConAcciones !== card) ocultarAccionesCards()
+
+        gesto = {
+            card,
+            pointerId: evento.pointerId,
+            pointerType: evento.pointerType,
+            startX: evento.clientX,
+            startY: evento.clientY,
+            movido: false,
+            swipeRevelado: false,
+            timer: null
+        }
+
+        const duracion = evento.pointerType === "touch" ? 500 : 700
+        gesto.timer = setTimeout(() => {
+            if (!gesto) return
+            toggleSeleccion(card.dataset.tradeId || card.dataset.ordenId)
+            marcarSupresorClick()
+            cancelar()
+        }, duracion)
+    })
+
+    container.addEventListener("pointermove", (evento) => {
+        if (!gesto || evento.pointerId !== gesto.pointerId) return
+
+        const dx = evento.clientX - gesto.startX
+        const dy = evento.clientY - gesto.startY
+
+        if (!gesto.movido && Math.hypot(dx, dy) > 10) {
+            gesto.movido = true
+            if (gesto.timer) {
+                clearTimeout(gesto.timer)
+                gesto.timer = null
+            }
+        }
+
+        if (!gesto.movido || gesto.pointerType === "mouse") return
+
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+            gesto.swipeRevelado = true
+            if (dx < 0) mostrarAccionesCard(gesto.card)
+            else ocultarAccionesCards()
+        }
+    })
+
+    const finalizar = (evento) => {
+        if (!gesto || evento.pointerId !== gesto.pointerId) return
+        if (gesto.swipeRevelado) marcarSupresorClick()
+        cancelar()
+    }
+
+    container.addEventListener("pointerup", finalizar)
+    container.addEventListener("pointercancel", finalizar)
 }
 
 // ============================================
