@@ -232,7 +232,7 @@
 }
 
 .posicion-favorito.es-favorito {
-    color: var(--warning, #f5a623);
+    color: var(--ambar);
 }
 
 .posicion-favorito.es-favorito svg {
@@ -252,15 +252,6 @@
 .posicion-detalle {
     font-size: 12px;
     color: var(--textSecondary);
-}
-
-.posicion-acciones-hint {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 4px;
-    opacity: 0.7;
-    font-size: 11px;
 }
 
 .posicion-valores {
@@ -423,7 +414,7 @@
 
 .posicion-fuente.fuente-manual {
     background: var(--border);
-    color: var(--textSecondary);
+    color: var(--borderAlt);
 }
 
 .posicion-fuente.fuente-api {

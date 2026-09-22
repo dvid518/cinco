@@ -91,6 +91,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    border: 1px solid var(--border);
     background: var(--surface);
     border: none;
     color: var(--text);
@@ -206,7 +207,7 @@
     transition: all 0.3s ease;
 }
 
-.form-group .form-input:focus {
+.form-group .form-input:hover {
     border-color: var(--text);
     background-color: var(--lightHover);
 }

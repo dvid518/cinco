@@ -51,6 +51,7 @@ export function render() {
         </section>
     `)}
         <section id="panel" class="glass">
+            <div class="panel-header">
                 <div class="toggle-group" id="toggle-vista-inversiones">
                     <span class="toggle-option active" data-vista="posiciones">Posiciones</span>
                     <span class="toggle-option" data-vista="estrategias">Estrategias</span>
@@ -215,9 +216,6 @@ function plantillaPosicion(p) {
                 <div class="posicion-detalle">
                     ${p.cantidad.toFixed(4)} · Precio: ${activo?.ultimoPrecio?.toFixed(2) || "0.00"} ${p.divisa.toUpperCase()}
                     ${fechaActualizacion ? ` · Act. ${fechaActualizacion}` : ""}
-                </div>
-                <div class="posicion-detalle posicion-acciones-hint">
-                    ${icono("refresh-cw", 12)} Toca para ver gráfico, actualizar precio o eliminar
                 </div>
             </div>
             <div class="posicion-valores">

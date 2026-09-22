@@ -7,8 +7,8 @@ class Sesion {
                 dashboard: true,
                 cuentas: true,
                 movimientos: true,
-                inversiones: false,
-                trading: false,
+                inversiones: true,
+                trading: true,
                 configuracion: true
             },
             seg: {
@@ -17,7 +17,8 @@ class Sesion {
             },
             accesibilidad: {
                 modalesPersistentes: false,
-                doodles: false
+                doodles: false,
+                unClickSeleccion: false
             },
             movimientosRecientes: 5
         }
@@ -173,8 +174,8 @@ class Sesion {
                 dashboard: true,
                 cuentas: true,
                 movimientos: true,
-                inversiones: false,
-                trading: false,
+                inversiones: true,
+                trading: true,
                 configuracion: true
             },
             seg: {
@@ -183,7 +184,8 @@ class Sesion {
             },
             accesibilidad: {
                 modalesPersistentes: false,
-                doodles: false
+                doodles: false,
+                unClickSeleccion: false
             },
             movimientosRecientes: 5
         }

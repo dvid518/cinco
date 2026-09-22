@@ -33,7 +33,8 @@ export async function aportarMeta(uid, meta, { monto, cuentaId, fecha = new Date
         concepto: `Aporte a meta: ${meta.nombre}`,
         monto,
         divisa: meta.divisa,
-        fechaRealizacion: fecha
+        fechaRealizacion: fecha,
+        metaId: meta.id
     })
 
     const montoActual = (meta.montoActual || 0) + monto

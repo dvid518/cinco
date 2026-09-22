@@ -22,16 +22,10 @@ import { obtenerPosicionesConValor } from "../services/PosicionServicio.js"
 import { obtenerPendientes } from "../repositories/PendienteRepositorio.js"
 import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
-import { parseFechaLocal, fechaLocalISO } from "../core/fechas.js"
 import { icono } from "../core/iconos.js"
 
-import {
-    obtenerMetas,
-    crearMeta,
-    actualizarMeta,
-    eliminarMeta
-} from "../repositories/MetaRepositorio.js"
-import { aportarMeta } from "../services/MetaServicio.js"
+import { obtenerMetas } from "../repositories/MetaRepositorio.js"
+import { abrirModalMeta, mostrarMetas } from "../ui/metas.js"
 
 // ============================================
 // ESTADO
@@ -724,6 +718,20 @@ function plantillaFavorito(posicion) {
 function configurarMetas() {
     document.getElementById("btn-nueva-meta")
         ?.addEventListener("click", () => abrirModalMeta())
+
+    instalarSincronizacionMetas()
+}
+
+// Cuando las metas cambian desde el modal del lastbar (metas.js), refresca
+// la sección del dashboard sin recargar. Se instala una sola vez.
+let sincronizacionMetasInstalada = false
+function instalarSincronizacionMetas() {
+    if (sincronizacionMetasInstalada) return
+    sincronizacionMetasInstalada = true
+    window.addEventListener("metas-actualizadas", async () => {
+        metasData = await cargarMetas()
+        actualizarMetas()
+    })
 }
 
 function actualizarMetas() {
@@ -736,10 +744,11 @@ function actualizarMetas() {
     }
 
     lista.innerHTML = metasData.map(plantillaMeta).join("")
-    ajustarBarrasMetas(lista)
-    enlazarAccionesMetas(lista)
+    enlazarListaMetas(lista)
 }
 
+// Tarjeta al estilo de "Últimos movimientos"/"Favoritos": el nombre con el
+// monto acumulado como información secundaria y el porcentaje a la derecha.
 function plantillaMeta(meta) {
     const simbolo = DIVISAS_SYMBOLS[meta.divisa] || "S/"
     const clases = [
@@ -749,63 +758,20 @@ function plantillaMeta(meta) {
     ].filter(Boolean).join(" ")
 
     return `
-        <div class="${clases}" data-meta-id="${meta.id}">
-            <div class="meta-cabecera">
-                <span class="meta-nombre">${icono(meta.icono, 16)}<span>${meta.nombre}</span></span>
-                <span class="meta-porcentaje">${meta.porcentaje.toFixed(0)}%</span>
+        <div class="${clases}" data-meta-id="${meta.id}" role="button" tabindex="0" title="Gestionar metas">
+            <div class="meta-info">
+                <span class="meta-nombre">${meta.nombre}</span>
+                <span class="meta-cantidad">${simbolo} ${meta.montoActual.toFixed(2)}</span>
             </div>
-            <div class="meta-progreso">
-                <div class="meta-progreso-barra" data-meta-id="${meta.id}"></div>
-            </div>
-            <div class="meta-detalle">
-                <span>${simbolo} ${meta.montoActual.toFixed(2)} de ${simbolo} ${meta.montoObjetivo.toFixed(2)}</span>
-                <span>${textoFechaLimite(meta.fechaLimite)}</span>
-            </div>
-            <div class="meta-acciones">
-                <button type="button" class="glass btn-sm meta-aportar" data-id="${meta.id}">Aportar</button>
-                <button type="button" class="glass btn-sm meta-editar" data-id="${meta.id}">Editar</button>
-                <button type="button" class="glass btn-sm btn-danger meta-eliminar" data-id="${meta.id}">Eliminar</button>
-            </div>
+            <span class="meta-porcentaje">${meta.porcentaje.toFixed(0)}%</span>
         </div>
     `
 }
 
-function ajustarBarrasMetas(container) {
-    container.querySelectorAll(".meta-progreso-barra").forEach(barra => {
-        const meta = metasData.find(m => m.id === barra.dataset.metaId)
-        const porcentaje = Math.min(100, meta?.porcentaje || 0)
-        // Variable CSS: mantiene la regla de no usar estilos inline.
-        barra.style.setProperty("--progreso", `${porcentaje}%`)
-    })
-}
-
-function enlazarAccionesMetas(container) {
-    container.querySelectorAll(".meta-aportar").forEach(boton => {
-        boton.addEventListener("click", () => {
-            const meta = metasData.find(m => m.id === boton.dataset.id)
-            if (meta) abrirModalAporteMeta(meta)
-        })
-    })
-
-    container.querySelectorAll(".meta-editar").forEach(boton => {
-        boton.addEventListener("click", () => {
-            const meta = metasData.find(m => m.id === boton.dataset.id)
-            if (meta) abrirModalMeta(meta)
-        })
-    })
-
-    container.querySelectorAll(".meta-eliminar").forEach(boton => {
-        boton.addEventListener("click", () => {
-            const meta = metasData.find(m => m.id === boton.dataset.id)
-            if (meta) confirmarEliminarMeta(meta)
-        })
-    })
-}
-
-function textoFechaLimite(fecha) {
-    if (!fecha) return "Sin fecha límite"
-    const dias = diasHasta(fecha)
-    return `Límite: ${formatearFecha(fecha)} (${textoDias(dias)})`
+function enlazarListaMetas(lista) {
+    lista.onclick = () => {
+        mostrarMetas()
+    }
 }
 
 function formatearFecha(fecha) {
@@ -813,209 +779,6 @@ function formatearFecha(fecha) {
     const d = new Date(fecha)
     if (isNaN(d.getTime())) return "—"
     return d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })
-}
-
-function abrirModalMeta(meta = null) {
-    const esEdicion = !!meta
-    const valorDivisa = meta?.divisa || getDivisaPrincipal()
-    const valorFecha = meta?.fechaLimite ? fechaLocalISO(new Date(meta.fechaLimite)) : ""
-
-    const contenido = `
-        <form id="form-meta" class="form-movimiento">
-            <div class="form-group">
-                <label for="meta-nombre">Nombre *</label>
-                <input type="text" id="meta-nombre" class="form-input" placeholder="Ej: Fondo de emergencia" value="${meta?.nombre || ""}" required>
-            </div>
-            <div class="form-grupo-doble">
-                <div class="form-group">
-                    <label for="meta-objetivo">Monto objetivo *</label>
-                    <input type="number" id="meta-objetivo" class="form-input" step="0.01" min="0.01" placeholder="0.00" value="${meta?.montoObjetivo ?? ""}" required>
-                </div>
-                <div class="form-group">
-                    <label for="meta-actual">Monto actual</label>
-                    <input type="number" id="meta-actual" class="form-input" step="0.01" min="0" placeholder="0.00" value="${meta?.montoActual ?? 0}">
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="meta-divisa">Divisa *</label>
-                <select id="meta-divisa" class="form-input">
-                    ${["pen", "usd", "usdt"].map(d => `<option value="${d}" ${d === valorDivisa ? "selected" : ""}>${d.toUpperCase()}</option>`).join("")}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="meta-fecha">Fecha límite</label>
-                <div class="campo-fecha">
-                    <input type="date" id="meta-fecha" class="form-input" value="${valorFecha}">
-                    <button type="button" class="btn-calendario" aria-label="Abrir calendario">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days preview-icon">
-                            <path d="M8 2v4"/>
-                            <path d="M16 2v4"/>
-                            <rect width="18" height="18" x="3" y="4" rx="2"/>
-                            <path d="M3 10h18"/>
-                            <path d="M8 14h.01"/>
-                            <path d="M12 14h.01"/>
-                            <path d="M16 14h.01"/>
-                            <path d="M8 18h.01"/>
-                            <path d="M12 18h.01"/>
-                            <path d="M16 18h.01"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </form>
-    `
-
-    abrirModal({
-        titulo: esEdicion ? "Editar meta" : "Nueva meta",
-        contenido,
-        confirmText: esEdicion ? "Guardar" : "Crear meta",
-        cancelText: "Cancelar",
-        onConfirm: async () => {
-            const nombre = document.getElementById("meta-nombre")?.value.trim()
-            const montoObjetivo = parseFloat(document.getElementById("meta-objetivo")?.value)
-            const montoActual = parseFloat(document.getElementById("meta-actual")?.value) || 0
-            const divisa = document.getElementById("meta-divisa")?.value
-            const fechaValor = document.getElementById("meta-fecha")?.value
-
-            if (!nombre) {
-                mostrarNotificacion("error", "El nombre es obligatorio")
-                return false
-            }
-            if (!montoObjetivo || montoObjetivo <= 0) {
-                mostrarNotificacion("error", "El monto objetivo debe ser mayor a 0")
-                return false
-            }
-
-            const datos = {
-                nombre,
-                montoObjetivo,
-                montoActual,
-                divisa,
-                fechaLimite: fechaValor ? parseFechaLocal(fechaValor) : null
-            }
-
-            try {
-                if (esEdicion) {
-                    await actualizarMeta(uid, meta.id, datos)
-                } else {
-                    await crearMeta(uid, datos)
-                }
-                metasData = await cargarMetas()
-                actualizarMetas()
-                mostrarNotificacion("exito", esEdicion ? "Meta actualizada" : "Meta creada")
-                return true
-            } catch (error) {
-                console.error("Error guardando meta:", error)
-                mostrarNotificacion("error", error.message || "No se pudo guardar la meta")
-                return false
-            }
-        }
-    })
-}
-
-function abrirModalAporteMeta(meta) {
-    const simbolo = DIVISAS_SYMBOLS[meta.divisa] || "S/"
-    const montoSugerido = meta.montoRestante > 0 ? meta.montoRestante.toFixed(2) : ""
-
-    const contenido = `
-        <form id="form-aporte-meta" class="form-movimiento">
-            <p class="modal-message-desc">
-                Aporte a <strong>${meta.nombre}</strong>.
-                Restante: ${simbolo} ${meta.montoRestante.toFixed(2)}.
-            </p>
-            <div class="form-group">
-                <label for="aporte-monto">Monto del aporte *</label>
-                <input type="number" id="aporte-monto" class="form-input" step="0.01" min="0.01" placeholder="0.00" value="${montoSugerido}" required>
-            </div>
-            <div class="form-group">
-                <label for="aporte-cuenta">Cuenta de origen *</label>
-                <select id="aporte-cuenta" class="form-input" required>
-                    <option value="">Seleccionar cuenta</option>
-                </select>
-                <span class="form-hint">Se registrará un gasto en la cuenta seleccionada.</span>
-            </div>
-        </form>
-    `
-
-    abrirModal({
-        titulo: "Aportar a meta",
-        contenido,
-        confirmText: "Aportar",
-        cancelText: "Cancelar",
-        onConfirm: async () => {
-            const monto = parseFloat(document.getElementById("aporte-monto")?.value)
-            const cuentaId = document.getElementById("aporte-cuenta")?.value
-
-            if (!monto || monto <= 0) {
-                mostrarNotificacion("error", "El monto debe ser mayor a 0")
-                return false
-            }
-            if (!cuentaId) {
-                mostrarNotificacion("error", "Selecciona una cuenta de origen")
-                return false
-            }
-
-            try {
-                await aportarMeta(uid, meta, { monto, cuentaId })
-                await cargarTodo()
-                mostrarNotificacion("exito", `Aporte de ${simbolo} ${monto.toFixed(2)} registrado`)
-                return true
-            } catch (error) {
-                console.error("Error registrando aporte:", error)
-                mostrarNotificacion("error", error.message || "No se pudo registrar el aporte")
-                return false
-            }
-        }
-    })
-
-    setTimeout(() => cargarCuentasEnSelect("aporte-cuenta"), 200)
-}
-
-function confirmarEliminarMeta(meta) {
-    abrirModal({
-        titulo: "Eliminar meta",
-        contenido: `
-            <div class="modal-message">
-                <p class="modal-message-desc">
-                    ¿Eliminar la meta <strong>${meta.nombre}</strong>? Esta acción no se puede deshacer.
-                </p>
-            </div>
-        `,
-        variante: "peligro",
-        confirmText: "Eliminar",
-        cancelText: "Cancelar",
-        onConfirm: async () => {
-            try {
-                await eliminarMeta(uid, meta.id)
-                metasData = await cargarMetas()
-                actualizarMetas()
-                mostrarNotificacion("exito", "Meta eliminada")
-                return true
-            } catch (error) {
-                console.error("Error eliminando meta:", error)
-                mostrarNotificacion("error", "No se pudo eliminar la meta")
-                return false
-            }
-        }
-    })
-}
-
-async function cargarCuentasEnSelect(selectId) {
-    const select = document.getElementById(selectId)
-    if (!select) return
-
-    try {
-        const lista = await obtenerCuentas(uid)
-        const disponibles = lista.filter(c => c.estado !== "archivada" && c.tipo !== "credito")
-
-        select.innerHTML = `<option value="">Seleccionar cuenta</option>` +
-            disponibles.map(c => {
-                const moneda = (c.moneda || "pen").toUpperCase()
-                return `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (${moneda})</option>`
-            }).join("")
-    } catch (error) {
-        console.error("Error cargando cuentas en select:", error)
-    }
 }
 
 // ============================================

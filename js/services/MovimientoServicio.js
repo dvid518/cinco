@@ -9,6 +9,7 @@ import {
 } from "../../firebase/firestore.js"
 import { TIPOS_MOVIMIENTO, CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
 import { getFechaHoy } from "../core/fechas.js"
+import { obtenerMeta, actualizarMeta } from "../repositories/MetaRepositorio.js"
 
 // No se permiten fechas futuras: cualquier fechaRealizacion mayor que hoy
 // se normaliza al día de hoy. Aplica tanto al registrar como al editar.
@@ -152,18 +153,25 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
     // 1. Deshacer el efecto del movimiento original
     await revertirSaldos(uid, movimientoOriginal.tipo, movimientoOriginal)
     await revertirPosicion(uid, movimientoOriginal)
+    if (movimientoOriginal?.metaId) {
+        await revertirAporteMeta(uid, movimientoOriginal)
+    }
 
     // 2. Aplicar el nuevo efecto
     await actualizarSaldos(uid, tipoFinal, datos)
     if (esMovimientoDeActivo(tipoFinal)) {
         await aplicarPosicion(uid, tipoFinal, datos)
     }
+    if (movimientoOriginal?.metaId) {
+        await aplicarAporteMeta(uid, movimientoOriginal.metaId, Math.abs(datos.monto || 0))
+    }
 
-    // 3. Actualizar el documento
-    await actualizarMovimientoDoc(uid, movimientoId, {
-        tipo: tipoFinal,
-        ...datos
-    })
+    // 3. Actualizar el documento (conserva el vínculo con la meta)
+    const datosGuardado = { tipo: tipoFinal, ...datos }
+    if (movimientoOriginal?.metaId) {
+        datosGuardado.metaId = movimientoOriginal.metaId
+    }
+    await actualizarMovimientoDoc(uid, movimientoId, datosGuardado)
 
     return true
 }
@@ -176,8 +184,41 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
 export async function eliminarMovimiento(uid, m) {
     await revertirSaldos(uid, m.tipo, m)
     await revertirPosicion(uid, m)
+    if (m?.metaId) {
+        await revertirAporteMeta(uid, m)
+    }
     await eliminarMovimientoDoc(uid, m.id)
     return true
+}
+
+// ============================================
+// VÍNCULO CON METAS DE AHORRO
+// ============================================
+// Un gasto creado por "Aportar a meta" guarda `metaId`. Al eliminar o editar
+// ese movimiento se ajusta el monto actual de la meta para que el fondo y el
+// total aportado reflejen el nuevo estado de la cuenta.
+
+async function revertirAporteMeta(uid, m) {
+    if (!m?.metaId) return
+
+    const meta = await obtenerMeta(uid, m.metaId)
+    if (!meta) return
+
+    const monto = Math.abs(m.monto || 0)
+    await actualizarMeta(uid, m.metaId, {
+        montoActual: Math.max(0, (meta.montoActual || 0) - monto)
+    })
+}
+
+async function aplicarAporteMeta(uid, metaId, monto) {
+    if (!metaId || !monto || monto <= 0) return
+
+    const meta = await obtenerMeta(uid, metaId)
+    if (!meta) return
+
+    await actualizarMeta(uid, metaId, {
+        montoActual: (meta.montoActual || 0) + monto
+    })
 }
 
 function esMovimientoDeActivo(tipo) {

@@ -53,6 +53,7 @@ const SHELL_ASSETS = [
     "/js/ui/modal.js",
     "/js/ui/formularioMovimiento.js",
     "/js/ui/pendientes.js",
+    "/js/ui/metas.js",
     "/js/ui/graficos.js",
     "/js/ui/notificaciones.js",
     "/js/ui/exportar.js",

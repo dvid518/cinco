@@ -236,11 +236,22 @@ function renderPage(page) {
     }
 }
 
+// Avisa a las páginas de que se está saliendo de la actual (antes del render).
+// Permite capturar estado (p. ej. cambios sin guardar) mientras el DOM
+// todavía está montado. La navegación no se bloquea.
+function avisarCambioDePagina(hacia) {
+    if (hacia === currentPage) return
+    document.dispatchEvent(new CustomEvent("pagina-cambiando", {
+        detail: { desde: currentPage, hacia }
+    }))
+}
+
 export function navigateTo(path) {
     console.log('[INFO] Navegando a:', path)
     const cleanPath = path.replace(/\/+/g, '/')
     const page = routes[cleanPath] || 'dashboard'
     console.log('[INFO] Página:', page)
+    avisarCambioDePagina(page)
     loadPage(page)
 }
 
@@ -271,6 +282,7 @@ function setupNavigation() {
 
 window.addEventListener('popstate', (event) => {
     const page = event.state?.page || 'dashboard'
+    avisarCambioDePagina(page)
     loadPage(page)
 })
 

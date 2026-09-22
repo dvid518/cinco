@@ -271,6 +271,23 @@ export function render() {
                         </div>
                     </div>
                 </div>
+
+                <div class="config-group">
+                    <span class="config-label">Un click para seleccionar</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Seleccionar con un click</span>
+                            <label class="switch">
+                                <input type="checkbox" id="acc-un-click-seleccion">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <span class="config-hint">
+                        Con la opción activa, el doble click abre el detalle del movimiento en lugar de
+                        seleccionarlo. Desactivada, el click abre el detalle como siempre.
+                    </span>
+                </div>
             </div>
 
             <!-- DATOS -->
@@ -366,6 +383,7 @@ function configurarTema() {
             // Aplicar visualmente sin persistir (se guarda con el botón Guardar)
             temaActual = tema
             temaPendiente = true
+            marcarCambioNuevo()
             aplicarTema(tema)
             window.dispatchEvent(new CustomEvent("tema-cambiado", { detail: { tema } }))
 
@@ -395,6 +413,7 @@ function configurarCuenta() {
                 nombreInput.value = usuario?.nombre || "Usuario"
             } else if (nuevo !== base) {
                 nombrePendiente = nuevo
+                marcarCambioNuevo()
             } else {
                 nombrePendiente = null
             }
@@ -657,6 +676,10 @@ async function cargarPreferencias() {
         if (accDoodles) {
             accDoodles.checked = acc.doodles === true
         }
+        const accUnClick = document.getElementById("acc-un-click-seleccion")
+        if (accUnClick) {
+            accUnClick.checked = acc.unClickSeleccion === true
+        }
 
         actualizarEstadoGuardar()
     } catch (error) {
@@ -689,6 +712,7 @@ function hayCambiosEnVivo() {
     const segCerrarUI = document.getElementById("seg-cerrar-pestana")?.checked
     const accModalesUI = document.getElementById("acc-modales-persistentes")?.checked
     const accDoodlesUI = document.getElementById("acc-doodles")?.checked
+    const accUnClickUI = document.getElementById("acc-un-click-seleccion")?.checked
     const movRecientesUI = leerCantidadMovimientos()
 
     return (
@@ -697,6 +721,7 @@ function hayCambiosEnVivo() {
         (segCerrarUI !== undefined && segCerrarUI !== (segBase.cerrarAlCerrarPestana !== false)) ||
         (accModalesUI !== undefined && accModalesUI !== (accBase.modalesPersistentes === true)) ||
         (accDoodlesUI !== undefined && accDoodlesUI !== (accBase.doodles === true)) ||
+        (accUnClickUI !== undefined && accUnClickUI !== (accBase.unClickSeleccion === true)) ||
         (movRecientesUI !== null && movRecientesUI !== (base.movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT)) ||
         (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
         (document.getElementById("toggle-movimientos")?.checked !== (basePaginas.movimientos !== false)) ||
@@ -719,13 +744,15 @@ function configurarDetectorCambios() {
         "seg-inactividad",
         "seg-cerrar-pestana",
         "acc-modales-persistentes",
-        "acc-doodles"
+        "acc-doodles",
+        "acc-un-click-seleccion"
     ]
 
     ids.forEach(id => {
         const el = document.getElementById(id)
         if (el) {
             el.addEventListener("change", () => {
+                marcarCambioNuevo()
                 actualizarEstadoGuardar()
             })
         }
@@ -733,6 +760,7 @@ function configurarDetectorCambios() {
 
     const movRecientes = document.getElementById("movimientos-recientes")
     movRecientes?.addEventListener("input", () => {
+        marcarCambioNuevo()
         actualizarEstadoGuardar()
     })
 }
@@ -826,6 +854,7 @@ async function actualizarTipoCambioAutomatico() {
         if (tcUSD) tcUSD.value = penUSD
 
         actualizarInfoAuto()
+        marcarCambioNuevo()
         actualizarEstadoGuardar()
         mostrarNotificacion("exito", `Tipo de cambio actualizado: 1 USD = ${penUSD.toFixed(2)} PEN`)
     } catch (error) {
@@ -853,6 +882,51 @@ export function guardarDesdeLastbar() {
 }
 
 // ============================================
+// AVISO DE CAMBIOS SIN GUARDAR AL NAVEGAR
+// ============================================
+// Al cambiar de pestaña con cambios sin guardar (router → "pagina-cambiando")
+// aparece una notificación persistente con Aceptar (guarda el snapshot) y
+// Cancelar (descarta el aviso sin guardar). Se cierra también con la X o
+// swipe (tampoco guarda). La navegación nunca se bloquea.
+// Si el usuario descarta el aviso (Cancelar/X/swipe), NO se vuelve a mostrar:
+// solo reaparece si vuelve a tocar algún control de la página o guarda.
+
+let avisoCambiosActivo = false
+let avisoDescartado = false
+
+// El usuario volvió a tocar un control → el aviso descartado se rehabilita.
+function marcarCambioNuevo() {
+    avisoDescartado = false
+}
+
+document.addEventListener("pagina-cambiando", (event) => {
+    const desde = event.detail?.desde
+    if (desde !== "configuracion") return
+    if (!hayCambios || avisoDescartado || avisoCambiosActivo) return
+
+    // Snapshot de las preferencias ANTES de que el router desmonte la página
+    const preferenciasPendientes = construirPreferencias()
+
+    avisoCambiosActivo = true
+
+    mostrarNotificacion("warning", "¿Guardar cambios?", 0, [
+        {
+            texto: "Aceptar",
+            primaria: true,
+            alClick: () => aplicarPreferencias(preferenciasPendientes)
+        },
+        {
+            texto: "Cancelar",
+            clase: "cancel",
+            alClick: () => {}
+        }
+    ], () => {
+        avisoCambiosActivo = false
+        avisoDescartado = true
+    })
+})
+
+// ============================================
 // ESTADO DEL BOTÓN GUARDAR
 // ============================================
 // Solo .desact (sin colores especiales ni clase .activo)
@@ -866,7 +940,7 @@ function actualizarEstadoGuardar() {
     }
 }
 
-async function guardarPreferencias() {
+function construirPreferencias() {
     const divisaPrincipal = document.getElementById("divisa-principal")?.value || "pen"
     const modoTCUI = getModoTipoCambioUI()
     const tcActual = getTipoCambio()
@@ -891,10 +965,11 @@ async function guardarPreferencias() {
 
     const accesibilidad = {
         modalesPersistentes: document.getElementById("acc-modales-persistentes")?.checked === true,
-        doodles: document.getElementById("acc-doodles")?.checked === true
+        doodles: document.getElementById("acc-doodles")?.checked === true,
+        unClickSeleccion: document.getElementById("acc-un-click-seleccion")?.checked === true
     }
 
-    const preferencias = {
+    return {
         tema: temaActual,
         movimientosRecientes: leerCantidadMovimientos() ?? (sesion.getPreferencias().movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT),
         paginas: {
@@ -910,7 +985,9 @@ async function guardarPreferencias() {
         seg,
         accesibilidad
     }
+}
 
+async function aplicarPreferencias(preferencias) {
     try {
         // Nombre pendiente → auth + doc de usuario
         if (nombrePendiente && nombrePendiente !== sesion.getUsuario()?.nombre) {
@@ -919,14 +996,16 @@ async function guardarPreferencias() {
             nombrePendiente = null
         }
 
+        const tc = preferencias.tipoCambio
+
         // Divisa y tipo de cambio se persisten vía DivisaServicio. En modo
         // "auto" se conserva la actualizacion previa (el TC no cambió).
-        await guardarDivisaPrincipal(uid, divisaPrincipal)
+        await guardarDivisaPrincipal(uid, preferencias.divisaPrincipal)
         await guardarTipoCambio(
             uid,
-            penUSD,
-            modoTCUI,
-            modoTCUI === "auto" && tcActual.actualizacion ? tcActual.actualizacion : null
+            tc.pen_usd,
+            tc.modo,
+            tc.modo === "auto" && tc.actualizacion ? tc.actualizacion : null
         )
 
         await actualizarPreferencias(uid, {
@@ -956,6 +1035,7 @@ async function guardarPreferencias() {
         lastbarPendiente = false
         nombrePendiente = null
         hayCambios = false
+        avisoDescartado = false
         actualizarEstadoGuardar()
 
         mostrarNotificacion("exito", "Cambios guardados")
@@ -963,6 +1043,10 @@ async function guardarPreferencias() {
         console.error("Error guardando preferencias:", error)
         mostrarNotificacion("error", "No se pudieron guardar las preferencias")
     }
+}
+
+async function guardarPreferencias() {
+    await aplicarPreferencias(construirPreferencias())
 }
 
 function actualizarNavegacion(paginas) {
@@ -998,6 +1082,7 @@ function configurarLastbar() {
             // Aplicar visualmente sin persistir (se guarda con el botón Guardar)
             lastbarModo = opt.dataset.lastbar
             lastbarPendiente = true
+            marcarCambioNuevo()
             aplicarModoLastbar(lastbarModo)
 
             actualizarEstadoGuardar()

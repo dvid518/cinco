@@ -83,7 +83,7 @@
     --raspberryRed: #DC0051;
     --tropicalMint: #00a269;
 
-    --warning: #f5a623;
+    --mustard: #f5a623;
 
     --font-primary: "Inter", Arial, sans-serif;
     --font-secondary: "Roboto Mono", "Courier New", monospace;
@@ -92,6 +92,7 @@
 /* Tema oscuro */
 [data-theme="dark"] {
     --background: var(--onyx);
+    --backgroundAlt: var(--paleSky);
     --surface: var(--graphite);
 
     --text: var(--whiteSmoke);
@@ -113,11 +114,14 @@
 
     --shadow: var(--lightPaleSky);
     --blurBackground: var(--lightOnyx);
+
+    --ambar: var(--mustard);
 }
 
 /* Tema claro */
 [data-theme="light"] {
     --background: var(--whiteSmoke);
+    --backgroundAlt: var(--graphite);
     --surface: var(--paleSky);
 
     --text: var(--onyx);
@@ -139,6 +143,8 @@
 
     --shadow: var(--lightSlateGrey);
     --blurBackground: var(--lightPaleSky);
+
+    --ambar: var(--mustard);
 }
 
 /* ============================================
@@ -433,6 +439,11 @@ option {
 
 .lista-vacia.error {
     color: var(--negative);
+    margin: auto;
+}
+
+.lista-vacia.error .btn-sm:hover {
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .lista-vacia-hint {

@@ -53,6 +53,17 @@ const ITEM_PENDIENTES = `
     </div>
 `
 
+const ITEM_METAS = `
+    <div class="item glass" data-accion="metas" role="button" tabindex="0">
+        <span class="glass">Metas</span>
+        <svg id="icon-target" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="6"/>
+            <circle cx="12" cy="12" r="2"/>
+        </svg>
+    </div>
+`
+
 const ITEM_CERRAR_SESION = `
     <div class="item glass" data-accion="cerrar-sesion" role="button" tabindex="0">
         <span class="glass">Cerrar sesión</span>
@@ -68,7 +79,7 @@ const ITEM_CERRAR_SESION = `
 // MAPAS DE ACCIONES (barra y pendientes)
 // ============================================
 
-const PENDIENTES_BLOCK = `<div class="pendientes">${ITEM_PENDIENTES}</div>`
+const PENDIENTES_BLOCK = `<div class="pendientes">${ITEM_PENDIENTES}${ITEM_METAS}</div>`
 
 // Mapa de lastbars por página.
 // El botón de tema SOLO aparece en dashboard y configuración.
@@ -299,6 +310,11 @@ const MAPA_ACCIONES = {
     "pendientes": async () => {
         const { mostrarPendientes } = await import("../ui/pendientes.js")
         await mostrarPendientes()
+    },
+
+    "metas": async () => {
+        const { mostrarMetas } = await import("../ui/metas.js")
+        await mostrarMetas()
     },
 
     "cerrar-sesion": async () => {

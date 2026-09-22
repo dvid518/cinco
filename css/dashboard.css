@@ -322,7 +322,7 @@
     gap: 10px;
     padding: 10px 20px;
     border-radius: 40px;
-    background: var(--background);
+    background: var(--surface);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
 }
@@ -396,7 +396,7 @@
     gap: 10px;
     padding: 10px 20px;
     border-radius: 40px;
-    background: var(--background);
+    background: var(--surface);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
 }
@@ -445,14 +445,33 @@
    CARD DE METAS DE AHORRO
    ============================================ */
 
-.meta-item {
+.metas-lista {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    background: var(--background);
+    gap: 8px;
+    max-height: 300px;
+    padding-right: 4px;
+    padding-bottom: 12px;
+    overflow-y: auto;
+}
+
+/* Fila al estilo de "Últimos movimientos"/"Favoritos": nombre + porcentaje */
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border-radius: 40px;
+    background: var(--surface);
     border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.meta-item:hover {
+    background-color: var(--lightHover);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .meta-item.pausada {
@@ -463,23 +482,25 @@
     border-color: var(--positive);
 }
 
-.meta-cabecera {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-}
-
 .meta-nombre {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     min-width: 0;
     color: var(--text);
+    font-size: 14px;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.meta-nombre span {
+.meta-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.meta-cantidad {
+    color: var(--textSecondary);
+    font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -497,15 +518,27 @@
     color: var(--positive);
 }
 
-.meta-progreso {
+/* ============================================
+   MODAL APORTAR A META
+   ============================================ */
+
+.aporte-progreso-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.aporte-progreso {
+    flex: 1 1 auto;
+    min-width: 0;
     width: 100%;
-    height: 6px;
+    height: 8px;
     border-radius: 50px;
-    background: var(--border);
+    background: var(--lightBorder);
     overflow: hidden;
 }
 
-.meta-progreso-barra {
+.aporte-progreso-barra {
     width: var(--progreso, 0%);
     height: 100%;
     border-radius: 50px;
@@ -513,23 +546,86 @@
     transition: width 0.3s ease;
 }
 
-.meta-detalle {
+.aporte-progreso-badge {
+    flex-shrink: 0;
+    min-width: 62px;
+    text-align: center;
+    padding: 3px 10px;
+    border-radius: 50px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    font-family: var(--font-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.aporte-valores {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.aporte-valor {
     display: flex;
-    justify-content: space-between;
-    gap: 8px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--background);
+    border: 1px solid var(--border);
+}
+
+.aporte-valor-label {
     font-size: 11px;
     color: var(--textSecondary);
 }
 
-.meta-acciones {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+.aporte-valor-fuerte {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
 }
 
-.meta-acciones .btn-sm {
-    font-size: 11px;
-    padding: 4px 10px;
+.aporte-proyeccion {
+    margin: 12px 0 16px;
+    font-size: 12px;
+    color: var(--textSecondary);
+    min-height: 16px;
+}
+
+/* Monto del aporte ocupa todo el espacio sobrante y cuenta de origen
+   conserva su ancho normal (el select no queda ancho ni con hueco). */
+.aporte-fila {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    width: 100%;
+}
+
+.aporte-fila .aporte-monto-flex {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.aporte-fila .aporte-cuenta-flex {
+    flex: 0 0 auto;
+}
+
+.aporte-fila .aporte-cuenta-flex .form-input {
+    width: auto;
+}
+
+@media (max-width: 480px) {
+    .aporte-valores {
+        grid-template-columns: 1fr;
+    }
+
+    .aporte-fila {
+        flex-direction: column;
+    }
 }
 
 /* ============================================
@@ -542,8 +638,39 @@
     gap: 12px;
 }
 
+/* Fecha límite llena el espacio sobrante y divisa conserva su ancho natural
+   (el select no se estira ni parece vacío). El contenedor es una fila completa. */
+.form-fila-fecha-divisa {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    width: 100%;
+    grid-column: 1 / -1;
+}
+
+.form-fila-fecha-divisa .form-fecha-flex {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.form-fila-fecha-divisa .form-divisa-auto {
+    flex: 0 0 auto;
+}
+
+.form-fila-fecha-divisa .form-divisa-auto .form-input {
+    width: auto;
+}
+
 @media (max-width: 480px) {
     .form-grupo-doble {
         grid-template-columns: 1fr;
+    }
+
+    .form-fila-fecha-divisa {
+        flex-direction: column;
+    }
+
+    .form-fila-fecha-divisa .form-fecha-flex {
+        width: 100%;
     }
 }

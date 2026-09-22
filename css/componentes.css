@@ -55,7 +55,7 @@
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    width: min(360px, calc(100vw - 32px));
+    width: min(460px, calc(100vw - 32px));
     pointer-events: none;
 }
 
@@ -147,7 +147,32 @@
 .notificacion-accion:hover {
     background: var(--lightHover);
     border-color: var(--border);
-    color: #ffffff;
+    color: var(--textAlt);
+    box-shadow: 0 0 10px var(--shadow);
+}
+
+.notificacion-accion-primaria {
+    background: var(--background);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.notificacion-accion-primaria:hover {
+    background: var(--positive);
+    border-color: var(--text);
+    color: var(--textAlt);
+}
+
+.notificacion-accion.cancel {
+    background: var(--background);
+    border-color: var(--negative);
+    color: var(--negative);
+}
+
+.notificacion-accion.cancel:hover {
+    background: var(--negative);
+    border-color: var(--text);
+    color: var(--textAlt);
 }
 
 /* --------------------------------------------
@@ -316,7 +341,7 @@
 
 .card-item.seleccionado {
     border-color: var(--text);
-    background: var(--border);
+    background: var(--backgroundAlt);
     box-shadow: inset 0 0 0 1px var(--shadow);
 }
 
@@ -325,7 +350,7 @@
 }
 
 .card-item.seleccionado .card-item-detalle {
-    color: var(--borderAlt);
+    color: var(--surface);
 }
 
 .card-item.card-item.seleccionado .card-item-valor.positive {

@@ -401,16 +401,17 @@
 .lastbar .pendientes {
     display: flex;
     align-items: center;
+    gap: 8px;
 }
 
 .lastbar .bar {
     height: inherit;
     display: flex;
     flex-direction: row;
-    gap: 8px;
 }
 
-.lastbar:hover .bar {
+.lastbar:hover .bar,
+.lastbar:hover .pendientes {
     gap: 14px;
 }
 
@@ -499,7 +500,11 @@
 
 .lastbar .item:hover #icon-pen {
     transition: all 0.3s ease;
-    transform: rotate(90deg);
+}
+
+.lastbar .item:hover #icon-target {
+    transition: all 0.3s ease;
+    transform: scale(1.15);
 }
 
 .lastbar .item:hover #icon-edit {

@@ -361,6 +361,27 @@ function consumirSupresorClick() {
     return true
 }
 
+// Preferencia "un click para seleccionar" (Configuración → Accesibilidad).
+function modoUnClickSeleccion() {
+    return sesion.getPreferencias()?.accesibilidad?.unClickSeleccion === true
+}
+
+// Modo "un click para seleccionar": un click (sin modificador) reemplaza la
+// selección con ese movimiento; Shift + click añade o quita de la selección.
+function seleccionarPorUnClick(id, conShift) {
+    if (conShift) {
+        toggleSeleccion(id)
+        return
+    }
+    if (seleccionados.size === 1 && seleccionados.has(id)) return
+    seleccionados.clear()
+    ordenSeleccion.length = 0
+    seleccionados.add(id)
+    ordenSeleccion.push(id)
+    actualizarSeleccionEnDOM()
+    actualizarEstadoLastbar()
+}
+
 function manejarClickCard(evento) {
     // Botones de acción revelados por hover/swipe
     const accionBtn = evento.target.closest(".card-action-btn")
@@ -394,7 +415,14 @@ function manejarClickCard(evento) {
 
     const id = card.dataset.id
 
-    // Con una selección activa, un click alterna la selección del item.
+    // Modo "un click para seleccionar": el click selecciona de inmediato.
+    if (modoUnClickSeleccion()) {
+        seleccionarPorUnClick(id, evento.shiftKey)
+        return
+    }
+
+    // Comportamiento clásico: con selección activa, un click la alterna;
+    // si no, un click simple abre el detalle del movimiento.
     if (seleccionados.size > 0) {
         toggleSeleccion(id)
         return
@@ -418,6 +446,12 @@ function manejarDobleClickCard(evento) {
     if (clickTimer) {
         clearTimeout(clickTimer)
         clickTimer = null
+    }
+    // Con la opción activa el click ya selecciona; el doble click abre el detalle.
+    if (modoUnClickSeleccion()) {
+        limpiarSeleccion()
+        abrirDetalleMovimiento(card.dataset.id)
+        return
     }
     toggleSeleccion(card.dataset.id)
 }

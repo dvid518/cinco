@@ -43,15 +43,18 @@ function limpiarContenedorVacio() {
  * @param {("exito"|"error"|"info"|"warning")} tipo
  * @param {string} mensaje
  * @param {number} [duracion=3000] ms. 0 = no se autoelimina.
- * @param {{texto: string, alClick: Function}|null} [accion] botón opcional.
+ * @param {{texto: string, alClick: Function, primaria?: boolean, clase?: string} | Array<{texto: string, alClick: Function, primaria?: boolean, clase?: string}> | null} [accion] botón(es) opcional(es).
+ * @param {() => void} [alCerrar] callback al cerrarse la notificación por cualquier vía.
  * @returns {Function} función para cerrarla manualmente.
  */
-export function mostrarNotificacion(tipo = "info", mensaje, duracion = 3000, accion = null) {
+export function mostrarNotificacion(tipo = "info", mensaje, duracion = 3000, accion = null, alCerrar = null) {
     if (!mensaje) return
 
     const config = TIPOS[tipo] || TIPOS.info
     const contenedor = obtenerContenedor()
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+
+    const acciones = Array.isArray(accion) ? accion : (accion ? [accion] : [])
 
     const notificacion = document.createElement("div")
     notificacion.className = `notificacion notificacion-${config.clase}`
@@ -59,9 +62,9 @@ export function mostrarNotificacion(tipo = "info", mensaje, duracion = 3000, acc
     notificacion.innerHTML = `
         <span class="notificacion-icono">${icono(config.icono, 20)}</span>
         <span class="notificacion-mensaje"></span>
-        ${accion ? `
-            <button type="button" class="notificacion-accion">${accion.texto}</button>
-        ` : ""}
+        ${acciones.map(a => `
+            <button type="button" class="notificacion-accion${a.primaria ? " notificacion-accion-primaria" : ""}${a.clase ? ` ${a.clase}` : ""}">${a.texto}</button>
+        `).join("")}
         <button type="button" class="notificacion-cerrar" aria-label="Cerrar notificación">${icono("x", 16)}</button>
     `
     notificacion.querySelector(".notificacion-mensaje").textContent = mensaje
@@ -71,8 +74,10 @@ export function mostrarNotificacion(tipo = "info", mensaje, duracion = 3000, acc
     // Forzar reflow para disparar la animación de entrada
     requestAnimationFrame(() => notificacion.classList.add("notificacion-activa"))
 
+    let cerrada = false
     const cerrar = () => {
-        if (!notificacion.isConnected) return
+        if (cerrada || !notificacion.isConnected) return
+        cerrada = true
         activas.delete(id)
         notificacion.classList.remove("notificacion-activa")
         notificacion.classList.add("notificacion-saliendo")
@@ -80,19 +85,22 @@ export function mostrarNotificacion(tipo = "info", mensaje, duracion = 3000, acc
             notificacion.remove()
             limpiarContenedorVacio()
         }, 250)
+        if (alCerrar) alCerrar()
     }
 
     notificacion.querySelector(".notificacion-cerrar").addEventListener("click", cerrar)
 
-    if (accion) {
-        notificacion.querySelector(".notificacion-accion").addEventListener("click", async () => {
-            try {
-                await accion.alClick()
-            } finally {
-                cerrar()
+    notificacion.querySelectorAll(".notificacion-accion").forEach((btn, i) => {
+        const accionItem = acciones[i]
+        btn.addEventListener("click", () => {
+            // Cerrar de inmediato sin esperar a que la acción termine.
+            cerrar()
+            const resultado = accionItem?.alClick?.()
+            if (resultado && typeof resultado.catch === "function") {
+                resultado.catch(() => {})
             }
         })
-    }
+    })
 
     let timer = null
     if (duracion > 0) {
