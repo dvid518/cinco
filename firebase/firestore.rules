@@ -139,7 +139,8 @@ service cloud.firestore {
             'tipo', 'cuenta', 'concepto', 'monto', 'divisa', 'fechaRealizacion',
             'fechaRegistro', 'cuentaOrigen', 'cuentaDestino', 'montoOrigen', 'montoDestino',
             'tasa', 'activo', 'cantidad', 'precio', 'comision', 'exchange',
-            'nombreVendedor', 'nombreComprador', 'cuentaPago', 'cuentaCobro', 'tarjeta'
+            'nombreVendedor', 'nombreComprador', 'cuentaPago', 'cuentaCobro', 'tarjeta',
+            'metaId'
           ])
           && request.resource.data.keys().hasAll(['tipo', 'fechaRegistro'])
           && esTexto(request.resource.data.tipo)
@@ -150,7 +151,8 @@ service cloud.firestore {
           && (('comision' in request.resource.data) ? esNumero(request.resource.data.comision) : true)
           && (('montoOrigen' in request.resource.data) ? esNumero(request.resource.data.montoOrigen) : true)
           && (('montoDestino' in request.resource.data) ? esNumero(request.resource.data.montoDestino) : true)
-          && (('tasa' in request.resource.data) ? esNumero(request.resource.data.tasa) : true);
+          && (('tasa' in request.resource.data) ? esNumero(request.resource.data.tasa) : true)
+          && (('metaId' in request.resource.data) ? esTexto(request.resource.data.metaId) : true);
 
         allow update: if esPropietario(uid)
           && ifPresenteTexto(request.resource.data, 'tipo')
@@ -174,7 +176,8 @@ service cloud.firestore {
           && ifPresenteTextoONulo(request.resource.data, 'nombreComprador')
           && ifPresenteTextoONulo(request.resource.data, 'cuentaPago')
           && ifPresenteTextoONulo(request.resource.data, 'cuentaCobro')
-          && ifPresenteTextoONulo(request.resource.data, 'tarjeta');
+          && ifPresenteTextoONulo(request.resource.data, 'tarjeta')
+          && ifPresenteTextoONulo(request.resource.data, 'metaId');
 
         allow delete: if esPropietario(uid);
       }

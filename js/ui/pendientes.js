@@ -1,10 +1,12 @@
 import { abrirModal, cerrarModal } from "./modal.js"
 import { obtenerPendientes, eliminarPendiente, crearPendiente, actualizarPendiente } from "../repositories/PendienteRepositorio.js"
+import { restaurarDocumento } from "../../firebase/firestore.js"
 import { sesion } from "../core/sesion.js"
 import { obtenerTiposCompatibles, consolidarPendienteAMovimiento } from "../services/PendienteServicio.js"
 import { generarFormularioMovimiento, recogerDatosFormulario, vincularSimboloDivisa } from "./formularioMovimiento.js"
 import { DIVISAS } from "../../constants/divisas.js"
 import { mostrarNotificacion } from "./notificaciones.js"
+import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { icono } from "../core/iconos.js"
 
 // ============================================
@@ -182,9 +184,14 @@ function confirmarEliminacionPendiente(pendiente, uid) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshot = { id: pendiente.id, ...pendiente.toFirestore() }
                 await eliminarPendiente(uid, pendiente.id)
                 cerrarModal()
-                mostrarNotificacion("exito", "Pendiente eliminado")
+                ofrecerDeshacer({
+                    mensaje: `Pendiente "${pendiente.concepto}" eliminado. ¿Deshacer?`,
+                    restaurar: () => restaurarDocumento(uid, "pendientes", snapshot.id, snapshot),
+                    alRestaurar: () => mostrarPendientes()
+                })
                 mostrarPendientes()
                 return true
             } catch (error) {
@@ -212,11 +219,20 @@ function confirmarEliminacionLotePendientes(lista, uid) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshots = lista.map(p => ({ id: p.id, ...p.toFirestore() }))
                 for (const pendiente of lista) {
                     await eliminarPendiente(uid, pendiente.id)
                 }
                 cerrarModal()
-                mostrarNotificacion("exito", `${cantidad} pendiente${cantidad !== 1 ? 's' : ''} eliminado${cantidad !== 1 ? 's' : ''}`)
+                ofrecerDeshacer({
+                    mensaje: `${cantidad} pendiente${cantidad !== 1 ? 's' : ''} eliminado${cantidad !== 1 ? 's' : ''}. ¿Deshacer?`,
+                    restaurar: async () => {
+                        for (const s of snapshots) {
+                            await restaurarDocumento(uid, "pendientes", s.id, s)
+                        }
+                    },
+                    alRestaurar: () => mostrarPendientes()
+                })
                 mostrarPendientes()
                 return true
             } catch (error) {
@@ -679,7 +695,7 @@ export async function abrirConsolidacionPendiente(pendiente, uidOrigen = sesion.
     }
 
     const tipo = tiposCompatibles[0]
-    const html = await generarFormularioMovimiento(tipo)
+    const html = await generarFormularioMovimiento(tipo, pendiente.divisa)
 
     abrirModal({
         titulo: `Consolidar: ${pendiente.concepto}`,

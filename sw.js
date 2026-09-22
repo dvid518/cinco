@@ -86,6 +86,7 @@ const SHELL_ASSETS = [
     "/js/services/PendienteServicio.js",
     "/js/services/TradingServicio.js",
     "/js/services/MovimientoServicio.js",
+    "/js/services/DeshacerServicio.js",
     "/js/services/SnapshotServicio.js",
     "/js/services/HistorialServicio.js",
     "/js/services/DivisaServicio.js",

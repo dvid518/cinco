@@ -25,7 +25,7 @@ import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { icono } from "../core/iconos.js"
 
 import { obtenerMetas } from "../repositories/MetaRepositorio.js"
-import { abrirModalMeta, mostrarMetas } from "../ui/metas.js"
+import { abrirModalMeta, abrirModalAporteMeta } from "../ui/metas.js"
 
 // ============================================
 // ESTADO
@@ -287,13 +287,14 @@ function cantidadMovimientosRecientes() {
 
 async function cargarVencimientos(cuentasDeUsuario) {
     try {
-        const [pendientes, tarjetas] = await Promise.all([
+        const [pendientes, tarjetas, metas] = await Promise.all([
             obtenerPendientesConVencimiento(),
-            obtenerTarjetasConPagoProximo(cuentasDeUsuario)
+            obtenerTarjetasConPagoProximo(cuentasDeUsuario),
+            obtenerMetasConVencimiento()
         ])
 
         // Combinar y ordenar por días restantes ascendente
-        const todos = [...pendientes, ...tarjetas]
+        const todos = [...pendientes, ...tarjetas, ...metas]
         todos.sort((a, b) => a.diasRestantes - b.diasRestantes)
 
         return {
@@ -322,6 +323,28 @@ async function obtenerPendientesConVencimiento() {
                 esCobrar: p.tipo,
                 monto: p.monto,
                 divisa: p.divisa,
+                diasRestantes: dias,
+                vencido: dias < 0,
+                icono: ""
+            }
+        })
+        .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
+}
+
+async function obtenerMetasConVencimiento() {
+    const metas = await obtenerMetas(uid)
+
+    return metas
+        .filter(m => m.fechaLimite && m.activa !== false && !m.completada)
+        .map(m => {
+            const dias = diasHasta(m.fechaLimite)
+            return {
+                tipo: "meta",
+                id: m.id,
+                titulo: m.nombre,
+                subtitulo: "Meta de ahorro",
+                monto: m.montoRestante,
+                divisa: m.divisa,
                 diasRestantes: dias,
                 vencido: dias < 0,
                 icono: ""
@@ -517,6 +540,24 @@ function actualizarMovimientos() {
     }
 
     lista.innerHTML = movimientosData.map(plantillaMovimiento).join("")
+    enlazarMovimientos(lista)
+}
+
+function enlazarMovimientos(lista) {
+    lista.querySelectorAll(".movimiento-item").forEach(item => {
+        const abrir = async (evento) => {
+            evento?.preventDefault?.()
+            evento?.stopPropagation?.()
+            const m = movimientosData.find(x => x.id === item.dataset.movimientoId)
+            if (!m) return
+            const { abrirFormularioDetalle } = await import("./movimientos.js")
+            abrirFormularioDetalle(m)
+        }
+        item.addEventListener("click", abrir)
+        item.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") abrir(e)
+        })
+    })
 }
 
 function plantillaMovimiento(m) {
@@ -527,7 +568,7 @@ function plantillaMovimiento(m) {
     const tipoNombre = CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Movimiento"
 
     return `
-        <div class="movimiento-item">
+        <div class="movimiento-item" data-movimiento-id="${m.id}" role="button" tabindex="0" title="Ver movimiento">
             <div class="movimiento-info">
                 <span class="movimiento-titulo">${m.concepto || m.activo || tipoNombre}</span>
                 <span class="movimiento-detalle">${formatearFecha(fechaDeMovimiento(m))}</span>
@@ -694,6 +735,25 @@ function actualizarFavoritos() {
     }
 
     lista.innerHTML = favoritosData.map(plantillaFavorito).join("")
+    enlazarFavoritos(lista)
+}
+
+function enlazarFavoritos(lista) {
+    lista.querySelectorAll(".favorito-item").forEach(item => {
+        const abrir = async (evento) => {
+            evento?.preventDefault?.()
+            evento?.stopPropagation?.()
+            const posicion = favoritosData.find(p => p.activoId === item.dataset.activoId)
+            const activo = posicion?.activo
+            if (!posicion || !activo) return
+            const { mostrarGraficoActivo } = await import("./inversiones.js")
+            await mostrarGraficoActivo(activo.id, activo, posicion)
+        }
+        item.addEventListener("click", abrir)
+        item.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") abrir(e)
+        })
+    })
 }
 
 function plantillaFavorito(posicion) {
@@ -701,7 +761,7 @@ function plantillaFavorito(posicion) {
     const precio = (activo.ultimoPrecio || 0).toFixed(2)
 
     return `
-        <div class="favorito-item">
+        <div class="favorito-item" data-activo-id="${posicion.activoId}" role="button" tabindex="0" title="Ver historial de precios">
             <div class="favorito-info">
                 <span class="favorito-nombre">${activo.nombre || posicion.activoId}</span>
                 <span class="favorito-simbolo">${activo.simbolo || ""}</span>
@@ -758,7 +818,7 @@ function plantillaMeta(meta) {
     ].filter(Boolean).join(" ")
 
     return `
-        <div class="${clases}" data-meta-id="${meta.id}" role="button" tabindex="0" title="Gestionar metas">
+        <div class="${clases}" data-meta-id="${meta.id}" role="button" tabindex="0" title="Aportar a la meta">
             <div class="meta-info">
                 <span class="meta-nombre">${meta.nombre}</span>
                 <span class="meta-cantidad">${simbolo} ${meta.montoActual.toFixed(2)}</span>
@@ -769,9 +829,18 @@ function plantillaMeta(meta) {
 }
 
 function enlazarListaMetas(lista) {
-    lista.onclick = () => {
-        mostrarMetas()
-    }
+    lista.querySelectorAll(".meta-item").forEach(item => {
+        const abrir = (evento) => {
+            evento?.preventDefault?.()
+            evento?.stopPropagation?.()
+            const meta = metasData.find(m => m.id === item.dataset.metaId)
+            if (meta) abrirModalAporteMeta(meta)
+        }
+        item.addEventListener("click", abrir)
+        item.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") abrir(e)
+        })
+    })
 }
 
 function formatearFecha(fecha) {

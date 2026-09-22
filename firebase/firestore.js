@@ -5,6 +5,7 @@ import {
     getDocs,
     collection,
     addDoc,
+    setDoc,
     updateDoc,
     deleteDoc,
     serverTimestamp
@@ -115,6 +116,17 @@ export async function eliminarMovimientoDoc(uid, movimientoId) {
     const referencia = doc(db, "usuarios", uid, "movimientos", movimientoId)
     const resultado = await deleteDoc(referencia)
     cacheCapa.invalidar(uid, "movimientos")
+    return resultado
+}
+
+export async function restaurarDocumento(uid, coleccion, id, datos) {
+    if (!datos || typeof datos !== "object") {
+        throw new Error("No hay datos para restaurar")
+    }
+    const { id: _campoId, ...datosGuardados } = datos
+    const referencia = doc(db, "usuarios", uid, coleccion, id)
+    const resultado = await setDoc(referencia, datosGuardados)
+    cacheCapa.invalidar(uid, coleccion)
     return resultado
 }
 

@@ -27,7 +27,8 @@ import {
 import { crearGraficoEvolucionPrecio, destruirGrafico } from "../ui/graficos.js"
 import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
-import { obtenerCuentas } from "../../firebase/firestore.js"
+import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
+import { obtenerCuentas, restaurarDocumento } from "../../firebase/firestore.js"
 import { icono } from "../core/iconos.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
@@ -441,9 +442,14 @@ function confirmarEliminarEstrategia(estrategia) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshot = { id: estrategia.id, ...estrategia.toFirestore() }
                 await eliminarEstrategia(uid, estrategia.id)
                 await cargarEstrategias()
-                mostrarNotificacion("exito", "Estrategia eliminada")
+                ofrecerDeshacer({
+                    mensaje: `Estrategia "${estrategia.nombre}" eliminada. ¿Deshacer?`,
+                    restaurar: () => restaurarDocumento(uid, "estrategias", snapshot.id, snapshot),
+                    alRestaurar: () => cargarEstrategias()
+                })
                 return true
             } catch (error) {
                 console.error("Error eliminando estrategia:", error)
@@ -684,11 +690,22 @@ function formatearFechaEstrategia(fecha) {
 // MOSTRAR GRÁFICO DE ACTIVO
 // ============================================
 
-async function mostrarGraficoActivo(activoId, activo, posicion) {
+export async function mostrarGraficoActivo(activoId, activo, posicion) {
     console.log("[INFO] Mostrando gráfico para:", activo?.simbolo || activoId)
 
-    // Usar el nuevo servicio de precios
-    const datos = await historialParaGrafico(uid, activo, 7)
+    let datos
+    try {
+        // Usar el nuevo servicio de precios
+        datos = await historialParaGrafico(uid, activo, 7)
+    } catch (error) {
+        console.warn("No se pudo obtener el historial:", error.message)
+        datos = { labels: [], data: [] }
+    }
+
+    if (!datos || !Array.isArray(datos.data) || datos.data.length === 0) {
+        mostrarNotificacion("info", "No hay historial de precios disponible para este activo")
+        return
+    }
 
     const html = `
         <div class="grafico-container">
@@ -816,9 +833,14 @@ function confirmarEliminarPosicion(posicion) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshot = { id: posicion.id, ...posicion.toFirestore() }
                 await eliminarPosicion(uid, posicion.id)
                 await cargarPosiciones()
-                mostrarNotificacion("exito", "Posición eliminada")
+                ofrecerDeshacer({
+                    mensaje: "Posición eliminada. ¿Deshacer?",
+                    restaurar: () => restaurarDocumento(uid, "posiciones", snapshot.id, snapshot),
+                    alRestaurar: () => cargarPosiciones()
+                })
                 return true
             } catch (error) {
                 console.error("Error eliminando posición:", error)

@@ -9,6 +9,8 @@ import {
 } from "../services/OrdenServicio.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
+import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
+import { restaurarDocumento } from "../../firebase/firestore.js"
 import { icono } from "../core/iconos.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
@@ -735,6 +737,8 @@ function abrirModalEditarTrade(tradeId) {
 // ============================================
 
 function confirmarEliminarTrade(tradeId) {
+    const trade = datosTrades?.trades?.find(t => t.id === tradeId) || null
+    const snapshot = trade ? { id: trade.id, ...trade.toFirestore() } : null
     abrirModal({
         titulo: "Eliminar trade",
         contenido: `
@@ -748,7 +752,15 @@ function confirmarEliminarTrade(tradeId) {
             try {
                 await borrarTrade(uid, tradeId)
                 await cargarTrades()
-                mostrarNotificacion("exito", "Trade eliminado")
+                if (snapshot) {
+                    ofrecerDeshacer({
+                        mensaje: "Trade eliminado. ¿Deshacer?",
+                        restaurar: () => restaurarDocumento(uid, "trades", snapshot.id, snapshot),
+                        alRestaurar: () => cargarTrades()
+                    })
+                } else {
+                    mostrarNotificacion("exito", "Trade eliminado")
+                }
                 return true
             } catch (error) {
                 console.error('Error eliminando trade:', error)
@@ -905,6 +917,8 @@ function confirmarCancelarOrden(ordenId) {
 // ============================================
 
 function confirmarEliminarOrden(ordenId) {
+    const orden = ordenesData.find(o => o.id === ordenId) || null
+    const snapshot = orden ? { id: orden.id, ...orden.toFirestore() } : null
     abrirModal({
         titulo: "Eliminar orden",
         contenido: `
@@ -918,7 +932,15 @@ function confirmarEliminarOrden(ordenId) {
             try {
                 await borrarOrden(uid, ordenId)
                 await cargarOrdenes()
-                mostrarNotificacion("exito", "Orden eliminada")
+                if (snapshot) {
+                    ofrecerDeshacer({
+                        mensaje: "Orden eliminada. ¿Deshacer?",
+                        restaurar: () => restaurarDocumento(uid, "ordenes", snapshot.id, snapshot),
+                        alRestaurar: () => cargarOrdenes()
+                    })
+                } else {
+                    mostrarNotificacion("exito", "Orden eliminada")
+                }
                 return true
             } catch (error) {
                 console.error('Error eliminando orden:', error)

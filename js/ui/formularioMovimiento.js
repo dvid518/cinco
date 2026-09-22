@@ -8,17 +8,32 @@ import { mostrarNotificacion } from "./notificaciones.js"
 // GENERAR FORMULARIO SEGÚN TIPO
 // ============================================
 
-export async function generarFormularioMovimiento(tipo) {
+export async function generarFormularioMovimiento(tipo, divisaPreseleccionada = null) {
     const uid = sesion.uid
     const config = CONFIG_MOVIMIENTOS[tipo]
     const cuentas = await obtenerCuentas(uid)
 
     const cuentasActivas = cuentas.filter(c => c.estado !== "archivada")
-    const cuentasOptions = cuentasActivas
+
+    // Al crear un movimiento con divisa predefinida (p. ej. al consolidar un
+    // pendiente), solo se ofrecen cuentas de esa divisa que puedan aportar
+    // directamente. Sin divisa predefinida se muestran todas las activas.
+    const divisaObjetivo = divisaPreseleccionada ? String(divisaPreseleccionada).toLowerCase() : null
+    const comparteDivisa = c => (c.moneda || "pen").toLowerCase() === divisaObjetivo
+
+    const cuentasElegibles = divisaObjetivo
+        ? cuentasActivas.filter(c => comparteDivisa(c) && c.tipo !== "credito")
+        : cuentasActivas
+
+    const cuentasOptions = cuentasElegibles
         .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (${c.moneda?.toUpperCase() || "PEN"})</option>`)
         .join("")
 
-    const tarjetas = cuentasActivas.filter(c => c.tipo === "credito")
+    // Las tarjetas solo se filtran por divisa (siguen disponibles para pagar
+    // el saldo de una tarjeta concreta de la misma moneda).
+    const tarjetas = divisaObjetivo
+        ? cuentasActivas.filter(c => c.tipo === "credito" && comparteDivisa(c))
+        : cuentasActivas.filter(c => c.tipo === "credito")
     const tarjetasOptions = tarjetas
         .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (deuda: ${(c.deuda || 0).toFixed(2)})</option>`)
         .join("")

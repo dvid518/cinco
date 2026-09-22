@@ -5,11 +5,12 @@ import {
     actualizarCuenta,
     obtenerMovimientos,
     actualizarMovimientoDoc,
-    eliminarMovimientoDoc
+    eliminarMovimientoDoc,
+    restaurarDocumento
 } from "../../firebase/firestore.js"
 import { TIPOS_MOVIMIENTO, CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
 import { getFechaHoy } from "../core/fechas.js"
-import { obtenerMeta, actualizarMeta } from "../repositories/MetaRepositorio.js"
+import { obtenerMeta, obtenerMetas, actualizarMeta } from "../repositories/MetaRepositorio.js"
 
 // No se permiten fechas futuras: cualquier fechaRealizacion mayor que hoy
 // se normaliza al día de hoy. Aplica tanto al registrar como al editar.
@@ -150,11 +151,13 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
 
     normalizarFechaFutura(datos)
 
+    const metaVinculada = await resolverMetaDeMovimiento(uid, movimientoOriginal)
+
     // 1. Deshacer el efecto del movimiento original
     await revertirSaldos(uid, movimientoOriginal.tipo, movimientoOriginal)
     await revertirPosicion(uid, movimientoOriginal)
-    if (movimientoOriginal?.metaId) {
-        await revertirAporteMeta(uid, movimientoOriginal)
+    if (metaVinculada) {
+        await revertirAporteMetaDeMeta(uid, metaVinculada, Math.abs(movimientoOriginal.monto || 0))
     }
 
     // 2. Aplicar el nuevo efecto
@@ -162,16 +165,18 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
     if (esMovimientoDeActivo(tipoFinal)) {
         await aplicarPosicion(uid, tipoFinal, datos)
     }
-    if (movimientoOriginal?.metaId) {
-        await aplicarAporteMeta(uid, movimientoOriginal.metaId, Math.abs(datos.monto || 0))
+    if (metaVinculada) {
+        await aplicarAporteMeta(uid, metaVinculada.id, Math.abs(datos.monto || 0))
     }
 
     // 3. Actualizar el documento (conserva el vínculo con la meta)
     const datosGuardado = { tipo: tipoFinal, ...datos }
-    if (movimientoOriginal?.metaId) {
-        datosGuardado.metaId = movimientoOriginal.metaId
+    if (metaVinculada) {
+        datosGuardado.metaId = metaVinculada.id
     }
     await actualizarMovimientoDoc(uid, movimientoId, datosGuardado)
+
+    notificarActualizacionMetas()
 
     return true
 }
@@ -184,10 +189,33 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
 export async function eliminarMovimiento(uid, m) {
     await revertirSaldos(uid, m.tipo, m)
     await revertirPosicion(uid, m)
-    if (m?.metaId) {
-        await revertirAporteMeta(uid, m)
-    }
+    await revertirAporteMeta(uid, m)
     await eliminarMovimientoDoc(uid, m.id)
+    notificarActualizacionMetas()
+    return true
+}
+
+// ============================================
+// RESTAURAR MOVIMIENTO (deshacer eliminación)
+// ============================================
+// Reaplica el efecto del movimiento (saldos + posición + aporte a meta)
+// y recrea el documento con su id y fecha originales.
+
+export async function restaurarMovimiento(uid, m) {
+    if (!m?.id) return false
+
+    await actualizarSaldos(uid, m.tipo, m)
+    if (esMovimientoDeActivo(m.tipo)) {
+        await aplicarPosicion(uid, m.tipo, m)
+    }
+    const meta = await resolverMetaDeMovimiento(uid, m)
+    if (meta) {
+        await aplicarAporteMeta(uid, meta.id, Math.abs(m.monto || 0))
+    }
+
+    await restaurarDocumento(uid, "movimientos", m.id, m)
+
+    notificarActualizacionMetas()
     return true
 }
 
@@ -197,15 +225,52 @@ export async function eliminarMovimiento(uid, m) {
 // Un gasto creado por "Aportar a meta" guarda `metaId`. Al eliminar o editar
 // ese movimiento se ajusta el monto actual de la meta para que el fondo y el
 // total aportado reflejen el nuevo estado de la cuenta.
+//
+// Los movimientos de aporte creados antes de que existiera el vínculo explícito
+// (sin `metaId`) se resuelven por su concepto "Aporte a meta: {nombre}" cuando
+// ese nombre coincide con una única meta.
+
+async function resolverMetaDeMovimiento(uid, m) {
+    if (m?.metaId) {
+        try {
+            const meta = await obtenerMeta(uid, m.metaId)
+            if (meta) return meta
+        } catch {
+            // La meta pudo haber sido borrada; intentar el fallback por nombre.
+        }
+    }
+
+    const nombre = nombreMetaDesdeConcepto(m?.concepto)
+    if (!nombre) return null
+
+    try {
+        const metas = await obtenerMetas(uid)
+        const coincidencias = metas.filter(meta =>
+            (meta.nombre || "").trim().toLowerCase() === nombre
+        )
+        return coincidencias.length === 1 ? coincidencias[0] : null
+    } catch {
+        return null
+    }
+}
+
+function nombreMetaDesdeConcepto(concepto) {
+    const prefijo = "aporte a meta: "
+    const texto = String(concepto || "").trim().toLowerCase()
+    if (!texto.startsWith(prefijo)) return null
+    const nombre = String(concepto).trim().slice(prefijo.length).trim()
+    return nombre ? nombre.toLowerCase() : null
+}
 
 async function revertirAporteMeta(uid, m) {
-    if (!m?.metaId) return
-
-    const meta = await obtenerMeta(uid, m.metaId)
+    const meta = await resolverMetaDeMovimiento(uid, m)
     if (!meta) return
+    await revertirAporteMetaDeMeta(uid, meta, Math.abs(m.monto || 0))
+}
 
-    const monto = Math.abs(m.monto || 0)
-    await actualizarMeta(uid, m.metaId, {
+async function revertirAporteMetaDeMeta(uid, meta, monto) {
+    if (!meta || !monto || monto <= 0) return
+    await actualizarMeta(uid, meta.id, {
         montoActual: Math.max(0, (meta.montoActual || 0) - monto)
     })
 }
@@ -219,6 +284,16 @@ async function aplicarAporteMeta(uid, metaId, monto) {
     await actualizarMeta(uid, metaId, {
         montoActual: (meta.montoActual || 0) + monto
     })
+}
+
+// Cuando un movimiento vinculado a una meta cambia, las vistas abiertas de
+// metas (dashboard y modal) deben refrescar sus datos.
+function notificarActualizacionMetas() {
+    try {
+        window.dispatchEvent(new CustomEvent("metas-actualizadas"))
+    } catch {
+        // Entorno sin window (p.ej. tests): el evento se ignora.
+    }
 }
 
 function esMovimientoDeActivo(tipo) {

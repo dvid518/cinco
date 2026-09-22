@@ -244,8 +244,9 @@ export function abrirModal(opciones) {
         overlay.addEventListener("pointerdown", () => sobreponer(overlay), true)
     }
 
-    // Drag desde el header
-    const limpiarDrag = activarDrag(modalEl, overlay)
+    // Drag desde el header. Solo en modo persistente: en modo estándar el
+    // modal queda fijo y centrado (no tiene sentido arrastrarlo si hay overlay).
+    const limpiarDrag = persistente ? activarDrag(modalEl, overlay) : null
 
     const registro = {
         overlay,

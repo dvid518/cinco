@@ -295,7 +295,7 @@
 .btn-meta-nueva {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
     padding: 4px 12px 4px 11px !important;
     font-size: 12px;
 }
@@ -325,6 +325,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .favorito-item:hover {
@@ -399,6 +400,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .movimientos-lista .movimiento-item:hover {
@@ -548,7 +550,6 @@
 
 .aporte-progreso-badge {
     flex-shrink: 0;
-    min-width: 62px;
     text-align: center;
     padding: 3px 10px;
     border-radius: 50px;
@@ -571,8 +572,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 10px 12px;
-    border-radius: 12px;
+    padding: 10px 20px;
+    border-radius: 40px;
     background: var(--background);
     border: 1px solid var(--border);
 }
@@ -636,6 +637,13 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+}
+
+/* Monto actual bloqueado al crear: se atenúa igual que los inputs
+   del detalle de movimiento antes de editarlo (se habilita al editar). */
+#form-meta .form-input:disabled {
+    opacity: 0.7;
+    cursor: default;
 }
 
 /* Fecha límite llena el espacio sobrante y divisa conserva su ancho natural

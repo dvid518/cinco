@@ -9,7 +9,8 @@ import {
     recogerDatosFormulario,
     vincularSimboloDivisa
 } from "../ui/formularioMovimiento.js"
-import { registrarMovimiento, actualizarMovimiento, eliminarMovimiento } from "../services/MovimientoServicio.js"
+import { registrarMovimiento, actualizarMovimiento, eliminarMovimiento, restaurarMovimiento } from "../services/MovimientoServicio.js"
+import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
@@ -908,10 +909,6 @@ function abrirModalEliminarMovimiento(m) {
                     <strong>${m.concepto || m.activo || CONFIG_MOVIMIENTOS[m.tipo]?.nombre || "Sin concepto"}</strong>
                     · ${formatearFecha(m.fechaRealizacion)}
                 </p>
-                <p class="modal-message-warning">
-                    Se revertirá su efecto en los saldos de tus cuentas.
-                </p>
-                <p class="modal-message-error">Esta acción no se puede deshacer.</p>
             </div>
         `,
         variante: "confirm",
@@ -919,9 +916,14 @@ function abrirModalEliminarMovimiento(m) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshot = { ...m }
                 await eliminarMovimiento(uid, m)
                 await cargarMovimientos()
-                mostrarNotificacion("exito", "Movimiento eliminado")
+                ofrecerDeshacer({
+                    mensaje: "Movimiento eliminado. ¿Deshacer?",
+                    restaurar: () => restaurarMovimiento(uid, snapshot),
+                    alRestaurar: () => cargarMovimientos()
+                })
                 return true
             } catch (error) {
                 console.error("Error eliminando movimiento:", error)
@@ -944,7 +946,7 @@ function abrirDetalleMovimiento(id) {
     abrirFormularioDetalle(m)
 }
 
-async function abrirFormularioDetalle(m) {
+export async function abrirFormularioDetalle(m) {
     uid = sesion.uid
     const html = await generarFormularioMovimiento(m.tipo)
     const config = CONFIG_MOVIMIENTOS[m.tipo]
@@ -981,11 +983,11 @@ function renderizarAccionesDetalle(modalEl, bloqueado) {
 
     contenedor.innerHTML = bloqueado
         ? `
-            <button type="button" class="glass-btn danger" data-detalle-accion="eliminar">
-                ${icono("trash", 15)} Eliminar
-            </button>
             <button type="button" class="glass-btn" data-detalle-accion="editar">
                 ${icono("pencil", 15)} Editar
+            </button>
+            <button type="button" class="glass-btn danger" data-detalle-accion="eliminar">
+                ${icono("trash", 15)} Eliminar
             </button>
         `
         : `
@@ -1133,10 +1135,6 @@ function abrirModalEliminarVarios(lista) {
         contenido: `
             <div class="modal-message">
                 <p class="modal-message-title-danger">¿Eliminar ${lista.length} movimiento(s)?</p>
-                <p class="modal-message-warning">
-                    Se revertirá su efecto en los saldos de tus cuentas.
-                </p>
-                <p class="modal-message-error">Esta acción no se puede deshacer.</p>
             </div>
         `,
         variante: "confirm",
@@ -1144,11 +1142,20 @@ function abrirModalEliminarVarios(lista) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshots = lista.map(x => ({ ...x }))
                 for (const m of lista) {
                     await eliminarMovimiento(uid, m)
                 }
                 await cargarMovimientos()
-                mostrarNotificacion("exito", `${lista.length} movimiento(s) eliminado(s)`)
+                ofrecerDeshacer({
+                    mensaje: `${lista.length} movimiento(s) eliminado(s). ¿Deshacer?`,
+                    restaurar: async () => {
+                        for (const s of snapshots) {
+                            await restaurarMovimiento(uid, s)
+                        }
+                    },
+                    alRestaurar: () => cargarMovimientos()
+                })
                 return true
             } catch (error) {
                 console.error("Error eliminando movimientos:", error)
@@ -1219,6 +1226,13 @@ function escaparCSV(valor) {
         return `"${texto.replaceAll('"', '""')}"`
     }
     return texto
+}
+
+// Un movimiento es de aporte a meta si guarda el vínculo explícito (metaId)
+// o si su concepto coincide con el generado por los aportes automáticos.
+function esMovimientoDeMeta(m) {
+    if (!!m?.metaId) return true
+    return /^aporte a meta:/i.test(String(m?.concepto || "").trim())
 }
 
 function descargarArchivo(url, nombre) {

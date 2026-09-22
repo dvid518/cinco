@@ -4,10 +4,12 @@ import {
     obtenerCuentas,
     crearCuenta,
     actualizarCuenta,
-    eliminarCuenta
+    eliminarCuenta,
+    restaurarDocumento
 } from "../../firebase/firestore.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
+import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
 let cuentas = []
@@ -396,7 +398,6 @@ export function eliminarCuentaSeleccionada() {
             <div class="modal-message">
                 <p class="modal-message-desc">
                     ¿Eliminar definitivamente la cuenta <strong>${cuenta.nombre}</strong>?
-                    Esta acción no se puede deshacer.
                 </p>
             </div>
         `,
@@ -405,9 +406,14 @@ export function eliminarCuentaSeleccionada() {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshot = { ...cuenta }
                 await eliminarCuenta(uid, cuenta.id)
                 await cargarCuentas()
-                mostrarNotificacion("exito", "Cuenta eliminada")
+                ofrecerDeshacer({
+                    mensaje: `Cuenta "${cuenta.nombre}" eliminada. ¿Deshacer?`,
+                    restaurar: () => restaurarDocumento(uid, "cuentas", snapshot.id, snapshot),
+                    alRestaurar: () => cargarCuentas()
+                })
                 return true
             } catch (error) {
                 console.error("Error eliminando cuenta:", error)

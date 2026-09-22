@@ -2,12 +2,13 @@ import { abrirModal, cerrarModal } from "./modal.js"
 import { obtenerMetas, crearMeta, actualizarMeta, eliminarMeta } from "../repositories/MetaRepositorio.js"
 import { sesion } from "../core/sesion.js"
 import { aportarMeta } from "../services/MetaServicio.js"
-import { obtenerCuentas } from "../../firebase/firestore.js"
+import { obtenerCuentas, restaurarDocumento } from "../../firebase/firestore.js"
 import { getDivisaPrincipal } from "../services/DivisaServicio.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 import { parseFechaLocal, fechaLocalISO } from "../core/fechas.js"
 import { icono } from "../core/iconos.js"
 import { mostrarNotificacion } from "./notificaciones.js"
+import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 
 // ============================================
 // UTILIDADES
@@ -429,7 +430,7 @@ export function confirmarEliminarMeta(meta) {
         contenido: `
             <div class="modal-message">
                 <p class="modal-message-desc">
-                    ¿Eliminar la meta <strong>${meta.nombre}</strong>? Esta acción no se puede deshacer.
+                    ¿Eliminar la meta <strong>${meta.nombre}</strong>?}
                 </p>
             </div>
         `,
@@ -438,10 +439,18 @@ export function confirmarEliminarMeta(meta) {
         cancelText: "Cancelar",
         onConfirm: async () => {
             try {
+                const snapshot = { id: meta.id, ...meta.toFirestore() }
                 await eliminarMeta(sesion.uid, meta.id)
                 notificarCambioMetas()
-                mostrarNotificacion("exito", "Meta eliminada")
                 setTimeout(() => mostrarMetas(), 100)
+                ofrecerDeshacer({
+                    mensaje: `Meta "${meta.nombre}" eliminada. ¿Deshacer?`,
+                    restaurar: () => restaurarDocumento(sesion.uid, "metas", snapshot.id, snapshot),
+                    alRestaurar: () => {
+                        notificarCambioMetas()
+                        return mostrarMetas()
+                    }
+                })
                 return true
             } catch (error) {
                 console.error("Error eliminando meta:", error)

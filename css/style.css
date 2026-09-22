@@ -295,7 +295,6 @@ button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto;
     color: var(--text);
     background-color: var(--surface);
     font-family: var(--font-primary);
@@ -315,7 +314,6 @@ select {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto;
     color: var(--text);
     background-color: var(--surface);
     font-family: var(--font-primary);

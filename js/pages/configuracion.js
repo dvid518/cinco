@@ -1357,7 +1357,6 @@ function eliminarTodosLosDatos() {
                     • Snapshots<br>
                     • Trades
                 </div>
-                <p class="modal-message-error">Esta acción no se puede deshacer.</p>
             </div>
         `,
         variante: "confirm",
