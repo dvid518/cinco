@@ -1,7 +1,7 @@
 import { obtenerMovimientos, obtenerCuentas } from "../../firebase/firestore.js"
 import { sesion } from "../core/sesion.js"
 import { getFechaHoy } from "../core/fechas.js"
-import { icono } from "../core/iconos.js"
+import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import { abrirModal, cerrarModal, estaAbierto } from "../ui/modal.js"
 import {
@@ -130,7 +130,7 @@ export function render() {
             </div>
             <div id="totales-movimientos" class="totales"></div>
             <div id="lista-movimientos" class="lista-cards">
-                <div class="lista-vacia"><div class="loading-spinner"></div></div>
+                <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
             </div>
         </section>
     `
@@ -691,7 +691,14 @@ function renderizarTotales(filtrados) {
     contenedor.innerHTML = `
         <span class="totales-count">${totalMovimientos} movimientos</span>
         ${lineas}
+        <div class="totales-acciones">
+            <button type="button" class="totales-btn" id="btn-nuevo-movimiento" title="Nuevo movimiento" aria-label="Nuevo movimiento">${icono("plus-circle", 16)}</button>
+        </div>
     `
+
+    document.getElementById("btn-nuevo-movimiento")?.addEventListener("click", () => {
+        abrirSelectorTipoMovimiento()
+    })
 }
 
 function parseFechaLocal(valor) {
@@ -783,7 +790,7 @@ const ICONO_TIPO_MOVIMIENTO = {
     [TIPOS_MOVIMIENTO.GASTO]: "arrow-up-right"
 }
 
-export function abrirSelectorTipoMovimiento() {
+export function abrirSelectorTipoMovimiento(cuentaId = null) {
     // Garantizar uid actual para quien invoque desde otra página
     uid = sesion.uid
 
@@ -838,7 +845,10 @@ export function abrirSelectorTipoMovimiento() {
             abrirSelectorDireccionTrade()
             return
         }
-        abrirFormularioMovimiento(tipo, null)
+        const opciones = cuentaId
+            ? { valores: { cuenta: cuentaId, cuentaOrigen: cuentaId } }
+            : undefined
+        abrirFormularioMovimiento(tipo, null, opciones)
     }
 
     document.querySelectorAll(".tipo-principal").forEach(cont => {
@@ -888,7 +898,7 @@ export async function abrirFormularioMovimiento(tipo, movimiento = null, opcione
     const esEdicion = !!movimiento
     const alGuardar = opciones.alGuardar || null
     const valoresIniciales = opciones.valores || null
-    const html = await generarFormularioMovimiento(tipo)
+    const html = await generarFormularioMovimiento(tipo, valoresIniciales?.divisa || null)
 
     const config = CONFIG_MOVIMIENTOS[tipo]
 
@@ -938,7 +948,31 @@ export async function abrirFormularioMovimiento(tipo, movimiento = null, opcione
         }
     }
 
+    if (tipo === TIPOS_MOVIMIENTO.PAGO_TARJETA) {
+        filtrarCuentasPagoTarjeta()
+    }
     vincularSimboloDivisa()
+}
+
+function filtrarCuentasPagoTarjeta() {
+    const tarjeta = document.getElementById("campo-tarjeta")
+    const origen = document.getElementById("campo-cuentaOrigen")
+    if (!tarjeta || !origen) return
+
+    const actualizar = () => {
+        const moneda = tarjeta.selectedOptions?.[0]?.dataset?.moneda
+        Array.from(origen.options).forEach((opcion, indice) => {
+            if (indice === 0) return
+            const tipo = opcion.dataset.tipo
+            const compatible = tipo !== "credito" && (!moneda || opcion.dataset.moneda === moneda)
+            opcion.hidden = !compatible
+            opcion.disabled = !compatible
+        })
+        if (origen.selectedOptions[0]?.disabled) origen.value = ""
+    }
+
+    tarjeta.addEventListener("change", actualizar)
+    actualizar()
 }
 
 function rellenarFormulario(tipo, m) {
@@ -1048,6 +1082,9 @@ export async function abrirFormularioDetalle(m) {
     })
 
     rellenarFormulario(m.tipo, m)
+    if (tipo === TIPOS_MOVIMIENTO.PAGO_TARJETA) {
+        filtrarCuentasPagoTarjeta()
+    }
     vincularSimboloDivisa()
     bloquearFormulario(true)
     renderizarAccionesDetalle(modalEl, true)

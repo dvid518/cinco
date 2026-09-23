@@ -31,7 +31,6 @@
 
 #logo {
     height: 30px;
-    margin-top: 5px;
 }
 
 .logo-container:hover {
@@ -99,7 +98,6 @@
 #exis {
     color: var(--text);
     transition: all 0.3s ease;
-    margin-top: 4px;
 }
 
 #conf-icon {
@@ -316,12 +314,17 @@
     max-width: 0;
 }
 
-/* Spinner pequeño dentro de un botón del sidebar */
-.sidebar-wrap #sidebar button .loading-spinner {
+/* El indicador de carga se muestra SIEMPRE (también colapsado): no es una
+   etiqueta, es el logo girando mientras se carga el panel. */
+.sidebar-wrap.sidebar-colapsado #sidebar button .loading-logo {
+    opacity: 1;
+    max-width: none;
+}
+
+/* Logo de escinco girando dentro de un botón del sidebar (carga) */
+.sidebar-wrap #sidebar button .loading-logo svg {
     width: 20px;
     height: 20px;
-    margin: 0;
-    border-width: 2px;
 }
 
 /* ============================================
@@ -330,7 +333,7 @@
 
 #panel {
     flex: 1;
-    padding: 28px 5% 28px 5%;
+    padding: 28px 3% 28px 3%;
     border-radius: 25px;
     color: var(--text);
     gap: 20px;

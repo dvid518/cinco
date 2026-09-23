@@ -30,7 +30,8 @@ class Sesion {
                 p2pVenta: true,
                 trade: true
             },
-            movimientosRecientes: 5
+            movimientosRecientes: 5,
+            formatoDivisa: "simbolo"
         }
         // Intentar cargar preferencias guardadas al instanciar
         this.recargarPreferencias()
@@ -111,6 +112,9 @@ class Sesion {
         }
         if (preferencias?.movimientosRecientes !== undefined) {
             this.preferencias.movimientosRecientes = preferencias.movimientosRecientes
+        }
+        if (preferencias?.formatoDivisa) {
+            this.preferencias.formatoDivisa = preferencias.formatoDivisa
         }
         try {
             sessionStorage.setItem('escinco_preferencias', JSON.stringify(this.preferencias))
@@ -213,7 +217,8 @@ class Sesion {
                 p2pVenta: true,
                 trade: true
             },
-            movimientosRecientes: 5
+            movimientosRecientes: 5,
+            formatoDivisa: "simbolo"
         }
         try {
             sessionStorage.removeItem('escinco_usuario')

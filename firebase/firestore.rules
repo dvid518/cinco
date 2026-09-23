@@ -99,15 +99,25 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
             'nombre', 'tipo', 'moneda', 'saldoInicial', 'estado', 'esPatrimonio',
             'fechaCreacion', 'deuda', 'limite', 'desgravamen', 'diaCorte', 'diaPago',
-            'num', 'cci'
+            'num', 'cci', 'vence', 'umbralAviso', 'umbralCritico', 'orden',
+            'anualidad', 'anualidadFecha', 'avisoUsoEnviado', 'avisoCriticoEnviado'
           ])
-          && request.resource.data.keys().hasAll(['nombre', 'tipo', 'moneda', 'estado'])
+          && request.resource.data.keys().hasAll(['nombre', 'tipo', 'moneda', 'saldoInicial', 'estado', 'esPatrimonio', 'orden'])
           && esTexto(request.resource.data.nombre)
           && esTexto(request.resource.data.tipo)
           && esTexto(request.resource.data.moneda)
           && esNumero(request.resource.data.saldoInicial)
           && esTexto(request.resource.data.estado)
-          && esBool(request.resource.data.esPatrimonio);
+          && esBool(request.resource.data.esPatrimonio)
+          && esNumero(request.resource.data.orden)
+          && request.resource.data.orden >= 0
+          && (('anualidad' in request.resource.data) ? esNumero(request.resource.data.anualidad) && request.resource.data.anualidad >= 0 : true)
+          && (('anualidadFecha' in request.resource.data) ? esTexto(request.resource.data.anualidadFecha) && request.resource.data.anualidadFecha.matches('^([0-9]{2})-([0-9]{2})$') : true)
+          && (('umbralAviso' in request.resource.data) ? esNumero(request.resource.data.umbralAviso) : true)
+          && (('umbralCritico' in request.resource.data) ? esNumero(request.resource.data.umbralCritico) : true)
+          && (('vence' in request.resource.data) ? esTexto(request.resource.data.vence) : true)
+          && (('avisoUsoEnviado' in request.resource.data) ? esBool(request.resource.data.avisoUsoEnviado) : true)
+          && (('avisoCriticoEnviado' in request.resource.data) ? esBool(request.resource.data.avisoCriticoEnviado) : true);
 
         allow update: if esPropietario(uid)
           && ifPresenteTexto(request.resource.data, 'nombre')
@@ -121,8 +131,16 @@ service cloud.firestore {
           && ifPresenteNumeroONulo(request.resource.data, 'desgravamen')
           && ifPresenteNumeroONulo(request.resource.data, 'diaCorte')
           && ifPresenteNumeroONulo(request.resource.data, 'diaPago')
+          && ifPresenteNumeroONulo(request.resource.data, 'umbralAviso')
+          && ifPresenteNumeroONulo(request.resource.data, 'umbralCritico')
+          && ifPresenteNumeroONulo(request.resource.data, 'orden')
+          && ifPresenteNumeroONulo(request.resource.data, 'anualidad')
+          && ifPresenteTextoONulo(request.resource.data, 'anualidadFecha')
+          && ifPresenteBool(request.resource.data, 'avisoUsoEnviado')
+          && ifPresenteBool(request.resource.data, 'avisoCriticoEnviado')
           && ifPresenteTextoONulo(request.resource.data, 'num')
           && ifPresenteTextoONulo(request.resource.data, 'cci')
+          && ifPresenteTextoONulo(request.resource.data, 'vence')
           && ifPresenteTimestampONulo(request.resource.data, 'fechaCreacion');
 
         allow delete: if esPropietario(uid);
@@ -483,13 +501,6 @@ service cloud.firestore {
         }
       }
 
-      // --------------------------------------------------------
-      // CATCH-ALL: cualquier subcolección futura bajo el usuario
-      // queda protegida por defecto.
-      // --------------------------------------------------------
-      match /{document=**} {
-        allow read, write: if esPropietario(uid);
-      }
     }
 
     // ----------------------------------------------------------

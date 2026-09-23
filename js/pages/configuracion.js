@@ -5,9 +5,9 @@ import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { VERSION } from "../../constants/version.js"
 import { TIPO_CAMBIO_DEFAULT } from "../../constants/divisas.js"
-import { getDivisaPrincipal, getTipoCambio, actualizarTipoCambioAuto, guardarDivisaPrincipal, guardarTipoCambio } from "../services/DivisaServicio.js"
+import { getDivisaPrincipal, getTipoCambio, getFormatoDivisa, actualizarTipoCambioAuto, guardarDivisaPrincipal, guardarTipoCambio } from "../services/DivisaServicio.js"
 import { aplicarTema, setTemaLocal } from "../core/tema.js"
-import { icono } from "../core/iconos.js"
+import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 import { accionExportar } from "../ui/exportar.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 
@@ -186,6 +186,14 @@ export function render() {
                         <option value="usd">USD ($)</option>
                         <option value="usdt">USDT (₮)</option>
                     </select>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Formato de divisa</span>
+                    <div class="toggle-group" id="formato-divisa">
+                        <span class="toggle-option active" data-formato="simbolo">Símbolo ($)</span>
+                        <span class="toggle-option" data-formato="codigo">Código (USD)</span>
+                    </div>
                 </div>
 
                 <div class="config-group">
@@ -415,6 +423,7 @@ export async function init() {
     configurarLastbar()
     configurarDetectorCambios()
     configurarTipoCambio()
+    configurarFormatoDivisa()
 }
 
 // ============================================
@@ -786,6 +795,10 @@ async function cargarPreferencias() {
     // Divisa
     const divisaSelect = document.getElementById("divisa-principal")
     if (divisaSelect) divisaSelect.value = getDivisaPrincipal()
+    const formato = getFormatoDivisa()
+    document.querySelectorAll("#formato-divisa .toggle-option").forEach(opcion => {
+        opcion.classList.toggle("active", opcion.dataset.formato === formato)
+    })
 
     // Tipo de cambio
     const tc = getTipoCambio()
@@ -840,6 +853,7 @@ function hayCambiosEnVivo() {
         (document.getElementById("toggle-trading")?.checked !== (basePaginas.trading !== false)) ||
         tiposDifieren ||
         (document.getElementById("divisa-principal")?.value !== getDivisaPrincipal()) ||
+        (getFormatoDivisaUI() !== getFormatoDivisa()) ||
         (modoTCUI !== null && modoTCUI !== (tc.modo === "auto" ? "auto" : "manual")) ||
         (modoTCUI !== "auto" && parseFloat(document.getElementById("tc-pen-usd")?.value) !== tc.pen_usd)
     )
@@ -885,9 +899,21 @@ function configurarDetectorCambios() {
     })
 }
 
-// ============================================
-// TIPO DE CAMBIO · MANUAL / AUTOMÁTICO
-// ============================================
+function configurarFormatoDivisa() {
+    const opciones = document.querySelectorAll("#formato-divisa .toggle-option")
+    opciones.forEach(opcion => {
+        opcion.addEventListener("click", () => {
+            opciones.forEach(otra => otra.classList.remove("active"))
+            opcion.classList.add("active")
+            marcarCambioNuevo()
+            actualizarEstadoGuardar()
+        })
+    })
+}
+
+function getFormatoDivisaUI() {
+    return document.querySelector("#formato-divisa .toggle-option.active")?.dataset.formato || "simbolo"
+}
 
 function getModoTipoCambioUI() {
     const opt = document.querySelector("#tc-modo .toggle-option.active")
@@ -1112,6 +1138,7 @@ function construirPreferencias() {
             configuracion: true
         },
         divisaPrincipal,
+        formatoDivisa: getFormatoDivisaUI(),
         tipoCambio,
         seg,
         accesibilidad,
@@ -1142,6 +1169,7 @@ async function aplicarPreferencias(preferencias) {
 
         await actualizarPreferencias(uid, {
             tema: preferencias.tema,
+            formatoDivisa: preferencias.formatoDivisa,
             movimientosRecientes: preferencias.movimientosRecientes,
             paginas: preferencias.paginas,
             seg: preferencias.seg,
@@ -1377,7 +1405,7 @@ function abrirModalPreviewImportacion(archivo, preview) {
                     titulo: "Importando...",
                     contenido: `
                         <div class="modal-loading">
-                            <div class="loading-spinner"></div>
+                            ${LOGO_ESCINCO_CARGA}
                             <p class="modal-loading-text">Importando datos...</p>
                         </div>
                     `,
@@ -1538,7 +1566,7 @@ function confirmarEliminacionFinal() {
                 titulo: "Eliminando datos",
                 contenido: `
                     <div class="modal-loading">
-                        <div class="loading-spinner"></div>
+                        ${LOGO_ESCINCO_CARGA}
                         <p class="modal-loading-text" id="eliminar-status">Descargando respaldo...</p>
                     </div>
                 `,
@@ -1777,7 +1805,7 @@ function abrirModalConfirmacionFinal() {
                 titulo: "Eliminando cuenta",
                 contenido: `
                     <div class="modal-loading">
-                        <div class="loading-spinner"></div>
+                        ${LOGO_ESCINCO_CARGA}
                         <p class="modal-loading-text" id="eliminar-cuenta-status">Descargando respaldo...</p>
                     </div>
                 `,

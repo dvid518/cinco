@@ -1,4 +1,5 @@
 import { sesion } from "../core/sesion.js"
+import { LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 import { abrirModal, cerrarModal } from "./modal.js"
 import { mostrarNotificacion } from "./notificaciones.js"
 
@@ -14,7 +15,7 @@ export async function accionExportar() {
         titulo: "Exportando respaldo",
         contenido: `
             <div class="modal-loading">
-                <div class="loading-spinner"></div>
+                ${LOGO_ESCINCO_CARGA}
                 <p class="modal-loading-text">Preparando archivo .dvid...</p>
             </div>
         `,

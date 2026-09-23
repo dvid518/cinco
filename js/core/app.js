@@ -1,7 +1,7 @@
 import { observeAuth, startInactivityTimer, aplicarPersistenciaSesion } from "../../firebase/auth.js"
 import { sesion } from "./sesion.js"
 import { initRouter } from "./router.js"
-import { obtenerPreferencias } from "../../firebase/firestore.js"
+import { obtenerPreferencias, asegurarCuentaEfectivoInicial } from "../../firebase/firestore.js"
 import { initTemaLocal, sincronizarTemaFirestore } from "./tema.js"
 import { initPWA } from "./pwa.js"
 import { initDoodles } from "../ui/doodles.js"
@@ -45,6 +45,7 @@ export async function initApp() {
         console.log("[INFO] Usuario autenticado:", user.uid)
 
         try {
+            await asegurarCuentaEfectivoInicial(user.uid, user)
             const prefs = await obtenerPreferencias(user.uid)
             if (prefs) {
                 sesion.setPreferencias(prefs)

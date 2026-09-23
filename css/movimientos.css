@@ -253,12 +253,12 @@
    con su scrollbar sutil ya definido en navegacion.css.
    -------------------------------------------- */
 
-#lista-movimientos {
+:is(#lista-movimientos, #lista-movimientos-cuenta) {
     flex: none;
     overflow: visible;
 }
 
-#lista-movimientos::after {
+:is(#lista-movimientos, #lista-movimientos-cuenta)::after {
     display: none;
 }
 
@@ -330,7 +330,7 @@
    CARD · interacción, selección y acciones
    -------------------------------------------- */
 
-#lista-movimientos .card-item {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item {
     --card-acciones-w: 88px;
     position: relative;
     overflow: hidden;
@@ -342,7 +342,7 @@
     -webkit-user-select: none;
 }
 
-#lista-movimientos .card-item-main {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item-main {
     position: relative;
     z-index: 1;
     display: flex;
@@ -355,7 +355,7 @@
     background: inherit;
 }
 
-#lista-movimientos .card-item-valor-wrap {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item-valor-wrap {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -364,14 +364,14 @@
     margin-left: 12px;
 }
 
-#lista-movimientos .card-item-valor {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item-valor {
     margin-left: 0;
 }
 
 /* Las acciones se superponen justo a la izquierda del precio:
    salen del flujo (position: absolute) para no empujar ningún
    contenido y se anclan al borde izquierdo del precio. */
-#lista-movimientos .card-item-acciones {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item-acciones {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -386,20 +386,20 @@
     transition: opacity 0.2s ease;
 }
 
-#lista-movimientos .card-item.acciones-visibles .card-item-acciones,
-#lista-movimientos .card-item:focus-within .card-item-acciones {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item.acciones-visibles .card-item-acciones,
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item:focus-within .card-item-acciones {
     opacity: 1;
     pointer-events: auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
-    #lista-movimientos .card-item:hover .card-item-acciones {
+    :is(#lista-movimientos, #lista-movimientos-cuenta) .card-item:hover .card-item-acciones {
         opacity: 1;
         pointer-events: auto;
     }
 }
 
-#lista-movimientos .card-action-btn {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -414,31 +414,31 @@
     transition: all 0.2s ease;
 }
 
-#lista-movimientos .card-action-btn:hover {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-action-btn:hover {
     color: var(--text);
     border-color: var(--text);
     background: var(--lightHover);
 }
 
-#lista-movimientos .card-action-btn.danger:hover {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-action-btn.danger:hover {
     color: var(--textAlt);
     background-color: var(--negative);
     border-color: var(--negative);
 }
 
-#lista-movimientos .card-item.seleccionado .card-item-acciones button {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item.seleccionado .card-item-acciones button {
     color: var(--textAlt);
     border-color: var(--text);
     background-color: var(--border);
 }
 
-#lista-movimientos .card-item.seleccionado .card-action-btn:hover {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item.seleccionado .card-action-btn:hover {
     color: var(--surface);
     border-color: var(--borderAlt);
     background-color: var(--text);
 }
 
-#lista-movimientos .card-item.seleccionado .card-action-btn.danger:hover {
+:is(#lista-movimientos, #lista-movimientos-cuenta) .card-item.seleccionado .card-action-btn.danger:hover {
     color: var(--text);
     border-color: var(--negativeAlt);
     background-color: var(--negativeAlt);

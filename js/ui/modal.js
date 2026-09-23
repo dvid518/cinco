@@ -38,6 +38,8 @@ function sobreponer(overlay) {
  * @param {string} [opciones.variante]        'info' | 'form' | 'confirm' | 'wide' | 'narrow'
  * @param {string} [opciones.confirmText]
  * @param {string} [opciones.cancelText]
+ * @param {string} [opciones.footerExtra]      HTML de botones extra en el footer
+ * @param {string} [opciones.headerExtra]      HTML de botones extra junto al botón de cerrar
  * @param {Function} [opciones.onConfirm]     Puede devolver false para NO cerrar
  * @param {Function} [opciones.onCancel]      Se llama al cerrar sin confirmar
  * @param {boolean} [opciones.cerrarAlClickFuera=true]
@@ -50,6 +52,8 @@ export function abrirModal(opciones) {
         variante = "form",
         confirmText = "Confirmar",
         cancelText = "Cancelar",
+        footerExtra = "",
+        headerExtra = "",
         onConfirm = null,
         onCancel = null,
         cerrarAlClickFuera = true,
@@ -74,8 +78,11 @@ export function abrirModal(opciones) {
         <div class="modal modal-${variante}" role="dialog" aria-modal="true" tabindex="-1">
             <div class="modal-header">
                 <h2 class="modal-title">${titulo}</h2>
+                <div class="modal-header-acciones">
+                    ${headerExtra}
+                </div>
                 <button class="modal-close" type="button" aria-label="Cerrar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
                         <path d="M18 6 6 18"/>
                         <path d="m6 6 12 12"/>
                     </svg>
@@ -88,6 +95,7 @@ export function abrirModal(opciones) {
             <div class="modal-footer">
                 ${mostrarCancelar ? `<button class="modal-btn modal-btn-secondary" id="modal-cancel"
                     type="button">${cancelText}</button>` : ""}
+                ${footerExtra}
                 ${mostrarConfirmar ? `<button class="modal-btn modal-btn-primary" id="modal-confirm"
                     type="button">${confirmText}</button>` : ""}
             </div>

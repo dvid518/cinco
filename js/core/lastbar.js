@@ -13,6 +13,16 @@ const ICONO_POR_MODO = {
 
 // Marcador resuelto en getLastbar() para que el ícono del tema se
 // genere SIEMPRE con el modo actual (no se congela al construir LASTBARS).
+const ITEM_EDITAR_DASHBOARD = `
+    <div class="item glass" data-accion="editar-dashboard" role="button" tabindex="0" title="Editar dashboard">
+        <span class="glass">Editar dashboard</span>
+        <svg id="icon-edit-dashboard" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+    </div>
+`
+
 const PLACEHOLDER_TEMA = "<!--item-tema-->"
 
 function itemTema() {
@@ -110,8 +120,9 @@ const LASTBARS = {
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     </svg>
                 </div>
-                ${PLACEHOLDER_TEMA}
-                ${ITEM_CERRAR_SESION}
+                 ${PLACEHOLDER_TEMA}
+                 ${ITEM_EDITAR_DASHBOARD}
+                 ${ITEM_CERRAR_SESION}
             </div>
             ${PENDIENTES_BLOCK}
         </div>
@@ -341,6 +352,11 @@ const MAPA_ACCIONES = {
     "mov": async () => {
         const { abrirSelectorTipoMovimiento } = await import("../pages/movimientos.js")
         abrirSelectorTipoMovimiento()
+    },
+
+    "editar-dashboard": async () => {
+        const { abrirEditorDashboard } = await import("../pages/dashboard.js")
+        abrirEditorDashboard()
     },
 
     "extracto": async (pagina) => {

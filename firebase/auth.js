@@ -20,7 +20,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js"
 import { app } from "./firebaseClient.js"
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
-import { db } from "./firestore.js"
+import { db, asegurarCuentaEfectivoInicial } from "./firestore.js"
 import { cacheCapa } from "../js/core/cache.js"
 import { sesion } from "../js/core/sesion.js"
 
@@ -46,6 +46,7 @@ export async function registrarConEmail(nombre, email, password) {
     }
 
     await asegurarDocUsuario(credencial.user, true, nombre)
+    await asegurarCuentaEfectivoInicial(credencial.user.uid, credencial.user)
 
     return credencial
 }
@@ -64,6 +65,7 @@ export async function registrarConGoogle() {
     const esNuevo = getAdditionalUserInfo(resultado)?.isNewUser || false
 
     await asegurarDocUsuario(resultado.user, esNuevo)
+    await asegurarCuentaEfectivoInicial(resultado.user.uid, resultado.user)
 
     return resultado
 }

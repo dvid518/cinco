@@ -5,11 +5,14 @@
 
 .dashboard {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
     gap: 20px;
     width: 100%;
     height: 100%;
-    align-content: start;
+    min-height: 0;
+    align-content: stretch;
+    overflow: visible;
 }
 
 /* ============================================
@@ -17,11 +20,19 @@
    ============================================ */
 
 .dashboard .card {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     border-radius: 20px;
     padding: 24px;
     transition: all 0.3s ease;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* Color de la línea según el tipo de card */
@@ -97,6 +108,37 @@
     padding-top: 12px;
     border-top: 1px solid var(--border);
     opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.dashboard .card .card-header,
+.dashboard .card .card-title,
+.dashboard .card .card-value {
+    flex-shrink: 0;
+}
+
+.patrimonio-card .card-value {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(24px, 2.4vw, 32px);
+    letter-spacing: -0.05em;
+}
+
+.grafico-patrimonio-card .grafico-container-dashboard {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    margin-top: 8px;
+}
+
+.grafico-patrimonio-card canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#panel:has(.dashboard) {
+    overflow: visible;
 }
 
 /* ============================================
@@ -172,14 +214,48 @@
    RESPONSIVE
    ============================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 1199px) and (min-width: 900px) {
     .dashboard {
-        grid-template-columns: 1fr;
-        gap: 16px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 899px) and (min-width: 600px) {
+    .dashboard {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 599px) and (min-width: 400px) {
+    .dashboard {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 899px) {
+    .dashboard {
+        grid-auto-rows: minmax(220px, auto);
+        height: auto;
+        min-height: 100%;
+        overflow: visible;
+    }
+
+    #panel:has(.dashboard) {
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 32px 28px;
     }
 
     .dashboard .card {
+        min-height: 220px;
         padding: 18px;
+    }
+}
+
+@media (max-width: 399px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+        gap: 16px;
     }
 
     .dashboard .card .card-value {
@@ -302,9 +378,13 @@
 .favoritos-lista,
 .metas-lista {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 8px;
-    max-height: 260px;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .card-vacio {
@@ -312,6 +392,14 @@
     color: var(--textSecondary);
     font-size: 12px;
     opacity: 0.7;
+}
+
+/* Indicador de carga compacto dentro de las tarjetas del dashboard */
+.movimientos-lista .loading-logo svg.spin,
+.favoritos-lista .loading-logo svg.spin,
+.metas-lista .loading-logo svg.spin {
+    width: 20px;
+    height: 20px;
 }
 
 .favorito-item {
@@ -369,24 +457,69 @@
 
 .movimientos-lista {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 8px;
-    max-height: 320px;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
     padding-right: 4px;
     padding-bottom: 12px;
 }
 
-.movimientos-lista::-webkit-scrollbar {
+.movimientos-lista::-webkit-scrollbar,
+.favoritos-lista::-webkit-scrollbar,
+.metas-lista::-webkit-scrollbar {
     width: 6px;
 }
 
-.movimientos-lista::-webkit-scrollbar-track {
+.movimientos-lista::-webkit-scrollbar-track,
+.favoritos-lista::-webkit-scrollbar-track,
+.metas-lista::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.movimientos-lista::-webkit-scrollbar-thumb {
+.movimientos-lista::-webkit-scrollbar-thumb,
+.favoritos-lista::-webkit-scrollbar-thumb,
+.metas-lista::-webkit-scrollbar-thumb {
     background: var(--border);
     border-radius: 10px;
+}
+
+.dashboard-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dashboard-editor-hint {
+    margin: 0;
+    color: var(--textSecondary);
+    font-size: 13px;
+}
+
+.dashboard-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.dashboard-card-opcion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.dashboard-card-opcion:has(input:checked) {
+    border-color: var(--positive);
+    background: var(--lightHover);
 }
 
 .movimientos-lista .movimiento-item {
@@ -447,13 +580,7 @@
    ============================================ */
 
 .metas-lista {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 300px;
-    padding-right: 4px;
-    padding-bottom: 12px;
-    overflow-y: auto;
+    max-height: none;
 }
 
 /* Fila al estilo de "Últimos movimientos"/"Favoritos": nombre + porcentaje */

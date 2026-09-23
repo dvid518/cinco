@@ -3,7 +3,7 @@ import { obtenerTradesConFiltros, registrarTrade, finalizarTrade, borrarTrade, r
 import {
     obtenerOrdenesConFiltros,
     registrarOrden,
-    cancelarOrden,
+    editarOrden,
     borrarOrden,
     evaluarOrdenesPendientes
 } from "../services/OrdenServicio.js"
@@ -11,7 +11,7 @@ import { abrirModal, cerrarModal, estaAbierto } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { restaurarDocumento } from "../../firebase/firestore.js"
-import { icono } from "../core/iconos.js"
+import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 
@@ -69,7 +69,7 @@ export function render() {
             </div>
 
             <div id="lista-trades" class="lista-posiciones">
-                <div class="lista-vacia"><div class="loading-spinner"></div></div>
+                <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
             </div>
         </section>
     `
@@ -290,7 +290,7 @@ function renderizarOrdenes() {
                         </div>
                         <div class="card-item-acciones">
                             ${o.estaPendiente ? `
-                                <button type="button" class="card-action-btn" data-accion="cancelar" data-id="${o.id}" title="Cancelar" aria-label="Cancelar">${icono("x", 16)}</button>
+                                <button type="button" class="card-action-btn" data-accion="editar" data-id="${o.id}" title="Editar" aria-label="Editar">${icono("pencil", 16)}</button>
                             ` : ''}
                             <button type="button" class="card-action-btn danger" data-accion="eliminar" data-id="${o.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
                         </div>
@@ -542,7 +542,7 @@ function manejarClickTarjeta(evento) {
         const card = accionBtn.closest(".trade-item")
         ocultarAccionesCards()
         if (!card) return
-        ejecutarAccionTarjeta(accionBtn.dataset.accion, card.dataset.tradeId || card.dataset.ordenId)
+        ejecutarAccionTarjeta(accionBtn.dataset.accion, card)
         return
     }
 
@@ -617,13 +617,15 @@ function manejarDobleClickTarjeta(evento) {
     if (id) toggleSeleccion(id)
 }
 
-function ejecutarAccionTarjeta(accion, id) {
+function ejecutarAccionTarjeta(accion, card) {
+    if (!card) return
+    const id = card.dataset.tradeId || card.dataset.ordenId
     if (!id) return
+    const esOrden = !!card.dataset.ordenId
     if (accion === "cerrar") abrirModalCerrarTrade(id)
     else if (accion === "reabrir") abrirModalReabrirTrade(id)
-    else if (accion === "editar") abrirModalEditarTrade(id)
-    else if (accion === "eliminar") confirmarEliminarTrade(id)
-    else if (accion === "cancelar") confirmarCancelarOrden(id)
+    else if (accion === "editar") esOrden ? abrirModalEditarOrden(id) : abrirModalEditarTrade(id)
+    else if (accion === "eliminar") esOrden ? confirmarEliminarOrden(id) : confirmarEliminarTrade(id)
 }
 
 function mostrarAccionesCard(card) {
@@ -1157,7 +1159,7 @@ export function abrirModalNuevaOrden() {
 // ÓRDENES · DETALLE
 // ============================================
 // El doble click sobre una orden abre un modal de solo lectura con todos
-// sus datos. Desde ahí se puede cancelar (si está pendiente) o eliminar.
+// sus datos. Desde el footer se puede editar o eliminar.
 
 function abrirModalDetalleOrden(ordenId) {
     const orden = ordenesData.find(o => o.id === ordenId)
@@ -1212,30 +1214,23 @@ function abrirModalDetalleOrden(ordenId) {
                 </div>
             ` : ''}
         </div>
-        <div class="movimiento-detalle-acciones">
-            ${orden.estaPendiente ? `
-                <button type="button" class="glass-btn" id="detalle-orden-cancelar">
-                    ${icono("x", 15)} Cancelar orden
-                </button>
-            ` : ''}
-            <button type="button" class="glass-btn danger" id="detalle-orden-eliminar">
-                ${icono("trash-2", 15)} Eliminar
-            </button>
-        </div>
     `
 
     abrirModal({
         titulo: `Orden · ${orden.activo}`,
         contenido: html,
         variante: "info",
-        confirmText: "Cerrar",
-        onConfirm: () => true,
+        confirmText: "Editar",
+        footerExtra: `
+            <button type="button" class="modal-btn modal-btn-secondary modal-btn-danger" id="detalle-orden-eliminar">
+                ${icono("trash-2", 15)} Eliminar
+            </button>
+        `,
+        onConfirm: () => {
+            abrirModalEditarOrden(orden.id)
+            return true
+        },
         onCancel: () => true
-    })
-
-    document.getElementById('detalle-orden-cancelar')?.addEventListener('click', () => {
-        cerrarModal()
-        confirmarCancelarOrden(orden.id)
     })
 
     document.getElementById('detalle-orden-eliminar')?.addEventListener('click', () => {
@@ -1249,12 +1244,10 @@ function formatearFechaOrden(valor) {
     try {
         const fecha = valor?.toDate ? valor.toDate() : new Date(valor)
         if (isNaN(fecha.getTime())) return "—"
-        return fecha.toLocaleString("es-PE", {
+        return fecha.toLocaleDateString("es-PE", {
             year: "numeric",
             month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit"
+            day: "2-digit"
         })
     } catch {
         return "—"
@@ -1262,38 +1255,116 @@ function formatearFechaOrden(valor) {
 }
 
 // ============================================
-// ÓRDENES · CANCELAR
+// ÓRDENES · EDITAR
 // ============================================
 
-function confirmarCancelarOrden(ordenId) {
+function abrirModalEditarOrden(ordenId) {
     const orden = ordenesData.find(o => o.id === ordenId)
     if (!orden) return
 
-    abrirModal({
-        titulo: "Cancelar orden",
-        contenido: `
-            <div class="modal-message">
-                <p class="modal-message-desc">
-                    ¿Cancelar la orden ${orden.tipoLabel.toLowerCase()} de ${orden.activo}
-                    (${orden.direccionLabel.toLowerCase()})? La orden quedará inactiva.
-                </p>
+    const html = `
+        <form class="form-movimiento form-movimiento-grid">
+            <div class="form-group">
+                <label for="editar-orden-activo">Activo *</label>
+                <input type="text" id="editar-orden-activo" class="form-input" value="${(orden.activo || "").replace(/</g, "&lt;")}" required>
             </div>
-        `,
-        confirmText: 'Cancelar orden',
-        cancelText: 'Volver',
+            <div class="form-group">
+                <label for="editar-orden-cuenta">Cuenta *</label>
+                <select id="editar-orden-cuenta" class="form-input" required>
+                    <option value="">Seleccionar cuenta</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="editar-orden-tipo">Tipo de orden *</label>
+                <select id="editar-orden-tipo" class="form-input">
+                    <option value="limite" ${orden.tipoOrden === "limite" ? "selected" : ""}>Límite</option>
+                    <option value="stop" ${orden.tipoOrden === "stop" ? "selected" : ""}>Stop</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="editar-orden-direccion">Dirección *</label>
+                <select id="editar-orden-direccion" class="form-input">
+                    <option value="long" ${orden.direccion === "long" ? "selected" : ""}>Compra (Largo)</option>
+                    <option value="short" ${orden.direccion === "short" ? "selected" : ""}>Venta (Corto)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="editar-orden-precio">Precio de disparo *</label>
+                <input type="number" id="editar-orden-precio" class="form-input" step="0.01" min="0.01" value="${orden.precioDisparo}" required>
+            </div>
+            <div class="form-group">
+                <label for="editar-orden-lotaje">Lotaje *</label>
+                <input type="number" id="editar-orden-lotaje" class="form-input" step="0.0001" min="0.0001" value="${orden.lotaje}" required>
+            </div>
+            <div class="form-group">
+                <label for="editar-orden-sl">Stop Loss</label>
+                <input type="number" id="editar-orden-sl" class="form-input" step="0.01" min="0" value="${orden.sl || ''}" placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label for="editar-orden-tp">Take Profit</label>
+                <input type="number" id="editar-orden-tp" class="form-input" step="0.01" min="0" value="${orden.tp || ''}" placeholder="0.00">
+            </div>
+            <div class="form-group full">
+                <label for="editar-orden-nota">Nota</label>
+                <textarea id="editar-orden-nota" class="form-input form-textarea" rows="3" maxlength="1500">${(orden.nota || "").replace(/</g, "&lt;")}</textarea>
+                <span class="form-hint">Máximo 1500 caracteres</span>
+            </div>
+        </form>
+    `
+
+    abrirModal({
+        titulo: `Editar orden · ${orden.activo}`,
+        contenido: html,
+        confirmText: "Guardar cambios",
+        cancelText: "Cancelar",
         onConfirm: async () => {
+            const activo = document.getElementById('editar-orden-activo')?.value.trim().toUpperCase()
+            const cuentaEl = document.getElementById('editar-orden-cuenta')
+            const cuenta = cuentaEl?.value
+            const divisa = cuentaEl?.selectedOptions?.[0]?.dataset?.moneda || orden.divisa || "usd"
+            const tipoOrden = document.getElementById('editar-orden-tipo')?.value
+            const direccion = document.getElementById('editar-orden-direccion')?.value
+            const precioDisparo = parseFloat(document.getElementById('editar-orden-precio')?.value)
+            const lotaje = parseFloat(document.getElementById('editar-orden-lotaje')?.value)
+            const sl = parseFloat(document.getElementById('editar-orden-sl')?.value) || null
+            const tp = parseFloat(document.getElementById('editar-orden-tp')?.value) || null
+            const nota = document.getElementById('editar-orden-nota')?.value.trim()
+
+            if (!activo) { mostrarNotificacion("error", "El activo es obligatorio"); return false }
+            if (!cuenta) { mostrarNotificacion("error", "Selecciona una cuenta"); return false }
+            if (!precioDisparo || precioDisparo <= 0) { mostrarNotificacion("error", "El precio de disparo debe ser mayor a 0"); return false }
+            if (!lotaje || lotaje <= 0) { mostrarNotificacion("error", "El lotaje debe ser mayor a 0"); return false }
+
             try {
-                await cancelarOrden(uid, ordenId)
+                await editarOrden(uid, ordenId, {
+                    activo,
+                    cuenta,
+                    tipoOrden,
+                    direccion,
+                    precioDisparo,
+                    lotaje,
+                    sl,
+                    tp,
+                    divisa,
+                    nota
+                })
                 await cargarOrdenes()
-                mostrarNotificacion("exito", "Orden cancelada")
+                mostrarNotificacion("exito", "Orden actualizada correctamente")
                 return true
             } catch (error) {
-                console.error('Error cancelando orden:', error)
+                console.error('Error editando orden:', error)
                 mostrarNotificacion("error", `Error: ${error.message}`)
                 return false
             }
         }
     })
+
+    setTimeout(() => {
+        cargarCuentasEnSelect('editar-orden-cuenta').then(() => {
+            const sel = document.getElementById('editar-orden-cuenta')
+            if (sel && orden.cuenta) sel.value = orden.cuenta
+        })
+    }, 200)
 }
 
 // ============================================

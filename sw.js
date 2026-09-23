@@ -1,5 +1,6 @@
 import { VERSION } from "./constants/version.js"
 
+// v1.0.0-beta.13 · reinicio de precache (módulos JS actualizados)
 const VERSION_APP = `escinco-v${VERSION.numero}`
 const CACHE_SHELL = `${VERSION_APP}-shell`
 const CACHE_RUNTIME = `${VERSION_APP}-runtime`
@@ -90,6 +91,7 @@ const SHELL_ASSETS = [
     "/js/services/SnapshotServicio.js",
     "/js/services/HistorialServicio.js",
     "/js/services/DivisaServicio.js",
+    "/js/services/CreditoServicio.js",
     "/js/services/ExportarServicio.js",
     "/js/services/ImportarServicio.js",
     "/js/services/EliminarServicio.js",

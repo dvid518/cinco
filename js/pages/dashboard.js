@@ -19,10 +19,11 @@ import {
     formatearMonto
 } from "../services/DivisaServicio.js"
 import { obtenerPosicionesConValor } from "../services/PosicionServicio.js"
+import { estadoCicloDe, proximaAnualidad } from "../services/CreditoServicio.js"
 import { obtenerPendientes } from "../repositories/PendienteRepositorio.js"
 import { abrirModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
-import { icono } from "../core/iconos.js"
+import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 
 import { obtenerMetas } from "../repositories/MetaRepositorio.js"
 import { abrirModalMeta, abrirModalAporteMeta } from "../ui/metas.js"
@@ -41,8 +42,85 @@ let favoritosData = []
 let metasData = []
 let movimientosData = []
 let cargado = false
+let eventosRefreshDashboardListos = false
+let timerRefreshDashboard = null
 
 const DIAS_VENCIMIENTO = 7
+const DASHBOARD_CARDS = [
+    { id: "patrimonio", label: "Patrimonio total" },
+    { id: "cuentas", label: "Cuentas" },
+    { id: "inversiones", label: "Inversiones" },
+    { id: "vencimientos", label: "Próximos vencimientos" },
+    { id: "movimientos", label: "Últimos movimientos" },
+    { id: "favoritos", label: "Favoritos" },
+    { id: "metas", label: "Metas de ahorro" },
+    { id: "grafico", label: "Evolución patrimonial" }
+]
+const MAX_DASHBOARD_CARDS = 8
+const CLAVE_LAYOUT_DASHBOARD = "escinco_dashboard_cards"
+
+function obtenerIdsDashboard() {
+    try {
+        const guardados = JSON.parse(localStorage.getItem(CLAVE_LAYOUT_DASHBOARD) || "null")
+        if (!Array.isArray(guardados)) return DASHBOARD_CARDS.map(card => card.id)
+        const validos = guardados.filter(id => DASHBOARD_CARDS.some(card => card.id === id))
+        if (validos.length < 2) return DASHBOARD_CARDS.map(card => card.id)
+        return [...new Set(validos)].slice(0, MAX_DASHBOARD_CARDS)
+    } catch {
+        return DASHBOARD_CARDS.map(card => card.id)
+    }
+}
+
+function aplicarLayoutDashboard() {
+    const grid = document.querySelector(".dashboard")
+    if (!grid) return
+    const ids = obtenerIdsDashboard()
+    const visibles = new Set(ids)
+    const cards = [...grid.querySelectorAll("[data-dashboard-card]")]
+    cards.forEach(card => { card.hidden = !visibles.has(card.dataset.dashboardCard) })
+    ids.forEach(id => {
+        const card = cards.find(item => item.dataset.dashboardCard === id)
+        if (card) grid.appendChild(card)
+    })
+}
+
+export function abrirEditorDashboard() {
+    const activos = new Set(obtenerIdsDashboard())
+    const opciones = DASHBOARD_CARDS.map(card => `
+        <label class="dashboard-card-opcion">
+            <input type="checkbox" value="${card.id}" ${activos.has(card.id) ? "checked" : ""}>
+            <span>${card.label}</span>
+        </label>
+    `).join("")
+
+    abrirModal({
+        titulo: "Editar dashboard",
+        variante: "form",
+        confirmText: "Guardar",
+        cancelText: "Cancelar",
+        contenido: `
+            <div class="dashboard-editor">
+                <p class="dashboard-editor-hint">Selecciona hasta ${MAX_DASHBOARD_CARDS} cards visibles. Las cards con listas conservan scroll interno.</p>
+                <div class="dashboard-editor-grid">${opciones}</div>
+            </div>
+        `,
+        onConfirm: () => {
+            const seleccionados = [...document.querySelectorAll(".dashboard-editor-grid input:checked")].map(input => input.value)
+            if (seleccionados.length < 2) {
+                mostrarNotificacion("warning", "Deja al menos dos cards visibles")
+                return false
+            }
+            if (seleccionados.length > MAX_DASHBOARD_CARDS) {
+                mostrarNotificacion("warning", `Muestra un máximo de ${MAX_DASHBOARD_CARDS} cards`)
+                return false
+            }
+            localStorage.setItem(CLAVE_LAYOUT_DASHBOARD, JSON.stringify(seleccionados))
+            aplicarLayoutDashboard()
+            mostrarNotificacion("exito", "Dashboard actualizado")
+            return true
+        }
+    })
+}
 
 // Periodos del gráfico de patrimonio. "todo" usa un tope alto de días.
 const PERIODOS_GRAFICO = [
@@ -67,7 +145,7 @@ function obtenerPeriodo(id) {
 export function render() {
     return `
         <div class="dashboard">
-            <div class="glass card primary patrimonio-card">
+            <div class="glass card primary patrimonio-card" data-dashboard-card="patrimonio">
                 <div class="card-header">
                     <span class="card-title">Patrimonio Total</span>
                     <select class="divisa-select" id="divisa-select" aria-label="Divisa">
@@ -80,42 +158,42 @@ export function render() {
                 <div class="card-sub" id="patrimonio-detalle">—</div>
             </div>
 
-            <div class="glass card card-navegable positive" id="card-cuentas" role="button" tabindex="0" title="Ver cuentas">
+            <div class="glass card card-navegable positive" id="card-cuentas" data-dashboard-card="cuentas" role="button" tabindex="0" title="Ver cuentas">
                 <div class="card-title">Cuentas</div>
                 <div class="card-value" id="total-cuentas">0</div>
                 <div class="card-sub">Activas y tarjetas</div>
             </div>
 
-            <div class="glass card card-navegable" id="card-inversiones" role="button" tabindex="0" title="Ver inversiones">
+            <div class="glass card card-navegable" id="card-inversiones" data-dashboard-card="inversiones" role="button" tabindex="0" title="Ver inversiones">
                 <div class="card-title">Inversiones</div>
                 <div class="card-value" id="inversiones-valor">—</div>
                 <div class="card-sub" id="inversiones-detalle">—</div>
             </div>
 
-            <div class="glass card card-navegable" id="card-vencimientos" role="button" tabindex="0" title="Ver pendientes">
+            <div class="glass card card-navegable" id="card-vencimientos" data-dashboard-card="vencimientos" role="button" tabindex="0" title="Ver pendientes">
                 <div class="card-title">Próximos vencimientos</div>
                 <div class="card-value" id="vencimientos-cantidad">—</div>
                 <div class="card-sub" id="vencimientos-detalle">—</div>
             </div>
 
-            <div class="glass card card-navegable movimientos-card" id="card-movimientos" role="button" tabindex="0" title="Ver movimientos">
+            <div class="glass card card-navegable movimientos-card" id="card-movimientos" data-dashboard-card="movimientos" role="button" tabindex="0" title="Ver movimientos">
                 <div class="card-title">Últimos movimientos</div>
                 <div class="movimientos-lista" id="movimientos-lista">
-                    <p class="card-vacio">Cargando...</p>
+                    ${LOGO_ESCINCO_CARGA}
                 </div>
             </div>
 
-            <div class="glass card card-navegable favoritos-card" id="card-favoritos" role="button" tabindex="0" title="Ver inversiones">
+            <div class="glass card card-navegable favoritos-card" id="card-favoritos" data-dashboard-card="favoritos" role="button" tabindex="0" title="Ver inversiones">
                 <div class="card-header">
                     <span class="card-title">Favoritos</span>
                     <span class="card-badge" id="favoritos-cantidad">0</span>
                 </div>
                 <div class="favoritos-lista" id="favoritos-lista">
-                    <p class="card-vacio">Cargando...</p>
+                    ${LOGO_ESCINCO_CARGA}
                 </div>
             </div>
 
-            <div class="glass card metas-card" id="card-metas">
+            <div class="glass card metas-card" id="card-metas" data-dashboard-card="metas">
                 <div class="card-header">
                     <span class="card-title">Metas de ahorro</span>
                     <button type="button" class="glass-btn btn-meta-nueva" id="btn-nueva-meta">
@@ -123,11 +201,11 @@ export function render() {
                     </button>
                 </div>
                 <div class="metas-lista" id="metas-lista">
-                    <p class="card-vacio">Cargando...</p>
+                    ${LOGO_ESCINCO_CARGA}
                 </div>
             </div>
 
-            <div class="glass card grafico-patrimonio-card">
+            <div class="glass card grafico-patrimonio-card" data-dashboard-card="grafico">
                 <div class="card-header">
                     <span class="card-title">Evolución patrimonial</span>
                     <div class="toggle-group grafico-periodos" id="grafico-periodos">
@@ -157,10 +235,12 @@ export async function init() {
     periodoGrafico = PERIODO_POR_DEFECTO
     console.log("[INFO] Dashboard iniciado para UID:", uid)
 
+    aplicarLayoutDashboard()
     configurarDivisa()
     configurarPeriodos()
     configurarCardsNavegacion()
     configurarMetas()
+    configurarRefreshDashboard()
 
     await cargarTodo()
 
@@ -173,6 +253,19 @@ export async function init() {
 
     await cargarGraficoPatrimonio()
     cargado = true
+}
+
+function configurarRefreshDashboard() {
+    if (eventosRefreshDashboardListos) return
+    eventosRefreshDashboardListos = true
+    window.addEventListener("movimientos-actualizados", () => {
+        if (!document.getElementById("dashboard") && !document.querySelector(".dashboard")) return
+        clearTimeout(timerRefreshDashboard)
+        timerRefreshDashboard = setTimeout(async () => {
+            cacheCapa.limpiar(uid)
+            await cargarTodo()
+        }, 150)
+    })
 }
 
 // ============================================
@@ -211,11 +304,11 @@ async function cargarTodo() {
         // primero para evitar la carrera con el estado del módulo.
         const cuentasResp = await obtenerCuentas(uid)
 
-        const [inversionesResp, vencimientosResp, metasResp, movimientosResp] = await Promise.all([
+        const movimientosResp = await cargarMovimientos()
+        const [inversionesResp, vencimientosResp, metasResp] = await Promise.all([
             cargarInversiones(),
-            cargarVencimientos(cuentasResp),
-            cargarMetas(),
-            cargarMovimientos()
+            cargarVencimientos(cuentasResp, movimientosResp),
+            cargarMetas()
         ])
 
         cuentas = cuentasResp
@@ -223,7 +316,7 @@ async function cargarTodo() {
         vencimientosData = vencimientosResp
         favoritosData = inversionesResp.favoritos || []
         metasData = metasResp
-        movimientosData = movimientosResp
+        movimientosData = movimientosResp.slice(0, cantidadMovimientosRecientes())
 
         await actualizarUI()
     } catch (error) {
@@ -270,7 +363,6 @@ async function cargarMovimientos() {
                 const fb = (fechaDeMovimiento(b)?.getTime?.()) || 0
                 return fb - fa
             })
-            .slice(0, cantidadMovimientosRecientes())
     } catch (error) {
         console.error("Error cargando movimientos:", error)
         return []
@@ -285,16 +377,17 @@ function cantidadMovimientosRecientes() {
     return Math.min(10, Math.max(1, n))
 }
 
-async function cargarVencimientos(cuentasDeUsuario) {
+async function cargarVencimientos(cuentasDeUsuario, movimientos = []) {
     try {
         const [pendientes, tarjetas, metas] = await Promise.all([
             obtenerPendientesConVencimiento(),
-            obtenerTarjetasConPagoProximo(cuentasDeUsuario),
+            obtenerTarjetasConPagoProximo(cuentasDeUsuario, movimientos),
             obtenerMetasConVencimiento()
         ])
 
         // Combinar y ordenar por días restantes ascendente
-        const todos = [...pendientes, ...tarjetas, ...metas]
+        const anualidades = obtenerAnualidadesConVencimiento(cuentasDeUsuario)
+        const todos = [...pendientes, ...tarjetas, ...anualidades, ...metas]
         todos.sort((a, b) => a.diasRestantes - b.diasRestantes)
 
         return {
@@ -355,27 +448,46 @@ async function obtenerMetasConVencimiento() {
         .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
 }
 
-function obtenerTarjetasConPagoProximo(listaCuentas) {
-    const tarjetas = (listaCuentas || []).filter(
-        c => c.tipo === "credito" && c.estado !== "archivada" && c.diaPago
-    )
+function obtenerAnualidadesConVencimiento(listaCuentas) {
+    return (listaCuentas || [])
+        .filter(c => c.tipo === "credito" && c.estado !== "archivada")
+        .map(c => ({ cuenta: c, proxima: proximaAnualidad(c) }))
+        .filter(item => item.proxima)
+        .map(item => ({
+            tipo: "anualidad",
+            id: `${item.cuenta.id}-anualidad`,
+            titulo: item.cuenta.nombre,
+            subtitulo: "Anualidad de tarjeta",
+            monto: item.proxima.monto,
+            divisa: item.cuenta.moneda || "pen",
+            diasRestantes: diasHasta(item.proxima.fecha),
+            vencido: false,
+            icono: "",
+            cuenta: item.cuenta
+        }))
+        .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
+}
 
-    return tarjetas
+function obtenerTarjetasConPagoProximo(listaCuentas, movimientos = []) {
+    return (listaCuentas || [])
+        .filter(c => c.tipo === "credito" && c.estado !== "archivada" && c.diaPago)
         .map(t => {
-            const dias = diasHastaDiaDelMes(t.diaPago)
+            const ciclo = estadoCicloDe(t, movimientos)
             return {
                 tipo: "tarjeta",
                 id: t.id,
                 titulo: t.nombre,
                 subtitulo: "Pago tarjeta",
-                monto: t.deuda || 0,
+                monto: Math.max(0, Number(t.deuda) || 0),
                 divisa: t.moneda || "pen",
-                diasRestantes: dias,
+                diasRestantes: diasHastaDiaDelMes(t.diaPago),
                 vencido: false,
-                icono: ""
+                icono: "",
+                cuenta: t,
+                ciclo
             }
         })
-        .filter(v => v.diasRestantes <= DIAS_VENCIMIENTO)
+        .filter(v => !v.ciclo.pagadoCompleto && v.monto > 0 && v.diasRestantes <= DIAS_VENCIMIENTO)
 }
 
 // ============================================
@@ -393,20 +505,15 @@ function diasHasta(fecha) {
 
 function diasHastaDiaDelMes(diaMes) {
     if (!diaMes || diaMes < 1 || diaMes > 31) return null
-
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
-
-    const ano = hoy.getFullYear()
-    const mes = hoy.getMonth()
-
-    let objetivo = new Date(ano, mes, diaMes)
-    if (objetivo < hoy) {
-        objetivo = new Date(ano, mes + 1, diaMes)
+    const crear = (anio, mes) => {
+        const ultimo = new Date(anio, mes + 1, 0).getDate()
+        return new Date(anio, mes, Math.min(diaMes, ultimo))
     }
-
-    const diff = objetivo - hoy
-    return Math.ceil(diff / (1000 * 60 * 60 * 24))
+    let objetivo = crear(hoy.getFullYear(), hoy.getMonth())
+    if (objetivo < hoy) objetivo = crear(hoy.getFullYear(), hoy.getMonth() + 1)
+    return Math.round((objetivo - hoy) / 86400000)
 }
 
 // ============================================
@@ -705,13 +812,19 @@ async function abrirModalVencimientos() {
         if (opcion.tipo === "pendiente") {
             const { abrirVistaPendiente } = await import("../ui/pendientes.js")
             abrirVistaPendiente(opcion.pendiente, uid)
+            return
+        }
+
+        if (opcion.tipo === "tarjeta") {
+            const { abrirPagarTarjeta } = await import("./cuentas.js")
+            await abrirPagarTarjeta(opcion.cuenta)
         }
     })
 }
 
 function plantillaVencimiento(v) {
     const esPendiente = v.tipo === "pendiente"
-    const accionable = esPendiente || v.tipo === "meta"
+    const accionable = esPendiente || v.tipo === "meta" || v.tipo === "tarjeta"
     const signo = esPendiente ? (v.esCobrar ? "+" : "-") : ""
     const claseValor = esPendiente
         ? (v.esCobrar ? "positive" : "negative")
@@ -971,7 +1084,7 @@ function mostrarEstadoGrafico(tipo, texto, hint = "") {
     const estado = document.getElementById("grafico-estado")
     if (!estado) return
 
-    const spinner = tipo === "cargando" ? '<div class="loading-spinner"></div>' : ""
+    const spinner = tipo === "cargando" ? `${LOGO_ESCINCO_CARGA}` : ""
 
     estado.innerHTML = `
         <div class="grafico-vacio">

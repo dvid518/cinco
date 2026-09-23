@@ -243,7 +243,7 @@
 .posicion-item:hover {
     background: var(--lightHover);
     border-color: var(--text);
-    box-shadow: 0 4px 12px var(--shadow);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .posicion-item.seleccionado {
@@ -270,7 +270,7 @@
 }
 
 .posicion-item.seleccionado .posicion-fuente.fuente-manual {
-    background: var(--borderAlt);
+    background: var(--background);
     color: var(--border);
 }
 
@@ -493,23 +493,6 @@
     font-size: 11px;
     color: var(--textSecondary);
     margin-top: 4px;
-}
-
-/* ============================================
-   ACCIONES DEL GRÁFICO
-   ============================================ */
-
-.grafico-acciones {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 14px;
-}
-
-.grafico-acciones .glass-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
 }
 
 /* ============================================

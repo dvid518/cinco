@@ -256,6 +256,35 @@
     font-weight: 600;
 }
 
+/* Botones de acción dentro de la fila de totales */
+.totales-acciones {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.totales-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--textSecondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.totales-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 8px var(--shadow);
+}
+
 /* --------------------------------------------
    LISTA DE CARDS
    -------------------------------------------- */

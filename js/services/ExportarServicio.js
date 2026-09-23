@@ -23,7 +23,7 @@ import { obtenerMetas } from "../repositories/MetaRepositorio.js"
 //  3.0.0 → + posiciones, trades, historial, preferencias
 //          + timestamps normalizados (ISO) para roundtrip fiel
 //  4.0.0 → + ordenes, estrategias, metas
-const VERSION_DVID = "4.0.0"
+const VERSION_DVID = "4.1.0"
 
 // Firestore rechaza limit() > 10000 (límite duro por consulta), aunque la
 // colección tenga pocos documentos. 9999 días (~27 años) cubre todo caso real.

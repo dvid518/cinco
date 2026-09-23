@@ -56,6 +56,7 @@
 .cuenta-vista-info {
     flex: 1 1 45%;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -63,6 +64,14 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 25px;
+    overflow: hidden;
+}
+
+.cuenta-vista-info .cuenta-perfil,
+.cuenta-vista-info .cuenta-saldo-grande,
+.cuenta-vista-info .credito-resumen,
+.cuenta-vista-info .credito-uso {
+    flex-shrink: 0;
 }
 
 @media (max-width: 760px) {
@@ -72,6 +81,9 @@
     }
     .cuenta-vista-movimientos {
         min-height: 260px;
+    }
+    .cuenta-vista-info {
+        max-height: calc(100vh - 200px);
     }
 }
 
@@ -93,13 +105,14 @@
     place-items: center;
     border-radius: 50%;
     background: var(--backgroundAlt);
-    color: var(--text);
+    color: var(--textAlt);
     border: 1px solid var(--border);
 }
 
 .cuenta-perfil-titulo {
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: 4px;
     min-width: 0;
     flex: 1;
@@ -115,7 +128,6 @@
 }
 
 .cuenta-badge {
-    align-self: flex-start;
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
@@ -126,12 +138,26 @@
     padding: 2px 10px;
 }
 
+.cuenta-perfil-badges {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
 .cuenta-badge.estado {
     color: var(--positive);
     border-color: var(--positive);
 }
 
-.cuenta-badge.estado.archivada {
+.cuenta-badge.estado.aviso {
+    color: var(--ambar);
+    border-color: var(--ambar);
+}
+
+.cuenta-badge.estado.critico {
     color: var(--negative);
     border-color: var(--negative);
 }
@@ -175,6 +201,24 @@
     flex-direction: column;
     gap: 6px;
     width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+}
+
+.cuenta-detalle::-webkit-scrollbar {
+    width: 6px;
+}
+
+.cuenta-detalle::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.cuenta-detalle::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
 }
 
 .cuenta-detalle .field {
@@ -198,6 +242,28 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.btn-copiar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: var(--background);
+    border: 1px solid var(--border);
+    color: var(--textSecondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    vertical-align: middle;
+}
+
+.btn-copiar:hover {
+    color: var(--text);
+    border-color: var(--text);
 }
 
 .cuenta-detalle .field .value.positive {
@@ -224,67 +290,165 @@
 }
 
 /* --------------------------------------------
-   CRÉDITO · BARRA DE USO
+   CRÉDITO · BARRA DE USO (modal educativo)
    -------------------------------------------- */
 
 .credito-uso {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 
-.credito-uso-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-}
-
-.credito-uso-head .label {
-    color: var(--textSecondary);
-    font-size: 14px;
-}
-
-.credito-uso-head .value {
-    font-family: var(--font-secondary);
-    font-weight: 600;
-}
-
-.credito-uso-head .value.positive {
-    color: var(--positive);
-}
-
-.credito-uso-head .value.negative {
-    color: var(--negative);
-}
-
-.credito-barra {
-    height: 12px;
-    border-radius: 50px;
-    background: var(--backgroundAlt);
-    border: 1px solid var(--border);
-    overflow: hidden;
-}
-
-.credito-barra-fill {
-    height: 100%;
-    border-radius: 50px;
-    background: var(--positive);
-    transition: width 0.4s ease;
-}
-
-.credito-barra-fill.negative {
+/* Uso del crédito: barra de aporte de meta (dashboard.css) con color según nivel */
+.credito-uso .aporte-progreso-barra.negative,
+.credito-educativo .aporte-progreso-barra.negative {
     background: var(--negative);
 }
 
+.credito-uso .aporte-progreso-barra.ambar,
+.credito-educativo .aporte-progreso-barra.ambar {
+    background: var(--ambar);
+}
+
+.credito-uso .aporte-progreso-badge.negative,
+.credito-educativo .aporte-progreso-badge.negative {
+    color: var(--negative);
+    border-color: var(--negative);
+}
+
+.credito-uso .aporte-progreso-badge.ambar,
+.credito-educativo .aporte-progreso-badge.ambar {
+    color: var(--ambar);
+    border-color: var(--ambar);
+}
+
 /* --------------------------------------------
-   VISTA · ACCIONES DEL DETALLE
+   CRÉDITO · RESUMEN DISPONIBLE / DEUDA
    -------------------------------------------- */
 
-.cuenta-vista-acciones {
+.credito-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.credito-resumen .resumen-card {
+    border-radius: 40px;
+    padding: 10px 16px;
+}
+
+.credito-resumen .resumen-valor {
+    font-size: 20px;
+}
+
+.credito-resumen .resumen-valor.positive {
+    color: var(--positive);
+}
+
+.credito-resumen .resumen-valor.negative {
+    color: var(--negative);
+}
+
+.credito-resumen .resumen-valor.ambar {
+    color: var(--ambar);
+}
+
+/* --------------------------------------------
+   MANEJO DEL DINERO · MODAL EDUCATIVO
+   -------------------------------------------- */
+
+.form-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--textSecondary);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0 6px;
+}
+
+.credito-educativo {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 14px;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.credito-educativo-cifra {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+}
+
+.credito-educativo-cifra .label {
+    font-size: 12px;
+    color: var(--textSecondary);
+}
+
+.credito-educativo-cifra .valor {
+    font-family: var(--font-secondary);
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.credito-educativo-cifra.aviso .valor {
+    color: var(--ambar);
+}
+
+.credito-educativo-cifra.critico .valor {
+    color: var(--negative);
+}
+
+.credito-educativo-detalle {
+    margin: 0;
+    text-align: center;
+    color: var(--textSecondary);
+    font-size: 13px;
+}
+
+.credito-educativo-niveles {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.credito-educativo-fila {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.credito-educativo-fila .punto {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    margin-top: 4px;
+    border-radius: 50%;
+    background: var(--border);
+}
+
+.credito-educativo-fila .punto.normal {
+    background: var(--positive);
+}
+
+.credito-educativo-fila .punto.aviso {
+    background: var(--ambar);
+}
+
+.credito-educativo-fila .punto.critico {
+    background: var(--negative);
+}
+
+.credito-educativo-tip {
+    margin: 0;
+    font-size: 13px;
+    color: var(--textSecondary);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
 }
 
 /* --------------------------------------------
@@ -335,4 +499,86 @@
 .modal-message-warn {
     color: var(--negative);
     font-size: 13px;
+}
+
+.cuenta-sidebar-item {
+    position: relative;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.cuenta-sidebar-item.arrastrando {
+    opacity: 0.45;
+}
+
+.cuenta-sidebar-btn {
+    width: 100%;
+}
+
+.cuenta-pasos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.cuenta-paso {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--textSecondary);
+    font-size: 12px;
+}
+
+.cuenta-paso.activo {
+    color: var(--text);
+    background: var(--lightHover);
+    border-color: var(--textSecondary);
+}
+
+.cuenta-tipos-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.cuenta-tipo-opcion {
+    min-height: 92px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: var(--background);
+    color: var(--textSecondary);
+    font-family: var(--font-primary);
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.cuenta-tipo-opcion:hover,
+.cuenta-tipo-opcion.seleccionada {
+    color: var(--text);
+    border-color: var(--textSecondary);
+    background: var(--lightHover);
+}
+
+.totales-btn.pagar-tarjeta-btn {
+    width: auto;
+    min-width: 92px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+@media (max-width: 520px) {
+    .cuenta-tipos-grid {
+        grid-template-columns: 1fr;
+    }
 }

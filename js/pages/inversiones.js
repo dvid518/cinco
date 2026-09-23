@@ -29,7 +29,7 @@ import { abrirModal, estaAbierto } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { obtenerCuentas, restaurarDocumento } from "../../firebase/firestore.js"
-import { icono } from "../core/iconos.js"
+import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 
@@ -88,7 +88,7 @@ export function render() {
                 </div>
             </div>
             <div id="lista-posiciones" class="lista-posiciones">
-                <div class="lista-vacia"><div class="loading-spinner"></div></div>
+                <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
             </div>
         </section>
     `
@@ -1098,15 +1098,15 @@ export async function mostrarGraficoActivo(activoId, activo, posicion) {
             <div class="grafico-precio">${activo?.ultimoPrecio?.toFixed(2) || "0.00"}</div>
             <div class="grafico-periodo">Últimos 7 días</div>
         </div>
-        <div class="grafico-acciones">
-            <button type="button" class="glass-btn btn-actualizar-precio">${icono("refresh-cw", 14)} Actualizar precio</button>
-            <button type="button" class="glass-btn danger btn-eliminar-posicion">${icono("trash-2", 14)} Eliminar posición</button>
-        </div>
     `
 
     abrirModal({
         titulo: "Historial de precios",
         contenido: html,
+        headerExtra: `
+            <button type="button" class="modal-header-btn btn-actualizar-precio" title="Actualizar precio" aria-label="Actualizar precio">${icono("refresh-cw", 16)}</button>
+            <button type="button" class="modal-header-btn danger btn-eliminar-posicion" title="Eliminar posición" aria-label="Eliminar posición">${icono("trash-2", 16)}</button>
+        `,
         confirmText: "Cerrar",
         onConfirm: () => {
             destruirGrafico()
@@ -1155,7 +1155,6 @@ function abrirModalActualizarPrecio(activo, posicion) {
             <div class="form-group">
                 <label for="precio-manual">Nuevo precio (${nombre})</label>
                 <input type="number" id="precio-manual" class="form-input" step="0.01" min="0.01" value="${precioActual}" placeholder="0.00" required>
-                <span class="form-hint">Actualiza el último precio conocido del activo.</span>
             </div>
         </form>
     `
@@ -1356,7 +1355,6 @@ export function abrirModalCompra() {
             <div class="form-group">
                 <label for="compra-simbolo">Símbolo del activo *</label>
                 <input type="text" id="compra-simbolo" class="form-input" placeholder="Ej: VOO, BTC, AAPL" required>
-                <span class="form-hint">Busca por símbolo. Si no existe, se creará automáticamente con los datos que completes.</span>
             </div>
             <div class="form-group">
                 <label for="compra-nombre">Nombre del activo (solo si es nuevo)</label>

@@ -11,6 +11,8 @@ import {
 import { TIPOS_MOVIMIENTO, CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
 import { getFechaHoy } from "../core/fechas.js"
 import { obtenerMeta, obtenerMetas, actualizarMeta } from "../repositories/MetaRepositorio.js"
+import { evaluarCreditosYNotificar } from "./CreditoServicio.js"
+import { mostrarNotificacion } from "../ui/notificaciones.js"
 
 // No se permiten fechas futuras: cualquier fechaRealizacion mayor que hoy
 // se normaliza al día de hoy. Aplica tanto al registrar como al editar.
@@ -53,6 +55,10 @@ export async function registrarMovimiento(uid, tipo, datos) {
 
     normalizarFechaFutura(datos)
 
+    // Los pagos de tarjeta se limitan a la deuda pendiente: si el monto la
+    // supera, solo se registra lo necesario para pagarla por completo.
+    await ajustarPagoDeTarjeta(uid, tipoFinal, datos)
+
     // 1. Crear el movimiento
     const movimiento = await crearMovimiento(uid, {
         tipo: tipoFinal,
@@ -61,6 +67,9 @@ export async function registrarMovimiento(uid, tipo, datos) {
 
     // 2. Actualizar saldos
     await actualizarSaldos(uid, tipoFinal, datos)
+
+    // 2b. Si un movimiento cambió la deuda de una tarjeta, avisar al cruzar un umbral.
+    await evaluarCreditosYNotificar(uid)
 
     // 3. Actualizar posición si es compra/venta de activo.
     //    El error NO se traga: si la posición no pudo actualizarse, el
@@ -76,6 +85,8 @@ export async function registrarMovimiento(uid, tipo, datos) {
             )
         }
     }
+
+    notificarMovimientosActualizados()
 
     return movimiento
 }
@@ -151,6 +162,8 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
 
     normalizarFechaFutura(datos)
 
+    await ajustarPagoDeTarjeta(uid, tipoFinal, datos, movimientoOriginal)
+
     const metaVinculada = await resolverMetaDeMovimiento(uid, movimientoOriginal)
 
     // 1. Deshacer el efecto del movimiento original
@@ -169,6 +182,9 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
         await aplicarAporteMeta(uid, metaVinculada.id, Math.abs(datos.monto || 0))
     }
 
+    // 2b. El resultado final puede haber cruzado (o dejado de cruzar) un umbral.
+    await evaluarCreditosYNotificar(uid)
+
     // 3. Actualizar el documento (conserva el vínculo con la meta)
     const datosGuardado = { tipo: tipoFinal, ...datos }
     if (metaVinculada) {
@@ -177,6 +193,7 @@ export async function actualizarMovimiento(uid, movimientoId, movimientoOriginal
     await actualizarMovimientoDoc(uid, movimientoId, datosGuardado)
 
     notificarActualizacionMetas()
+    notificarMovimientosActualizados()
 
     return true
 }
@@ -191,7 +208,9 @@ export async function eliminarMovimiento(uid, m) {
     await revertirPosicion(uid, m)
     await revertirAporteMeta(uid, m)
     await eliminarMovimientoDoc(uid, m.id)
+    await evaluarCreditosYNotificar(uid)
     notificarActualizacionMetas()
+    notificarMovimientosActualizados()
     return true
 }
 
@@ -205,6 +224,7 @@ export async function restaurarMovimiento(uid, m) {
     if (!m?.id) return false
 
     await actualizarSaldos(uid, m.tipo, m)
+    await evaluarCreditosYNotificar(uid)
     if (esMovimientoDeActivo(m.tipo)) {
         await aplicarPosicion(uid, m.tipo, m)
     }
@@ -216,6 +236,7 @@ export async function restaurarMovimiento(uid, m) {
     await restaurarDocumento(uid, "movimientos", m.id, m)
 
     notificarActualizacionMetas()
+    notificarMovimientosActualizados()
     return true
 }
 
@@ -296,6 +317,57 @@ function notificarActualizacionMetas() {
     }
 }
 
+// Cuando cualquier movimiento cambia (crear/editar/eliminar/restaurar), las
+// páginas abiertas (cuentas, dashboard) deben refrescar sus datos.
+function notificarMovimientosActualizados() {
+    try {
+        window.dispatchEvent(new CustomEvent("movimientos-actualizados"))
+    } catch {
+        // Entorno sin window (p.ej. tests): el evento se ignora.
+    }
+}
+
+/**
+ * Limita el monto de un pago de tarjeta a la deuda pendiente. Si el pago
+ * supera la deuda, solo se registra lo necesario para pagarla por completo
+ * y se avisa al usuario. Si la tarjeta no tiene deuda, el pago se rechaza.
+ */
+async function ajustarPagoDeTarjeta(uid, tipo, datos, movimientoOriginal = null) {
+    if (tipo !== TIPOS_MOVIMIENTO.PAGO_TARJETA) return datos
+
+    const tarjeta = datos?.tarjeta ? await obtenerCuenta(uid, datos.tarjeta) : null
+    const origen = datos?.cuentaOrigen ? await obtenerCuenta(uid, datos.cuentaOrigen) : null
+    if (!tarjeta) throw new Error("No se encontró la tarjeta a pagar")
+    if (!origen) throw new Error("No se encontró la cuenta de origen")
+    if (origen.tipo === "credito") throw new Error("Una tarjeta de crédito no puede ser origen de un pago de tarjeta")
+    if ((origen.moneda || "pen").toLowerCase() !== (tarjeta.moneda || "pen").toLowerCase()) {
+        throw new Error("La cuenta de origen debe usar la misma divisa que la tarjeta")
+    }
+
+    const montoSolicitado = Number(datos.monto) || 0
+    if (montoSolicitado <= 0) throw new Error("El monto del pago debe ser mayor a cero")
+
+    let deudaMaxima = Math.max(0, Number(tarjeta.deuda) || 0)
+    if (
+        movimientoOriginal?.tipo === TIPOS_MOVIMIENTO.PAGO_TARJETA &&
+        movimientoOriginal.tarjeta === datos.tarjeta
+    ) {
+        deudaMaxima += Math.max(0, Number(movimientoOriginal.monto) || 0)
+    }
+
+    if (deudaMaxima <= 0) throw new Error(`"${tarjeta.nombre}" no tiene deuda pendiente`)
+
+    if (montoSolicitado > deudaMaxima) {
+        datos.monto = deudaMaxima
+        mostrarNotificacion(
+            "info",
+            `El pago superaba la deuda de "${tarjeta.nombre}". Solo se registró ${deudaMaxima.toFixed(2)}.`
+        )
+    }
+
+    return datos
+}
+
 function esMovimientoDeActivo(tipo) {
     return (
         tipo === TIPOS_MOVIMIENTO.COMPRA_ACTIVO ||
@@ -338,9 +410,10 @@ async function actualizarSaldos(uid, tipo, datos) {
             break
 
         case TIPOS_MOVIMIENTO.COMPRA_ACTIVO: {
-            // ✅ Comisión incluida en el saldo
             const totalCompra = (datos.cantidad * datos.precio) + (datos.comision || 0)
-            await actualizarSaldoCuenta(uid, datos.cuenta, totalCompra, "restar")
+            const cuenta = await obtenerCuenta(uid, datos.cuenta)
+            if (cuenta?.tipo === "credito") await actualizarDeudaTarjeta(uid, datos.cuenta, totalCompra, "aumentar")
+            else await actualizarSaldoCuenta(uid, datos.cuenta, totalCompra, "restar")
             break
         }
 
@@ -353,7 +426,9 @@ async function actualizarSaldos(uid, tipo, datos) {
 
         case TIPOS_MOVIMIENTO.P2P_COMPRA: {
             const totalP2PCompra = (datos.cantidad * datos.precio) + (datos.comision || 0)
-            await actualizarSaldoCuenta(uid, datos.cuenta, totalP2PCompra, "restar")
+            const cuenta = await obtenerCuenta(uid, datos.cuenta)
+            if (cuenta?.tipo === "credito") await actualizarDeudaTarjeta(uid, datos.cuenta, totalP2PCompra, "aumentar")
+            else await actualizarSaldoCuenta(uid, datos.cuenta, totalP2PCompra, "restar")
             break
         }
 
@@ -418,7 +493,9 @@ async function revertirSaldos(uid, tipo, datos) {
         case TIPOS_MOVIMIENTO.COMPRA_ACTIVO:
         case TIPOS_MOVIMIENTO.P2P_COMPRA: {
             const total = (datos.cantidad * datos.precio) + (datos.comision || 0)
-            await actualizarSaldoCuenta(uid, datos.cuenta, total, "sumar")
+            const cuenta = await obtenerCuenta(uid, datos.cuenta)
+            if (cuenta?.tipo === "credito") await actualizarDeudaTarjeta(uid, datos.cuenta, total, "reducir")
+            else await actualizarSaldoCuenta(uid, datos.cuenta, total, "sumar")
             break
         }
 
@@ -482,8 +559,14 @@ async function actualizarSaldoCuenta(uid, cuentaId, monto, operacion) {
                 throw new Error(`Operación inválida: ${operacion}`)
         }
 
+        // Se permite gastar más de lo que hay, pero se advierte con una
+        // notificación en el momento en que el saldo pasa a negativo.
         if (cuenta.tipo !== "credito" && nuevoSaldo < 0) {
             console.warn(`Saldo negativo en cuenta ${cuenta.nombre}: ${nuevoSaldo}`)
+            mostrarNotificacion(
+                "warning",
+                `El movimiento dejó la cuenta "${cuenta.nombre}" en saldo negativo (${nuevoSaldo.toFixed(2)}). Se registró igual.`
+            )
         }
 
         await actualizarCuenta(uid, cuentaId, { saldoInicial: nuevoSaldo })

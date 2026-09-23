@@ -62,6 +62,13 @@ export async function obtenerOrdenesConFiltros(uid, filtros = {}) {
 }
 
 /**
+ * Edita los datos de una orden.
+ */
+export async function editarOrden(uid, ordenId, datos) {
+    return await actualizarOrden(uid, ordenId, datos)
+}
+
+/**
  * Cancela una orden pendiente (no la elimina).
  */
 export async function cancelarOrden(uid, ordenId) {

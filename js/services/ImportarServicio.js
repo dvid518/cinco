@@ -229,14 +229,16 @@ async function crearActivo(uid, datos) {
  * que reemplaza).
  */
 async function importarColeccion(uid, elementos, resultado, config) {
-    const { coleccion: nombreColeccion, camposFecha, contador, etiqueta } = config
+    const { coleccion: nombreColeccion, camposFecha, contador, etiqueta, transformar } = config
 
     if (!elementos || elementos.length === 0) return
 
     for (const elemento of elementos) {
         try {
             const { id, ...datosLimpios } = elemento
-            const datos = deserializarFechas(datosLimpios, camposFecha)
+            const datos = transformar
+                ? transformar(datosLimpios, elemento)
+                : deserializarFechas(datosLimpios, camposFecha)
             const campoFecha = camposFecha[0]
             const referencia = collection(db, "usuarios", uid, nombreColeccion)
             await addDoc(referencia, {
@@ -256,7 +258,14 @@ async function importarCuentas(uid, cuentas, resultado) {
         coleccion: "cuentas",
         camposFecha: ["fechaCreacion"],
         contador: "cuentas",
-        etiqueta: "Cuenta"
+        etiqueta: "Cuenta",
+        transformar: datos => ({
+            ...deserializarFechas(datos, ["fechaCreacion"]),
+            saldoInicial: Number(datos.saldoInicial) || 0,
+            estado: datos.estado || "activa",
+            esPatrimonio: datos.esPatrimonio !== false,
+            orden: Number.isFinite(Number(datos.orden)) ? Number(datos.orden) : resultado.cuentas
+        })
     })
 }
 

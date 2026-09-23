@@ -201,7 +201,7 @@
 }
 
 #lista-trades .trade-item.seleccionado .orden-badge.pendiente {
-    background: var(--borderAlt);
+    background: var(--textAlt);
     color: var(--border);
 }
 

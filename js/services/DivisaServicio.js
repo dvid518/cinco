@@ -1,5 +1,5 @@
 import { actualizarPreferencias } from "../../firebase/firestore.js"
-import { DIVISAS, DIVISAS_SYMBOLS, TIPO_CAMBIO_DEFAULT } from "../../constants/divisas.js"
+import { DIVISAS, DIVISAS_LABELS, DIVISAS_SYMBOLS, TIPO_CAMBIO_DEFAULT } from "../../constants/divisas.js"
 import { sesion } from "../core/sesion.js"
 
 // ============================================
@@ -13,6 +13,42 @@ export function getDivisaPrincipal() {
 
 export function getSimboloDivisaPrincipal() {
     return DIVISAS_SYMBOLS[getDivisaPrincipal()] || "S/"
+}
+
+// ============================================
+// FORMATO DE DIVISA · SÍMBOLO ($) O CÓDIGO (USD)
+// ============================================
+// Preferencia del usuario: "simbolo" (por defecto, muestra $) o "codigo" (USD).
+
+export function getFormatoDivisa() {
+    const prefs = sesion.getPreferencias()
+    const formato = prefs?.formatoDivisa
+    return formato === "codigo" ? "codigo" : "simbolo"
+}
+
+/**
+ * Devuelve la representación de una moneda según la preferencia:
+ *   simbolo → "$" · codigo → "USD"
+ */
+export function presentarDivisa(moneda) {
+    const clave = String(moneda || getDivisaPrincipal()).toLowerCase()
+    if (getFormatoDivisa() === "codigo") {
+        return DIVISAS_LABELS[clave] ? DIVISAS_LABELS[clave].toUpperCase() : String(clave).toUpperCase()
+    }
+    return DIVISAS_SYMBOLS[clave] || "S/"
+}
+
+/**
+ * Formatea un monto respetando el formato de divisa elegido:
+ *   simbolo → "$ 100.00" · codigo → "100.00 USD"
+ * `despues` indica si el código va después del número (para cuentas/movimientos).
+ */
+export function formatearMontoConDivisa(monto, moneda = null) {
+    const importe = Number(monto).toFixed(2)
+    if (getFormatoDivisa() === "codigo") {
+        return `${importe} ${DIVISAS_LABELS[(moneda || getDivisaPrincipal()).toLowerCase()] || String(moneda || "").toUpperCase() || "PEN"}`
+    }
+    return `${presentarDivisa(moneda)} ${importe}`
 }
 
 export function getTipoCambio() {
@@ -57,6 +93,10 @@ export function convertirMonto(monto, desde, hacia) {
 
 export function formatearMonto(monto, divisa = null) {
     const div = divisa || getDivisaPrincipal()
+    if (getFormatoDivisa() === "codigo") {
+        const codigo = DIVISAS_LABELS[div] || String(div).toUpperCase()
+        return `${Number(monto).toFixed(2)} ${codigo}`
+    }
     const simbolo = DIVISAS_SYMBOLS[div] || "S/"
     return `${simbolo} ${Number(monto).toFixed(2)}`
 }

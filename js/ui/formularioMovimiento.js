@@ -1,4 +1,4 @@
-import { CONFIG_MOVIMIENTOS } from "../../constants/tiposMovimiento.js"
+import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import { obtenerCuentas } from "../../firebase/firestore.js"
 import { sesion } from "../core/sesion.js"
 import { getFechaHoy } from "../core/fechas.js"
@@ -21,12 +21,15 @@ export async function generarFormularioMovimiento(tipo, divisaPreseleccionada = 
     const divisaObjetivo = divisaPreseleccionada ? String(divisaPreseleccionada).toLowerCase() : null
     const comparteDivisa = c => (c.moneda || "pen").toLowerCase() === divisaObjetivo
 
-    const cuentasElegibles = divisaObjetivo
-        ? cuentasActivas.filter(c => comparteDivisa(c) && c.tipo !== "credito")
-        : cuentasActivas
+    const esPagoTarjeta = tipo === TIPOS_MOVIMIENTO.PAGO_TARJETA
+    const cuentasElegibles = esPagoTarjeta
+        ? cuentasActivas.filter(c => c.tipo !== "credito" && (!divisaObjetivo || comparteDivisa(c)))
+        : divisaObjetivo
+            ? cuentasActivas.filter(c => comparteDivisa(c) && c.tipo !== "credito")
+            : cuentasActivas
 
     const cuentasOptions = cuentasElegibles
-        .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (${c.moneda?.toUpperCase() || "PEN"})</option>`)
+        .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}" data-tipo="${c.tipo || "otro"}">${c.nombre} (${c.moneda?.toUpperCase() || "PEN"})</option>`)
         .join("")
 
     // Las tarjetas solo se filtran por divisa (siguen disponibles para pagar

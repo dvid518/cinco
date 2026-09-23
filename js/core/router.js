@@ -167,7 +167,7 @@ function mostrarErrorPagina(page, error) {
 
     const esSyntaxError = error instanceof SyntaxError
     const detalle = esSyntaxError
-        ? "El módulo tiene un error de sintaxis. Corrige el archivo y recarga."
+        ? "Error en la sintaxis."
         : (error?.message || "Error desconocido al cargar la página.")
 
     container.innerHTML = `
