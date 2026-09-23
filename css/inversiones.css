@@ -607,7 +607,7 @@ button.btn-nueva-estrategia {
    BADGE DE FUENTE DE PRECIO
    ============================================ */
 
-   .posicion-fuente {
+.posicion-fuente {
     display: inline-block;
     margin-left: 6px;
     padding: 1px 8px;
@@ -617,6 +617,7 @@ button.btn-nueva-estrategia {
     text-transform: uppercase;
     letter-spacing: 0.3px;
     vertical-align: middle;
+    transition: all 0.3s ease;
 }
 
 .posicion-fuente.fuente-manual {

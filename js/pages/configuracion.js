@@ -116,16 +116,65 @@ export function render() {
                 </div>
 
                 <div class="config-group">
-                    <span class="config-label">Lastbar auto-hide</span>
-                    <div class="toggle-group" id="toggle-lastbar">
-                        <span class="toggle-option" data-lastbar="hide">Ocultar</span>
-                        <span class="toggle-option" data-lastbar="show">Siempre visible</span>
+                    <span class="config-label">Tipos de movimiento en el selector</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Cambio de divisa</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-cambio-divisa" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Compra de activo</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-compra-activo">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Venta de activo</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-venta-activo">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Pago de tarjeta</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-pago-tarjeta">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Compra P2P</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-p2p-compra" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Venta P2P</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-p2p-venta" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Trade</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-tipo-trade" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
                     </div>
                     <span class="config-hint">
-                        Ocultar: los botones aparecen al pasar el mouse. Siempre visible: los botones se muestran siempre.
+                        Qué tipos se ofrecen al crear un movimiento nuevo. Compra/venta de activo y pago de
+                        tarjeta solo se registran desde sus propias páginas salvo que los actives aquí.
                     </span>
                 </div>
-            </div>
+
+                </div>
 
             <!-- MONEDA -->
             <div class="panel-section hidden-section" id="section-moneda">
@@ -288,6 +337,34 @@ export function render() {
                     <span class="config-hint">
                         Con la opción activa, el doble click abre el detalle del movimiento en lugar de
                         seleccionarlo. Desactivada, el click abre el detalle como siempre.
+                    </span>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Lastbar auto-hide</span>
+                    <div class="toggle-group" id="toggle-lastbar">
+                        <span class="toggle-option" data-lastbar="hide">Ocultar</span>
+                        <span class="toggle-option" data-lastbar="show">Siempre visible</span>
+                    </div>
+                    <span class="config-hint">
+                        Ocultar: los botones aparecen al pasar el mouse. Siempre visible: los botones se muestran siempre.
+                    </span>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Resaltar ingreso y gasto</span>
+                    <div class="pages-toggle-group">
+                        <div class="toggle-row">
+                            <span>Mostrar Ingreso y Gasto resaltados en el selector</span>
+                            <label class="switch">
+                                <input type="checkbox" id="acc-resaltar-ingreso-gasto" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <span class="config-hint">
+                        Con la opción activa, Ingreso y Gasto se muestran como botones destacados en el
+                        selector de movimientos. Desactivada, se ven como los demás tipos.
                     </span>
                 </div>
             </div>
@@ -682,6 +759,24 @@ async function cargarPreferencias() {
         if (accUnClick) {
             accUnClick.checked = acc.unClickSeleccion === true
         }
+        const accResaltar = document.getElementById("acc-resaltar-ingreso-gasto")
+        if (accResaltar) {
+            accResaltar.checked = acc.resaltarIngresoGasto !== false
+        }
+
+        // Tipos de movimiento en el selector (Apariencia)
+        const tipos = prefs?.tiposMovimiento || {}
+        const marcarTipo = (id, valor) => {
+            const el = document.getElementById(id)
+            if (el) el.checked = valor !== false
+        }
+        marcarTipo("toggle-tipo-cambio-divisa", tipos.cambioDivisa)
+        marcarTipo("toggle-tipo-compra-activo", tipos.compraActivo)
+        marcarTipo("toggle-tipo-venta-activo", tipos.ventaActivo)
+        marcarTipo("toggle-tipo-pago-tarjeta", tipos.pagoTarjeta)
+        marcarTipo("toggle-tipo-p2p-compra", tipos.p2pCompra)
+        marcarTipo("toggle-tipo-p2p-venta", tipos.p2pVenta)
+        marcarTipo("toggle-tipo-trade", tipos.trade)
 
         actualizarEstadoGuardar()
     } catch (error) {
@@ -706,6 +801,7 @@ function hayCambiosEnVivo() {
     const basePaginas = base.paginas || {}
     const segBase = base.seg || {}
     const accBase = base.accesibilidad || {}
+    const tiposBase = base.tiposMovimiento || {}
     const tc = getTipoCambio()
     const modoTCUI = getModoTipoCambioUI()
     const nombreBase = (sesion.getUsuario()?.nombre || "Usuario").trim()
@@ -715,7 +811,19 @@ function hayCambiosEnVivo() {
     const accModalesUI = document.getElementById("acc-modales-persistentes")?.checked
     const accDoodlesUI = document.getElementById("acc-doodles")?.checked
     const accUnClickUI = document.getElementById("acc-un-click-seleccion")?.checked
+    const accResaltarUI = document.getElementById("acc-resaltar-ingreso-gasto")?.checked
     const movRecientesUI = leerCantidadMovimientos()
+
+    const tipoUI = id => document.getElementById(id)?.checked !== false
+    const tiposDifieren = [
+        ["toggle-tipo-cambio-divisa", "cambioDivisa"],
+        ["toggle-tipo-compra-activo", "compraActivo"],
+        ["toggle-tipo-venta-activo", "ventaActivo"],
+        ["toggle-tipo-pago-tarjeta", "pagoTarjeta"],
+        ["toggle-tipo-p2p-compra", "p2pCompra"],
+        ["toggle-tipo-p2p-venta", "p2pVenta"],
+        ["toggle-tipo-trade", "trade"]
+    ].some(([id, key]) => tipoUI(id) !== (tiposBase[key] !== false))
 
     return (
         (nombrePendiente !== null && nombrePendiente !== nombreBase) ||
@@ -724,11 +832,13 @@ function hayCambiosEnVivo() {
         (accModalesUI !== undefined && accModalesUI !== (accBase.modalesPersistentes === true)) ||
         (accDoodlesUI !== undefined && accDoodlesUI !== (accBase.doodles === true)) ||
         (accUnClickUI !== undefined && accUnClickUI !== (accBase.unClickSeleccion === true)) ||
+        (accResaltarUI !== undefined && accResaltarUI !== (accBase.resaltarIngresoGasto !== false)) ||
         (movRecientesUI !== null && movRecientesUI !== (base.movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT)) ||
         (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
         (document.getElementById("toggle-movimientos")?.checked !== (basePaginas.movimientos !== false)) ||
         (document.getElementById("toggle-inversiones")?.checked !== (basePaginas.inversiones !== false)) ||
         (document.getElementById("toggle-trading")?.checked !== (basePaginas.trading !== false)) ||
+        tiposDifieren ||
         (document.getElementById("divisa-principal")?.value !== getDivisaPrincipal()) ||
         (modoTCUI !== null && modoTCUI !== (tc.modo === "auto" ? "auto" : "manual")) ||
         (modoTCUI !== "auto" && parseFloat(document.getElementById("tc-pen-usd")?.value) !== tc.pen_usd)
@@ -741,13 +851,21 @@ function configurarDetectorCambios() {
         "toggle-movimientos",
         "toggle-inversiones",
         "toggle-trading",
+        "toggle-tipo-cambio-divisa",
+        "toggle-tipo-compra-activo",
+        "toggle-tipo-venta-activo",
+        "toggle-tipo-pago-tarjeta",
+        "toggle-tipo-p2p-compra",
+        "toggle-tipo-p2p-venta",
+        "toggle-tipo-trade",
         "divisa-principal",
         "tc-pen-usd",
         "seg-inactividad",
         "seg-cerrar-pestana",
         "acc-modales-persistentes",
         "acc-doodles",
-        "acc-un-click-seleccion"
+        "acc-un-click-seleccion",
+        "acc-resaltar-ingreso-gasto"
     ]
 
     ids.forEach(id => {
@@ -968,7 +1086,18 @@ function construirPreferencias() {
     const accesibilidad = {
         modalesPersistentes: document.getElementById("acc-modales-persistentes")?.checked === true,
         doodles: document.getElementById("acc-doodles")?.checked === true,
-        unClickSeleccion: document.getElementById("acc-un-click-seleccion")?.checked === true
+        unClickSeleccion: document.getElementById("acc-un-click-seleccion")?.checked === true,
+        resaltarIngresoGasto: document.getElementById("acc-resaltar-ingreso-gasto")?.checked !== false
+    }
+
+    const tiposMovimiento = {
+        cambioDivisa: document.getElementById("toggle-tipo-cambio-divisa")?.checked !== false,
+        compraActivo: document.getElementById("toggle-tipo-compra-activo")?.checked === true,
+        ventaActivo: document.getElementById("toggle-tipo-venta-activo")?.checked === true,
+        pagoTarjeta: document.getElementById("toggle-tipo-pago-tarjeta")?.checked === true,
+        p2pCompra: document.getElementById("toggle-tipo-p2p-compra")?.checked !== false,
+        p2pVenta: document.getElementById("toggle-tipo-p2p-venta")?.checked !== false,
+        trade: document.getElementById("toggle-tipo-trade")?.checked !== false
     }
 
     return {
@@ -985,7 +1114,8 @@ function construirPreferencias() {
         divisaPrincipal,
         tipoCambio,
         seg,
-        accesibilidad
+        accesibilidad,
+        tiposMovimiento
     }
 }
 
@@ -1015,7 +1145,8 @@ async function aplicarPreferencias(preferencias) {
             movimientosRecientes: preferencias.movimientosRecientes,
             paginas: preferencias.paginas,
             seg: preferencias.seg,
-            accesibilidad: preferencias.accesibilidad
+            accesibilidad: preferencias.accesibilidad,
+            tiposMovimiento: preferencias.tiposMovimiento
         })
         sesion.setPreferencias(preferencias)
 

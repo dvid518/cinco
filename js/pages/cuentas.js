@@ -2,11 +2,14 @@ import { sesion } from "../core/sesion.js"
 import { icono } from "../core/iconos.js"
 import {
     obtenerCuentas,
+    obtenerMovimientos,
     crearCuenta,
     actualizarCuenta,
     eliminarCuenta,
     restaurarDocumento
 } from "../../firebase/firestore.js"
+import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
+import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 import { abrirModal, cerrarModal } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
@@ -169,26 +172,61 @@ function mostrarDetalleCuenta() {
     const panel = document.getElementById("panel")
     if (!panel || !cuentaSeleccionada) return
 
-    if (cuentaSeleccionada.tipo === "credito") {
-        mostrarDetalleTarjeta(panel, cuentaSeleccionada)
-    } else {
-        mostrarDetalleCuentaNormal(panel, cuentaSeleccionada)
-    }
-}
-
-function mostrarDetalleCuentaNormal(panel, c) {
-    const esPositivo = (c.saldoInicial || 0) >= 0
+    const cuenta = cuentaSeleccionada
+    const panelInfo = cuenta.tipo === "credito"
+        ? plantillaInfoTarjeta(cuenta)
+        : plantillaInfoNormal(cuenta)
 
     panel.innerHTML = `
-        <div class="cuenta-detalle-header">
-        </div>
-        <div class="cuenta-detalle">
-            <div class="saldo ${esPositivo ? "positive" : "negative"}">
-                ${(c.saldoInicial || 0).toFixed(2)}
+        <div class="cuenta-vista">
+            <div class="cuenta-vista-movimientos">
+                <div class="cuenta-mov-head">
+                    <h2>Últimos movimientos</h2>
+                </div>
+                <div class="lista-cards" id="lista-movimientos-cuenta">
+                    <div class="loading-spinner"></div>
+                </div>
             </div>
+            <div class="cuenta-vista-info">
+                ${panelInfo}
+            </div>
+        </div>
+    `
+
+    cargarMovimientosDeCuenta(cuenta)
+
+    document.getElementById("btn-pagar-tarjeta")?.addEventListener("click", () => {
+        abrirPagarTarjeta(cuenta)
+    })
+}
+
+// ============================================
+// INFO · CUENTA NORMAL
+// ============================================
+
+function plantillaInfoNormal(c) {
+    const saldo = c.saldoInicial || 0
+    const esPositivo = saldo >= 0
+
+    return `
+        <div class="cuenta-perfil">
+            <div class="cuenta-perfil-icono">${icono(iconoPorTipo(c.tipo), 26)}</div>
+            <div class="cuenta-perfil-titulo">
+                <h3>${c.nombre}</h3>
+                <span class="cuenta-badge">${nombreTipo(c.tipo)}</span>
+                <span class="cuenta-badge estado ${c.estado === "archivada" ? "archivada" : ""}">${c.estado || "activa"}</span>
+            </div>
+        </div>
+
+        <div class="cuenta-saldo-grande ${esPositivo ? "positive" : "negative"}">
+            ${simboloMoneda(c.moneda)} ${Math.abs(saldo).toFixed(2)}
+            <span class="cuenta-saldo-moneda">${(c.moneda || "PEN").toUpperCase()}</span>
+        </div>
+
+        <div class="cuenta-detalle">
             <div class="field">
                 <span class="label">Tipo</span>
-                <span class="value">${c.tipo || "No definido"}</span>
+                <span class="value">${nombreTipo(c.tipo)}</span>
             </div>
             <div class="field">
                 <span class="label">Moneda</span>
@@ -204,7 +242,11 @@ function mostrarDetalleCuentaNormal(panel, c) {
     `
 }
 
-function mostrarDetalleTarjeta(panel, c) {
+// ============================================
+// INFO · TARJETA DE CRÉDITO
+// ============================================
+
+function plantillaInfoTarjeta(c) {
     const deuda = c.deuda || 0
     const limite = c.limite || 0
     const disponible = Math.max(0, limite - deuda)
@@ -223,25 +265,39 @@ function mostrarDetalleTarjeta(panel, c) {
     const corteInfo = calcularDiasHasta(c.diaCorte)
     const pagoInfo = calcularDiasHasta(c.diaPago)
 
-    panel.innerHTML = `
-        <div class="cuenta-detalle-header">
-        </div>
-        <div class="cuenta-detalle">
-            <div class="saldo ${deuda > 0 ? "negative" : "positive"}">
-                ${deuda > 0 ? "- " : ""}${deuda.toFixed(2)}
+    return `
+        <div class="cuenta-perfil">
+            <div class="cuenta-perfil-icono">${icono("credit-card", 26)}</div>
+            <div class="cuenta-perfil-titulo">
+                <h3>${c.nombre}</h3>
+                <span class="cuenta-badge">Tarjeta de crédito</span>
+                <span class="cuenta-badge estado ${c.estado === "archivada" ? "archivada" : ""}">${c.estado || "activa"}</span>
             </div>
+        </div>
 
+        <div class="cuenta-saldo-grande ${deuda > 0 ? "negative" : "positive"}">
+            ${deuda > 0 ? "−" : ""}${simboloMoneda(c.moneda)} ${deuda.toFixed(2)}
+            <span class="cuenta-saldo-moneda">deuda</span>
+        </div>
+
+        <div class="credito-uso">
+            <div class="credito-uso-head">
+                <span class="label">Uso del crédito</span>
+                <span class="value ${nivelClase}">${porcentaje.toFixed(1)}% — ${nivelTexto}</span>
+            </div>
+            <div class="credito-barra">
+                <div class="credito-barra-fill ${nivelClase}" style="width:${Math.min(100, porcentaje).toFixed(1)}%"></div>
+            </div>
+        </div>
+
+        <div class="cuenta-detalle">
             <div class="field">
                 <span class="label">Límite</span>
-                <span class="value">${limite.toFixed(2)}</span>
+                <span class="value">${simboloMoneda(c.moneda)} ${limite.toFixed(2)}</span>
             </div>
             <div class="field">
                 <span class="label">Disponible</span>
-                <span class="value ${disponible > 0 ? "positive" : "negative"}">${disponible.toFixed(2)}</span>
-            </div>
-            <div class="field">
-                <span class="label">Uso</span>
-                <span class="value ${nivelClase}">${porcentaje.toFixed(1)}% — ${nivelTexto}</span>
+                <span class="value ${disponible > 0 ? "positive" : "negative"}">${simboloMoneda(c.moneda)} ${disponible.toFixed(2)}</span>
             </div>
             <div class="field">
                 <span class="label">Próximo corte</span>
@@ -260,7 +316,160 @@ function mostrarDetalleTarjeta(panel, c) {
                 <span class="value">${c.estado || "activa"}</span>
             </div>
         </div>
+
+        ${c.estado !== "archivada" ? `
+        <div class="cuenta-vista-acciones">
+            <button type="button" class="modal-btn modal-btn-primary" id="btn-pagar-tarjeta">
+                ${icono("credit-card", 16)} Pagar tarjeta
+            </button>
+        </div>` : ""}
     `
+}
+
+// "Pagar tarjeta" abierto desde la propia tarjeta (no desde el selector de movimientos).
+async function abrirPagarTarjeta(cuenta) {
+    try {
+        const { abrirFormularioMovimiento } = await import("./movimientos.js")
+        abrirFormularioMovimiento(TIPOS_MOVIMIENTO.PAGO_TARJETA, null, {
+            alGuardar: () => cargarCuentas(),
+            valores: { tarjeta: cuenta.id }
+        })
+    } catch (error) {
+        console.error("Error abriendo pago de tarjeta:", error)
+        mostrarNotificacion("error", "No se pudo abrir el pago de tarjeta")
+    }
+}
+
+// ============================================
+// INFO · MOVIMIENTOS DE LA CUENTA
+// ============================================
+
+async function cargarMovimientosDeCuenta(cuenta) {
+    const contenedor = document.getElementById("lista-movimientos-cuenta")
+    if (!contenedor) return
+
+    try {
+        const movimientos = await obtenerMovimientos(uid)
+        const involucrados = movimientos
+            .filter(m => movimientoInvolucra(m, cuenta.id))
+            .sort((a, b) => {
+                const fa = (fechaDeMovimiento(a)?.getTime?.()) || 0
+                const fb = (fechaDeMovimiento(b)?.getTime?.()) || 0
+                return fb - fa
+            })
+            .slice(0, 20)
+
+        if (involucrados.length === 0) {
+            contenedor.innerHTML = `
+                <p class="lista-vacia">
+                    No hay movimientos que involucren esta cuenta todavía.
+                </p>
+            `
+            return
+        }
+
+        contenedor.innerHTML = involucrados.map(plantillaMovimiento).join("")
+    } catch (error) {
+        console.error("Error cargando movimientos de la cuenta:", error)
+        contenedor.innerHTML = `<p class="lista-vacia error">Error al cargar movimientos</p>`
+    }
+}
+
+function movimientoInvolucra(m, cuentaId) {
+    return (
+        m.cuenta === cuentaId ||
+        m.cuentaOrigen === cuentaId ||
+        m.cuentaDestino === cuentaId ||
+        m.tarjeta === cuentaId
+    )
+}
+
+function plantillaMovimiento(m) {
+    const monto = montoDeMovimiento(m)
+    const esPositivo = esMovimientoPositivo(m)
+    const signo = esPositivo ? "+" : "−"
+    const clase = esPositivo ? "positive" : "negative"
+    const tipoNombre = CONFIG_MOVIMIENTOS[m.tipo]?.nombre || m.tipo || "Desconocido"
+    const fecha = formatearFecha(m.fechaRealizacion)
+
+    return `
+        <div class="card-item">
+            <div class="card-item-info">
+                <span class="card-item-titulo">${m.concepto || m.activo || m.tipo || "Sin concepto"}</span>
+                <span class="card-item-detalle">${fecha} · ${tipoNombre}</span>
+            </div>
+            <span class="card-item-valor ${clase}">
+                ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
+            </span>
+        </div>
+    `
+}
+
+function esMovimientoPositivo(m) {
+    if (m?.tipo === TIPOS_MOVIMIENTO.ERROR) {
+        return m.operacion === "sumar"
+    }
+    return (
+        m?.tipo === "ingreso" ||
+        m?.tipo === "ventaActivo" ||
+        m?.tipo === "p2pVenta"
+    )
+}
+
+function montoDeMovimiento(m) {
+    if (m.monto !== undefined && m.monto !== null && m.monto !== "") {
+        return Number(m.monto) || 0
+    }
+    if (m.cantidad && m.precio) {
+        const total = Number(m.cantidad) * Number(m.precio)
+        const comision = Number(m.comision) || 0
+        return esMovimientoPositivo(m) ? (total - comision) : (total + comision)
+    }
+    if (m.montoOrigen) return Number(m.montoOrigen) || 0
+    if (m.montoDestino) return Number(m.montoDestino) || 0
+    return 0
+}
+
+function fechaDeMovimiento(m) {
+    const valor = m.fechaRealizacion || m.fechaRegistro
+    if (!valor) return null
+    if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}/.test(valor)) {
+        const [anio, mes, dia] = valor.split("-").map(Number)
+        return new Date(anio, mes - 1, dia)
+    }
+    if (valor?.toDate) return valor.toDate()
+    if (valor?.seconds) return new Date(valor.seconds * 1000)
+    return new Date(valor)
+}
+
+function formatearFecha(valor) {
+    if (!valor) return "—"
+    try {
+        if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}/.test(valor)) {
+            const [anio, mes, dia] = valor.split("-").map(Number)
+            return new Date(anio, mes - 1, dia).toLocaleDateString("es-PE")
+        }
+        if (valor?.toDate) return valor.toDate().toLocaleDateString("es-PE")
+        if (valor?.seconds) return new Date(valor.seconds * 1000).toLocaleDateString("es-PE")
+        return new Date(valor).toLocaleDateString("es-PE")
+    } catch {
+        return "—"
+    }
+}
+
+function nombreTipo(tipo) {
+    const NOMBRES = {
+        banco: "Banco",
+        efectivo: "Efectivo",
+        broker: "Broker",
+        exchange: "Exchange",
+        credito: "Tarjeta de crédito"
+    }
+    return NOMBRES[tipo] || "Cuenta"
+}
+
+function simboloMoneda(moneda) {
+    return DIVISAS_SYMBOLS[(moneda || "pen").toLowerCase()] || "S/"
 }
 
 function calcularDiasHasta(diaMes) {
@@ -338,12 +547,42 @@ export function archivarCuentaSeleccionada() {
         return
     }
 
-    const saldo = cuenta.saldoInicial || 0
+    const saldo = saldoParaRegla(cuenta)
     if (saldo !== 0) {
-        mostrarNotificacion(
-            "warning",
-            `No se puede archivar una cuenta con saldo diferente de 0 (saldo actual: ${saldo})`
-        )
+        abrirModal({
+            titulo: "No se puede archivar en cero",
+            contenido: `
+                <div class="modal-message">
+                    <p class="modal-message-desc">
+                        ${cuenta.tipo === "credito"
+                            ? "La tarjeta <strong>" + cuenta.nombre + "</strong> tiene una deuda pendiente."
+                            : "La cuenta <strong>" + cuenta.nombre + "</strong> tiene un saldo distinto de 0."
+                        }
+                    </p>
+                    <p class="modal-message-hint">
+                        Para archivar en cero primero debes dejar el saldo en 0
+                        creando los movimientos de ajuste necesarios.
+                    </p>
+                    <p class="modal-message-warn">
+                        Puedes <strong>forzar el archivo</strong>, pero NO es recomendable:
+                        movimientos, posiciones, trades, órdenes, pendientes y metas que
+                        usan esta cuenta quedarán afectados y deberás corregirlos creando
+                        movimientos de error.
+                    </p>
+                </div>
+            `,
+            variante: "confirm",
+            confirmText: "Archivar de todos modos",
+            cancelText: "Cancelar",
+            onConfirm: () => {
+                cambiarEstadoCuenta(cuenta.id, "archivada")
+                mostrarNotificacion(
+                    "warning",
+                    "Cuenta archivada a la fuerza: revisa movimientos, posiciones, trades, órdenes, pendientes y metas relacionados"
+                )
+                return true
+            }
+        })
         return
     }
 
@@ -366,6 +605,15 @@ export function archivarCuentaSeleccionada() {
     })
 }
 
+// Saldo que importa para la regla de archivo/eliminación según el tipo:
+// · cuenta normal → saldo inicial
+// · tarjeta de crédito → deuda (debe estar en 0 → disponible = línea)
+function saldoParaRegla(cuenta) {
+    return cuenta.tipo === "credito"
+        ? (cuenta.deuda || 0)
+        : (cuenta.saldoInicial || 0)
+}
+
 async function cambiarEstadoCuenta(id, estado) {
     try {
         await actualizarCuenta(uid, id, { estado })
@@ -383,11 +631,13 @@ export function eliminarCuentaSeleccionada() {
         return
     }
     const cuenta = cuentaSeleccionada
-    const saldo = cuenta.saldoInicial || 0
+    const saldo = saldoParaRegla(cuenta)
     if (saldo !== 0) {
         mostrarNotificacion(
             "warning",
-            `Solo se puede eliminar una cuenta con saldo 0 (saldo actual: ${saldo})`
+            cuenta.tipo === "credito"
+                ? `Solo se puede eliminar una tarjeta con la deuda en 0 (deuda actual: ${saldo})`
+                : `Solo se puede eliminar una cuenta con saldo 0 (saldo actual: ${saldo})`
         )
         return
     }
@@ -610,7 +860,7 @@ function _abrirModalEditarCuenta(cuenta) {
     const moneda = (cuenta.moneda || "pen").toLowerCase()
     const permisoMoneda = cuenta.tipo !== "credito"
     const esArchivada = cuenta.estado === "archivada"
-    const saldo = cuenta.saldoInicial || 0
+    const saldoParaEliminar = saldoParaRegla(cuenta)
 
     const html = `
         <form id="form-editar-cuenta" class="form-movimiento">
@@ -660,7 +910,7 @@ function _abrirModalEditarCuenta(cuenta) {
                 <button type="button" class="modal-btn modal-btn-secondary" id="btn-editar-estado">
                     ${esArchivada ? "Desarchivar" : "Archivar"}
                 </button>
-                ${saldo === 0 ? `<button type="button" class="modal-btn modal-btn-secondary modal-btn-danger" id="btn-editar-eliminar">
+                ${saldoParaEliminar === 0 ? `<button type="button" class="modal-btn modal-btn-secondary modal-btn-danger" id="btn-editar-eliminar">
                     Eliminar
                 </button>` : ""}
             </div>

@@ -567,6 +567,16 @@
    LASTRAR - MODO SIEMPRE VISIBLE
    ============================================ */
 
+.lastbar-always-visible {
+    gap: 25px;
+    transition: all 0.3s ease;
+}
+
+.lastbar-always-visible .bar,
+.lastbar-always-visible .pendientes {
+    gap: 14px;
+}
+
 .lastbar-always-visible .item {
     width: 40px !important;
     height: 40px !important;

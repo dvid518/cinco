@@ -717,37 +717,66 @@ function fechaDeMovimiento(m) {
 // LASTBAR (handlers centralizados en app.js)
 // ============================================
 
-// Tipos que se pueden crear según las páginas visibles:
-//  · activos   → requieren la página "inversiones"
-//  · p2p       → requieren la página "trading"
+// Tipos que se pueden crear según las preferencias y las páginas visibles:
+//  · activos & pago de tarjeta → ocultos por defecto; si se activan en
+//    configuración (Apariencia → Tipos de movimiento en el selector) vuelven.
+//  · p2p y trades → requieren la página "trading".
+//  · error → siempre el último.
 //  · compraTarjeta NO aparece: comprar con tarjeta es un gasto desde la
 //    cuenta de la tarjeta (aumenta su deuda), no un tipo aparte.
+const TIPO_TRADE = "trade"
+
 function tiposDisponiblesParaCrear() {
     const paginas = sesion.getPaginasVisibles()
+    const tiposPref = sesion.getPreferencias()?.tiposMovimiento || {}
+
     const tipos = [
         TIPOS_MOVIMIENTO.INGRESO,
         TIPOS_MOVIMIENTO.GASTO,
-        TIPOS_MOVIMIENTO.TRANSFERENCIA,
-        TIPOS_MOVIMIENTO.CAMBIO_DIVISA
+        TIPOS_MOVIMIENTO.TRANSFERENCIA
     ]
 
-    if (paginas.inversiones !== false) {
-        tipos.push(TIPOS_MOVIMIENTO.COMPRA_ACTIVO, TIPOS_MOVIMIENTO.VENTA_ACTIVO)
-    }
-    if (paginas.trading !== false) {
-        tipos.push(TIPOS_MOVIMIENTO.P2P_COMPRA, TIPOS_MOVIMIENTO.P2P_VENTA)
+    if (tiposPref.cambioDivisa !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.CAMBIO_DIVISA)
     }
 
-    tipos.push(TIPOS_MOVIMIENTO.PAGO_TARJETA, TIPOS_MOVIMIENTO.ERROR)
+    if (paginas.inversiones !== false && tiposPref.compraActivo !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.COMPRA_ACTIVO)
+    }
+    if (paginas.inversiones !== false && tiposPref.ventaActivo !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.VENTA_ACTIVO)
+    }
+
+    if (paginas.trading !== false && tiposPref.p2pCompra !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.P2P_COMPRA)
+    }
+    if (paginas.trading !== false && tiposPref.p2pVenta !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.P2P_VENTA)
+    }
+
+    if (tiposPref.pagoTarjeta !== false) {
+        tipos.push(TIPOS_MOVIMIENTO.PAGO_TARJETA)
+    }
+
+    if (paginas.trading !== false && tiposPref.trade !== false) {
+        tipos.push(TIPO_TRADE)
+    }
+
+    tipos.push(TIPOS_MOVIMIENTO.ERROR)
 
     return tipos
 }
 
 // Tipos destacados (grandes, con círculo e ícono) frente a los secundarios.
+// Se pueden quitar desde Accesibilidad (resaltarIngresoGasto).
 const TIPOS_DESTACADOS = [
     TIPOS_MOVIMIENTO.INGRESO,
     TIPOS_MOVIMIENTO.GASTO
 ]
+
+const NOMBRES_ADICIONALES = {
+    [TIPO_TRADE]: "Trade"
+}
 
 const ICONO_TIPO_MOVIMIENTO = {
     [TIPOS_MOVIMIENTO.INGRESO]: "arrow-down-left",
@@ -759,11 +788,16 @@ export function abrirSelectorTipoMovimiento() {
     uid = sesion.uid
 
     const disponibles = tiposDisponiblesParaCrear()
-    const destacados = TIPOS_DESTACADOS.filter(t => disponibles.includes(t))
-    const secundarios = disponibles.filter(t => !TIPOS_DESTACADOS.includes(t))
+
+    // Accesibilidad: resaltar ingreso/gasto (destacados) o verlos igual que el resto
+    const resaltar = sesion.getPreferencias()?.accesibilidad?.resaltarIngresoGasto !== false
+    const destacados = resaltar
+        ? TIPOS_DESTACADOS.filter(t => disponibles.includes(t))
+        : []
+    const secundarios = disponibles.filter(t => !destacados.includes(t))
 
     const botonDestacado = t => {
-        const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || t
+        const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || NOMBRES_ADICIONALES[t] || t
         return `
         <div class="tipo-movimiento-btn tipo-principal" data-tipo="${t}">
             <button type="button" class="tipo-icono" aria-label="Crear ${nombre}">
@@ -773,9 +807,12 @@ export function abrirSelectorTipoMovimiento() {
         </div>
     `
     }
-    const botonSecundario = t => {
-        const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || t
-        return `<button class="tipo-movimiento-btn tipo-secundario" data-tipo="${t}" type="button">${nombre}</button>`
+    // Si la cantidad de secundarios es impar, el último (error) ocupa ambas columnas.
+    const impar = secundarios.length % 2 === 1
+    const botonSecundario = (t, i) => {
+        const nombre = CONFIG_MOVIMIENTOS[t]?.nombre || NOMBRES_ADICIONALES[t] || t
+        const spanFull = impar && i === secundarios.length - 1 ? " span-full" : ""
+        return `<button class="tipo-movimiento-btn tipo-secundario${spanFull}" data-tipo="${t}" type="button">${nombre}</button>`
     }
 
     abrirModal({
@@ -797,6 +834,10 @@ export function abrirSelectorTipoMovimiento() {
 
     const abrirFormularioPorTipo = tipo => {
         cerrarModal()
+        if (tipo === TIPO_TRADE) {
+            abrirSelectorDireccionTrade()
+            return
+        }
         abrirFormularioMovimiento(tipo, null)
     }
 
@@ -811,9 +852,42 @@ export function abrirSelectorTipoMovimiento() {
     })
 }
 
-async function abrirFormularioMovimiento(tipo, movimiento = null) {
+// El tipo "Trade" abre una dirección (Largo/Corto) antes del formulario.
+function abrirSelectorDireccionTrade() {
+    abrirModal({
+        titulo: "Nuevo trade",
+        contenido: `
+            <div class="selector-tipos selector-tipos-secundarios">
+                <button class="tipo-movimiento-btn tipo-secundario" data-direccion="long" type="button">Largo (Long)</button>
+                <button class="tipo-movimiento-btn tipo-secundario" data-direccion="short" type="button">Corto (Short)</button>
+            </div>
+        `,
+        variante: "narrow",
+        confirmText: null,
+        cancelText: null,
+        cerrarAlClickFuera: true
+    })
+
+    document.querySelectorAll("[data-direccion]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const direccion = btn.dataset.direccion
+            cerrarModal()
+            try {
+                const { abrirModalNuevoTrade } = await import("./trading.js")
+                abrirModalNuevoTrade(direccion)
+            } catch (error) {
+                console.error("Error abriendo trade:", error)
+                mostrarNotificacion("error", "No se pudo abrir el registro de trade")
+            }
+        })
+    })
+}
+
+export async function abrirFormularioMovimiento(tipo, movimiento = null, opciones = {}) {
     uid = sesion.uid
     const esEdicion = !!movimiento
+    const alGuardar = opciones.alGuardar || null
+    const valoresIniciales = opciones.valores || null
     const html = await generarFormularioMovimiento(tipo)
 
     const config = CONFIG_MOVIMIENTOS[tipo]
@@ -841,7 +915,11 @@ async function abrirFormularioMovimiento(tipo, movimiento = null) {
                     await registrarMovimiento(uid, tipo, datos)
                     mostrarNotificacion("exito", "Movimiento registrado")
                 }
-                await cargarMovimientos()
+                if (alGuardar) {
+                    await alGuardar()
+                } else {
+                    await cargarMovimientos()
+                }
                 return true
             } catch (error) {
                 console.error("Error guardando movimiento:", error)
@@ -853,6 +931,11 @@ async function abrirFormularioMovimiento(tipo, movimiento = null) {
 
     if (esEdicion) {
         rellenarFormulario(tipo, movimiento)
+    } else if (valoresIniciales) {
+        for (const [campo, valor] of Object.entries(valoresIniciales)) {
+            const input = document.getElementById(`campo-${campo}`)
+            if (input) input.value = valor
+        }
     }
 
     vincularSimboloDivisa()
@@ -991,8 +1074,8 @@ function renderizarAccionesDetalle(modalEl, bloqueado) {
             </button>
         `
         : `
-            <button type="button" class="glass-btn" data-detalle-accion="cancelar">Cancelar</button>
             <button type="button" class="modal-btn modal-btn-primary" data-detalle-accion="guardar">Guardar cambios</button>
+            <button type="button" class="glass-btn cancel" data-detalle-accion="cancelar">Cancelar</button>
         `
 }
 

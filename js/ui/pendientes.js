@@ -559,7 +559,7 @@ function htmlFormularioPendiente(p) {
                 </select>
             </div>
             <div class="form-group">
-                <label for="pendiente-vencimiento">Fecha de vencimiento (opcional)</label>
+                <label for="pendiente-vencimiento">Fecha de vencimiento</label>
                 <div class="campo-fecha">
                     <input type="date" id="pendiente-vencimiento" class="form-input" value="${vencimiento}">
                     <button type="button" class="btn-calendario" aria-label="Abrir calendario">

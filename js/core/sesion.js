@@ -18,7 +18,17 @@ class Sesion {
             accesibilidad: {
                 modalesPersistentes: false,
                 doodles: false,
-                unClickSeleccion: false
+                unClickSeleccion: false,
+                resaltarIngresoGasto: true
+            },
+            tiposMovimiento: {
+                cambioDivisa: true,
+                compraActivo: false,
+                ventaActivo: false,
+                pagoTarjeta: false,
+                p2pCompra: true,
+                p2pVenta: true,
+                trade: true
             },
             movimientosRecientes: 5
         }
@@ -91,6 +101,12 @@ class Sesion {
             this.preferencias.accesibilidad = {
                 ...this.preferencias.accesibilidad,
                 ...preferencias.accesibilidad
+            }
+        }
+        if (preferencias?.tiposMovimiento) {
+            this.preferencias.tiposMovimiento = {
+                ...this.preferencias.tiposMovimiento,
+                ...preferencias.tiposMovimiento
             }
         }
         if (preferencias?.movimientosRecientes !== undefined) {
@@ -185,7 +201,17 @@ class Sesion {
             accesibilidad: {
                 modalesPersistentes: false,
                 doodles: false,
-                unClickSeleccion: false
+                unClickSeleccion: false,
+                resaltarIngresoGasto: true
+            },
+            tiposMovimiento: {
+                cambioDivisa: true,
+                compraActivo: false,
+                ventaActivo: false,
+                pagoTarjeta: false,
+                p2pCompra: true,
+                p2pVenta: true,
+                trade: true
             },
             movimientosRecientes: 5
         }

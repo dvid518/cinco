@@ -210,8 +210,8 @@ const LASTBARS = {
                         <path d="M3 3v5h5"/>
                     </svg>
                 </div>
-                <div class="item glass" data-accion="broker">
-                    <span class="glass">Broker</span>
+                <div class="item glass" data-accion="nueva-estrategia">
+                    <span class="glass">Estrategia</span>
                     <svg id="icon-mov" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>
                         <path d="M8 12h8"/>
@@ -254,8 +254,8 @@ const LASTBARS = {
                         <path d="M3 3v5h5"/>
                     </svg>
                 </div>
-                <div class="item glass" data-accion="broker">
-                    <span class="glass">Broker</span>
+                <div class="item glass" data-accion="nueva-orden">
+                    <span class="glass">Orden</span>
                     <svg id="icon-mov" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>
                         <path d="M8 12h8"/>
@@ -416,13 +416,14 @@ const MAPA_ACCIONES = {
         abrirModalVenta()
     },
 
-    "broker": async (pagina) => {
-        const modulo = await import(
-            pagina === "trading"
-                ? "../pages/trading.js"
-                : "../pages/inversiones.js"
-        )
-        modulo.abrirModalBroker()
+    "nueva-estrategia": async () => {
+        const { abrirModalEstrategia } = await import("../pages/inversiones.js")
+        abrirModalEstrategia()
+    },
+
+    "nueva-orden": async () => {
+        const { abrirModalNuevaOrden } = await import("../pages/trading.js")
+        abrirModalNuevaOrden()
     },
 
     // ── TRADING ──

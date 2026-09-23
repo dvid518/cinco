@@ -33,6 +33,6 @@ export function ofrecerDeshacer({
 
     mostrarNotificacion("info", mensaje, duracion, [
         { texto: "Aceptar", primaria: true, alClick: ejecutarRestauracion },
-        { texto: "Rechazar", alClick: () => {} }
+        { texto: "Cancelar", clase: "cancel", alClick: () => {} }
     ])
 }

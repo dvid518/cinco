@@ -103,7 +103,7 @@
     cursor: pointer;
     flex-shrink: 0;
     margin-left: auto;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
 .modal-close:hover {

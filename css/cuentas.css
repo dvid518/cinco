@@ -11,19 +11,176 @@
 }
 
 /* --------------------------------------------
+   VISTA DE CUENTA · DOS COLUMNAS
+   -------------------------------------------- */
+
+.cuenta-vista {
+    display: flex;
+    gap: 20px;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+.cuenta-vista-movimientos {
+    flex: 1 1 55%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+}
+
+.cuenta-vista-movimientos .cuenta-mov-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.cuenta-vista-movimientos .cuenta-mov-head h2 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.cuenta-vista-movimientos .lista-vacia {
+    color: var(--textSecondary);
+}
+
+.cuenta-vista-movimientos .lista-cards {
+    padding: 4px;
+}
+
+/* Columna derecha: info de la cuenta */
+.cuenta-vista-info {
+    flex: 1 1 45%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 25px;
+}
+
+@media (max-width: 760px) {
+    .cuenta-vista {
+        flex-direction: column;
+        height: auto;
+    }
+    .cuenta-vista-movimientos {
+        min-height: 260px;
+    }
+}
+
+/* --------------------------------------------
+   PERFIL DE LA CUENTA
+   -------------------------------------------- */
+
+.cuenta-perfil {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cuenta-perfil-icono {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--backgroundAlt);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.cuenta-perfil-titulo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.cuenta-perfil-titulo h3 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cuenta-badge {
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--textSecondary);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 2px 10px;
+}
+
+.cuenta-badge.estado {
+    color: var(--positive);
+    border-color: var(--positive);
+}
+
+.cuenta-badge.estado.archivada {
+    color: var(--negative);
+    border-color: var(--negative);
+}
+
+/* --------------------------------------------
+   SALDO GRANDE
+   -------------------------------------------- */
+
+.cuenta-saldo-grande {
+    font-family: var(--font-secondary);
+    font-size: 36px;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 0;
+    line-height: 1.1;
+}
+
+.cuenta-saldo-grande.positive {
+    color: var(--positive);
+}
+
+.cuenta-saldo-grande.negative {
+    color: var(--negative);
+}
+
+.cuenta-saldo-moneda {
+    display: inline-block;
+    margin-left: 10px;
+    font-family: var(--font-primary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--textSecondary);
+}
+
+/* --------------------------------------------
    DETALLE DE CUENTA
    -------------------------------------------- */
 
 .cuenta-detalle {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 6px;
     width: 100%;
 }
 
 .cuenta-detalle .field {
     display: flex;
     justify-content: space-between;
+    gap: 12px;
     padding: 8px 0;
     border-bottom: 1px solid var(--border);
 }
@@ -37,6 +194,18 @@
     color: var(--text);
     font-family: var(--font-secondary);
     font-weight: 500;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cuenta-detalle .field .value.positive {
+    color: var(--positive);
+}
+
+.cuenta-detalle .field .value.negative {
+    color: var(--negative);
 }
 
 .cuenta-detalle .saldo {
@@ -52,6 +221,70 @@
 
 .cuenta-detalle .saldo.negative {
     color: var(--negative);
+}
+
+/* --------------------------------------------
+   CRÉDITO · BARRA DE USO
+   -------------------------------------------- */
+
+.credito-uso {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.credito-uso-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.credito-uso-head .label {
+    color: var(--textSecondary);
+    font-size: 14px;
+}
+
+.credito-uso-head .value {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+}
+
+.credito-uso-head .value.positive {
+    color: var(--positive);
+}
+
+.credito-uso-head .value.negative {
+    color: var(--negative);
+}
+
+.credito-barra {
+    height: 12px;
+    border-radius: 50px;
+    background: var(--backgroundAlt);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.credito-barra-fill {
+    height: 100%;
+    border-radius: 50px;
+    background: var(--positive);
+    transition: width 0.4s ease;
+}
+
+.credito-barra-fill.negative {
+    background: var(--negative);
+}
+
+/* --------------------------------------------
+   VISTA · ACCIONES DEL DETALLE
+   -------------------------------------------- */
+
+.cuenta-vista-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
 }
 
 /* --------------------------------------------
@@ -88,4 +321,18 @@
     border-top: 1px solid var(--border);
     padding-top: 14px;
     margin-top: 4px;
+}
+
+/* --------------------------------------------
+   MODAL · TEXTOS DE AVISO
+   -------------------------------------------- */
+
+.modal-message-hint {
+    color: var(--textSecondary);
+    font-size: 13px;
+}
+
+.modal-message-warn {
+    color: var(--negative);
+    font-size: 13px;
 }

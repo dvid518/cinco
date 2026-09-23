@@ -68,12 +68,6 @@ export function render() {
                 </div>
             </div>
 
-            <div class="estrategias-acciones" id="ordenes-acciones" hidden>
-                <button type="button" class="glass-btn" id="btn-nueva-orden">
-                    ${icono("plus-circle", 16)} Nueva orden
-                </button>
-            </div>
-
             <div id="lista-trades" class="lista-posiciones">
                 <div class="lista-vacia"><div class="loading-spinner"></div></div>
             </div>
@@ -274,37 +268,34 @@ function renderizarOrdenes() {
 
         return `
             <div class="posicion-item trade-item orden-item${seleccionadas.has(o.id) ? " seleccionado" : ""}" data-orden-id="${o.id}">
-                <div class="posicion-info">
-                    <div class="posicion-nombre">
-                        ${o.activo}
-                        <span class="posicion-simbolo">${o.direccionLabel}</span>
-                        <span class="orden-badge ${claseEstado}">${o.estadoTexto}</span>
-                    </div>
-                    <div class="posicion-detalle">
-                        ${o.tipoLabel}: ${simbolo} ${o.precioDisparo.toFixed(2)} · Lotaje: ${o.lotaje}
-                    </div>
-                    ${o.fueEjecutada && o.precioEjecucion ? `
+                <div class="card-item-main">
+                    <div class="posicion-info">
+                        <div class="posicion-nombre">
+                            ${o.activo}
+                            <span class="posicion-simbolo">${o.direccion === "long" ? "Largo" : "Corto"}</span>
+                            <span class="orden-badge ${claseEstado}">${o.estadoTexto}</span>
+                        </div>
                         <div class="posicion-detalle">
-                            Ejecutada a ${simbolo} ${o.precioEjecucion.toFixed(2)}
-                    </div>
-                ` : ''}
-                ${o.nota ? `
-                    <div class="posicion-detalle trade-nota">${o.nota.replace(/</g, "&lt;")}</div>
-                ` : ''}
-                <div class="card-item-valor-wrap">
-                    <div class="posicion-valores">
-                        <div class="posicion-valor ${claseDireccion}">
-                            ${o.direccion === "long" ? "Largo" : "Corto"}
+                            Lotaje: ${o.lotaje}
                         </div>
                     </div>
-                    <div class="card-item-acciones">
-                        ${o.estaPendiente ? `
-                            <button type="button" class="card-action-btn" data-accion="cancelar" data-id="${o.id}" title="Cancelar" aria-label="Cancelar">${icono("x", 16)}</button>
-                        ` : ''}
-                        <button type="button" class="card-action-btn danger" data-accion="eliminar" data-id="${o.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
+                    <div class="card-item-valor-wrap">
+                        <div class="posicion-valores">
+                            <div class="posicion-valor">
+                                ${simbolo} ${o.precioDisparo.toFixed(2)}
+                            </div>
+                            <div class="posicion-rendimiento ${claseDireccion}">
+                                ${o.tipoLabel}
+                            </div>
+                        </div>
+                        <div class="card-item-acciones">
+                            ${o.estaPendiente ? `
+                                <button type="button" class="card-action-btn" data-accion="cancelar" data-id="${o.id}" title="Cancelar" aria-label="Cancelar">${icono("x", 16)}</button>
+                            ` : ''}
+                            <button type="button" class="card-action-btn danger" data-accion="eliminar" data-id="${o.id}" title="Eliminar" aria-label="Eliminar">${icono("trash-2", 16)}</button>
+                        </div>
                     </div>
                 </div>
-            </div>
             </div>
         `
     }).join('')
@@ -375,9 +366,6 @@ function actualizarBotonesVista() {
     contenedor?.querySelectorAll(".toggle-option").forEach(opcion => {
         opcion.classList.toggle("active", opcion.dataset.vista === vistaActual)
     })
-
-    const acciones = document.getElementById("ordenes-acciones")
-    if (acciones) acciones.hidden = vistaActual !== "ordenes"
 }
 
 function cambiarVista(vista) {
@@ -415,10 +403,6 @@ function configurarEventos() {
 
             cargarTrades()
         })
-    })
-
-    document.getElementById('btn-nueva-orden')?.addEventListener('click', () => {
-        abrirModalNuevaOrden()
     })
 }
 
@@ -615,6 +599,13 @@ function manejarDobleClickTarjeta(evento) {
         clickTimer = null
     }
 
+    // Órdenes: el doble click abre el detalle de la orden.
+    if (card.dataset.ordenId) {
+        limpiarSeleccion()
+        abrirModalDetalleOrden(card.dataset.ordenId)
+        return
+    }
+
     // Con la opción activa el click ya selecciona; el doble click abre la edición.
     if (modoUnClickSeleccion()) {
         limpiarSeleccion()
@@ -738,6 +729,7 @@ export function abrirModalBroker() {
 // ============================================
 
 export function abrirModalNuevoTrade(tipo) {
+    uid = sesion.uid
     const esLong = tipo === 'long'
     const titulo = esLong ? 'Nuevo trade largo' : 'Nuevo trade corto'
 
@@ -762,15 +754,15 @@ export function abrirModalNuevoTrade(tipo) {
                 <input type="number" id="trade-lotaje" class="form-input" step="0.0001" min="0.0001" placeholder="0" required>
             </div>
             <div class="form-group">
-                <label for="trade-sl">Stop Loss (opcional)</label>
+                <label for="trade-sl">Stop Loss</label>
                 <input type="number" id="trade-sl" class="form-input" step="0.01" min="0" placeholder="0.00">
             </div>
             <div class="form-group">
-                <label for="trade-tp">Take Profit (opcional)</label>
+                <label for="trade-tp">Take Profit</label>
                 <input type="number" id="trade-tp" class="form-input" step="0.01" min="0" placeholder="0.00">
             </div>
-            <div class="form-group span-full">
-                <label for="trade-nota">Nota (opcional)</label>
+            <div class="form-group full">
+                <label for="trade-nota">Nota</label>
                 <textarea id="trade-nota" class="form-input form-textarea" rows="3" maxlength="1500" placeholder="Estrategia, contexto del mercado, decisiones..."></textarea>
                 <span class="form-hint">Máximo 1500 caracteres</span>
             </div>
@@ -847,7 +839,7 @@ function abrirModalCerrarTrade(tradeId) {
                 <label>Lotaje</label>
                 <span class="form-static">${trade.lotaje}</span>
             </div>
-            <div class="form-group span-full">
+            <div class="form-group full">
                 <label for="cerrar-salida">Precio de salida *</label>
                 <input type="number" id="cerrar-salida" class="form-input" step="0.01" min="0.01" placeholder="0.00" required>
             </div>
@@ -954,12 +946,12 @@ function abrirModalEditarTrade(tradeId) {
                 <input type="number" id="editar-trade-tp" class="form-input" step="0.01" min="0" value="${trade.tp || ''}" placeholder="0.00">
             </div>
             ${trade.estaCerrado ? `
-                <div class="form-group span-full">
+                <div class="form-group full">
                     <label for="editar-trade-salida">Precio de salida</label>
                     <input type="number" id="editar-trade-salida" class="form-input" step="0.01" min="0" value="${trade.salida || ''}" placeholder="${simbolo} 0.00">
                 </div>
             ` : ''}
-            <div class="form-group span-full">
+            <div class="form-group full">
                 <label for="editar-trade-nota">Nota</label>
                 <textarea id="editar-trade-nota" class="form-input form-textarea" rows="3" maxlength="1500">${(trade.nota || "").replace(/</g, "&lt;")}</textarea>
                 <span class="form-hint">Máximo 1500 caracteres</span>
@@ -1095,15 +1087,15 @@ export function abrirModalNuevaOrden() {
                 <input type="number" id="orden-lotaje" class="form-input" step="0.0001" min="0.0001" placeholder="0" required>
             </div>
             <div class="form-group">
-                <label for="orden-sl">Stop Loss (opcional)</label>
+                <label for="orden-sl">Stop Loss</label>
                 <input type="number" id="orden-sl" class="form-input" step="0.01" min="0" placeholder="0.00">
             </div>
             <div class="form-group">
-                <label for="orden-tp">Take Profit (opcional)</label>
+                <label for="orden-tp">Take Profit</label>
                 <input type="number" id="orden-tp" class="form-input" step="0.01" min="0" placeholder="0.00">
             </div>
-            <div class="form-group span-full">
-                <label for="orden-nota">Nota (opcional)</label>
+            <div class="form-group full">
+                <label for="orden-nota">Nota</label>
                 <textarea id="orden-nota" class="form-input form-textarea" rows="3" maxlength="1500" placeholder="Estrategia, contexto del mercado, decisiones..."></textarea>
                 <span class="form-hint">Máximo 1500 caracteres</span>
             </div>
@@ -1159,6 +1151,114 @@ export function abrirModalNuevaOrden() {
     })
 
     setTimeout(() => cargarCuentasEnSelect('orden-cuenta'), 200)
+}
+
+// ============================================
+// ÓRDENES · DETALLE
+// ============================================
+// El doble click sobre una orden abre un modal de solo lectura con todos
+// sus datos. Desde ahí se puede cancelar (si está pendiente) o eliminar.
+
+function abrirModalDetalleOrden(ordenId) {
+    const orden = ordenesData.find(o => o.id === ordenId)
+    if (!orden) return
+
+    const simbolo = DIVISAS_SYMBOLS[orden.divisa] || '$'
+
+    const html = `
+        <div class="form-movimiento form-movimiento-grid">
+            <div class="form-group">
+                <label>Activo</label>
+                <span class="form-static">${orden.activo} (${orden.direccion === "long" ? "Largo" : "Corto"})</span>
+            </div>
+            <div class="form-group">
+                <label>Tipo de orden</label>
+                <span class="form-static">${orden.tipoLabel}</span>
+            </div>
+            <div class="form-group">
+                <label>Estado</label>
+                <span class="form-static">${orden.estadoTexto}</span>
+            </div>
+            <div class="form-group">
+                <label>Precio de disparo</label>
+                <span class="form-static">${simbolo} ${orden.precioDisparo.toFixed(2)}</span>
+            </div>
+            <div class="form-group">
+                <label>Lotaje</label>
+                <span class="form-static">${orden.lotaje}</span>
+            </div>
+            <div class="form-group">
+                <label>Stop Loss</label>
+                <span class="form-static">${orden.sl ? `${simbolo} ${Number(orden.sl).toFixed(2)}` : "—"}</span>
+            </div>
+            <div class="form-group">
+                <label>Take Profit</label>
+                <span class="form-static">${orden.tp ? `${simbolo} ${Number(orden.tp).toFixed(2)}` : "—"}</span>
+            </div>
+            ${orden.fueEjecutada && orden.precioEjecucion ? `
+                <div class="form-group">
+                    <label>Precio ejecutado</label>
+                    <span class="form-static">${simbolo} ${Number(orden.precioEjecucion).toFixed(2)}</span>
+                </div>
+            ` : ''}
+            <div class="form-group">
+                <label>Creada el</label>
+                <span class="form-static">${formatearFechaOrden(orden.fechaCreacion)}</span>
+            </div>
+            ${orden.nota ? `
+                <div class="form-group full">
+                    <label>Nota</label>
+                    <span class="form-static">${orden.nota.replace(/</g, "&lt;")}</span>
+                </div>
+            ` : ''}
+        </div>
+        <div class="movimiento-detalle-acciones">
+            ${orden.estaPendiente ? `
+                <button type="button" class="glass-btn" id="detalle-orden-cancelar">
+                    ${icono("x", 15)} Cancelar orden
+                </button>
+            ` : ''}
+            <button type="button" class="glass-btn danger" id="detalle-orden-eliminar">
+                ${icono("trash-2", 15)} Eliminar
+            </button>
+        </div>
+    `
+
+    abrirModal({
+        titulo: `Orden · ${orden.activo}`,
+        contenido: html,
+        variante: "info",
+        confirmText: "Cerrar",
+        onConfirm: () => true,
+        onCancel: () => true
+    })
+
+    document.getElementById('detalle-orden-cancelar')?.addEventListener('click', () => {
+        cerrarModal()
+        confirmarCancelarOrden(orden.id)
+    })
+
+    document.getElementById('detalle-orden-eliminar')?.addEventListener('click', () => {
+        cerrarModal()
+        confirmarEliminarOrden(orden.id)
+    })
+}
+
+function formatearFechaOrden(valor) {
+    if (!valor) return "—"
+    try {
+        const fecha = valor?.toDate ? valor.toDate() : new Date(valor)
+        if (isNaN(fecha.getTime())) return "—"
+        return fecha.toLocaleString("es-PE", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
+        })
+    } catch {
+        return "—"
+    }
 }
 
 // ============================================

@@ -56,16 +56,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
-    background: var(--surface);
+    padding: 12px 20px;
     border-radius: 16px;
     border: 1px solid var(--border);
 }
 
-/* El wrapper .trading no existe en el DOM (el router inserta la página
-   directamente en #app-content); el contenedor real de la lista es
-   #lista-trades. Las cards imitan la jerarquía de movimientos:
-   .posicion-item > .card-item-main > (.posicion-info + .card-item-valor-wrap). */
 #lista-trades .trade-item {
     padding: 0;
 }
@@ -80,7 +75,6 @@
     width: 100%;
     box-sizing: border-box;
     padding: 12px 24px;
-    background: inherit;
 }
 
 .trading .trade-item .tipo {
@@ -206,6 +200,11 @@
     background-color: var(--border);
 }
 
+#lista-trades .trade-item.seleccionado .orden-badge.pendiente {
+    background: var(--borderAlt);
+    color: var(--border);
+}
+
 #lista-trades .trade-item.seleccionado .card-action-btn:hover {
     color: var(--surface);
     border-color: var(--borderAlt);
@@ -222,7 +221,7 @@
    ÓRDENES (LÍMITE / STOP)
    ============================================ */
 
-.orden-item .orden-badge {
+   .orden-item .orden-badge {
     margin-left: 8px;
     padding: 2px 10px;
     border-radius: 50px;
@@ -231,11 +230,12 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     vertical-align: middle;
+    transition: all 0.3s ease;
 }
 
 .orden-item .orden-badge.pendiente {
     background: var(--border);
-    color: var(--text);
+    color: var(--surface);
 }
 
 .orden-item .orden-badge.ejecutada {

@@ -87,11 +87,6 @@ export function render() {
                     <div class="resumen-valor" id="total-posiciones">0</div>
                 </div>
             </div>
-            <div class="estrategias-acciones" id="estrategias-acciones" hidden>
-                <button type="button" class="glass-btn btn-nueva-estrategia" id="btn-nueva-estrategia">
-                    ${icono("plus-circle", 16)} Nueva estrategia
-                </button>
-            </div>
             <div id="lista-posiciones" class="lista-posiciones">
                 <div class="lista-vacia"><div class="loading-spinner"></div></div>
             </div>
@@ -676,9 +671,6 @@ function actualizarBotonesVista() {
     contenedor?.querySelectorAll(".toggle-option").forEach(opcion => {
         opcion.classList.toggle("active", opcion.dataset.vista === vistaActual)
     })
-
-    const acciones = document.getElementById("estrategias-acciones")
-    if (acciones) acciones.hidden = vistaActual !== "estrategias"
 }
 
 function cambiarVista(vista) {
@@ -854,7 +846,7 @@ function confirmarEliminarEstrategia(estrategia) {
 // MODAL ESTRATEGIA (CREAR / EDITAR)
 // ============================================
 
-function abrirModalEstrategia(estrategia = null) {
+export function abrirModalEstrategia(estrategia = null) {
     const esEdicion = !!estrategia
     const frecuencia = estrategia?.frecuencia || "mensual"
     const divisa = estrategia?.divisa || "pen"
@@ -1309,10 +1301,6 @@ function configurarEventos() {
             container.innerHTML = filtradas.map(plantillaPosicion).join("")
             enlazarListaPosiciones(container)
         })
-    })
-
-    document.getElementById("btn-nueva-estrategia")?.addEventListener("click", () => {
-        abrirModalEstrategia()
     })
 }
 
