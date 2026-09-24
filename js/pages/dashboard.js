@@ -209,10 +209,7 @@ function configurarEventosReordenamientoDashboard() {
 function configurarEdicionDashboard() {
     if (!eventosEdicionDashboardListos) {
         eventosEdicionDashboardListos = true
-        document.addEventListener("pagina-cambiando", (evento) => {
-            if (evento.detail?.desde !== "dashboard") return
-            salirModoEdicionDashboard(true)
-        })
+        document.addEventListener("pagina-cambiando", manejarCambioPaginaDashboard)
     }
 
     document.getElementById("dashboard-abrir-cards")?.addEventListener("click", abrirSelectorCardsDashboard)
@@ -242,20 +239,53 @@ function salirModoEdicionDashboard(forzar = false) {
     desactivarEdicionCardsDashboard()
 }
 
+async function guardarOrdenDashboard() {
+    try {
+        await actualizarPreferencias(uid, { "dashboard.orden": cardsOrdenDashboard })
+        cambiosPendientesDashboard = false
+        return true
+    } catch (error) {
+        console.error("Error guardando orden del dashboard:", error)
+        mostrarNotificacion("error", "No se pudo guardar el orden del dashboard")
+        return false
+    }
+}
+
 async function guardarYSalirEdicionDashboard() {
     if (!cambiosPendientesDashboard) {
         salirModoEdicionDashboard()
         return
     }
-    try {
-        await actualizarPreferencias(uid, { "dashboard.orden": cardsOrdenDashboard })
-        cambiosPendientesDashboard = false
+    if (!await guardarOrdenDashboard()) return
+    salirModoEdicionDashboard(true)
+    mostrarNotificacion("exito", "Orden del dashboard guardado")
+}
+
+function manejarCambioPaginaDashboard(evento) {
+    if (evento.detail?.desde !== "dashboard") return
+    if (!modoEdicionDashboard || !cambiosPendientesDashboard) {
         salirModoEdicionDashboard(true)
-        mostrarNotificacion("exito", "Orden del dashboard guardado")
-    } catch (error) {
-        console.error("Error guardando orden del dashboard:", error)
-        mostrarNotificacion("error", "No se pudo guardar el orden del dashboard")
+        return
     }
+
+    evento.preventDefault()
+    const hacia = evento.detail.hacia
+    mostrarNotificacion("warning", "Hay cambios sin guardar en el dashboard", 0, [
+        {
+            texto: "Guardar y salir",
+            primaria: true,
+            alClick: async () => {
+                if (!await guardarOrdenDashboard()) return
+                salirModoEdicionDashboard(true)
+                navigateTo(hacia === "dashboard" ? "/" : `/${hacia}`)
+            }
+        },
+        {
+            texto: "Cancelar",
+            clase: "cancel",
+            alClick: () => {}
+        }
+    ])
 }
 
 function abrirSelectorCardsDashboard() {
@@ -346,7 +376,7 @@ export function render() {
             </div>
         </div>
         <div class="dashboard">
-            <div class="glass card primary patrimonio-card" data-dashboard-card="patrimonio">
+            <div class="glass card primary patrimonio-card" data-dashboard-card="patrimonio" role="region" tabindex="0" aria-label="Patrimonio total, valor actual">
                 <div class="card-header">
                     <span class="card-title">Patrimonio Total</span>
                     <select class="divisa-select" id="divisa-select" aria-label="Divisa">
@@ -355,7 +385,7 @@ export function render() {
                         <option value="usdt">USDT</option>
                     </select>
                 </div>
-                <div class="card-value" id="patrimonio-valor">—</div>
+                <div class="card-value" id="patrimonio-valor" aria-live="polite">—</div>
                 <div class="card-sub" id="patrimonio-detalle">—</div>
             </div>
 
@@ -394,7 +424,7 @@ export function render() {
                 </div>
             </div>
 
-            <div class="glass card metas-card" id="card-metas" data-dashboard-card="metas">
+            <div class="glass card metas-card" id="card-metas" data-dashboard-card="metas" role="region" tabindex="0" aria-label="Metas de ahorro">
                 <div class="card-header">
                     <span class="card-title">Metas de ahorro</span>
                     <button type="button" class="glass-btn btn-meta-nueva" id="btn-nueva-meta">
@@ -406,7 +436,7 @@ export function render() {
                 </div>
             </div>
 
-            <div class="glass card grafico-patrimonio-card" data-dashboard-card="grafico">
+            <div class="glass card grafico-patrimonio-card" data-dashboard-card="grafico" role="region" tabindex="0" aria-label="Evolución patrimonial">
                 <div class="card-header">
                     <span class="card-title">Evolución patrimonial</span>
                     <div class="toggle-group grafico-periodos" id="grafico-periodos">

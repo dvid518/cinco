@@ -240,10 +240,13 @@ function renderPage(page) {
 // Permite capturar estado (p. ej. cambios sin guardar) mientras el DOM
 // todavía está montado. La navegación no se bloquea.
 function avisarCambioDePagina(hacia) {
-    if (hacia === currentPage) return
-    document.dispatchEvent(new CustomEvent("pagina-cambiando", {
-        detail: { desde: currentPage, hacia }
-    }))
+    if (hacia === currentPage) return false
+    const evento = new CustomEvent("pagina-cambiando", {
+        detail: { desde: currentPage, hacia },
+        cancelable: true
+    })
+    document.dispatchEvent(evento)
+    return evento.defaultPrevented
 }
 
 export function navigateTo(path) {
@@ -251,7 +254,7 @@ export function navigateTo(path) {
     const cleanPath = path.replace(/\/+/g, '/')
     const page = routes[cleanPath] || 'dashboard'
     console.log('[INFO] Página:', page)
-    avisarCambioDePagina(page)
+    if (avisarCambioDePagina(page)) return
     loadPage(page)
 }
 
@@ -282,7 +285,7 @@ function setupNavigation() {
 
 window.addEventListener('popstate', (event) => {
     const page = event.state?.page || 'dashboard'
-    avisarCambioDePagina(page)
+    if (avisarCambioDePagina(page)) return
     loadPage(page)
 })
 
