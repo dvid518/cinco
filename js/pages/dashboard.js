@@ -1,7 +1,7 @@
 import { sesion } from "../core/sesion.js"
 import { cacheCapa } from "../core/cache.js"
 import { activarSpinLogo, desactivarSpinLogo, navigateTo } from "../core/router.js"
-import { obtenerCuentas, obtenerMovimientos } from "../../firebase/firestore.js"
+import { obtenerCuentas, obtenerMovimientos, obtenerPreferencias } from "../../firebase/firestore.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import {
@@ -56,11 +56,36 @@ const DASHBOARD_CARDS = [
     { id: "metas", label: "Metas de ahorro" },
     { id: "grafico", label: "Evolución patrimonial" }
 ]
+
+const DEFAULT_CARDS_VISIBLES = DASHBOARD_CARDS
+    .map(card => card.id)
+    .filter(id => id !== "patrimonio")
+
+let cardsVisiblesDashboard = [...DEFAULT_CARDS_VISIBLES]
+
+function normalizarCardsVisibles(valor) {
+    if (!Array.isArray(valor)) return [...DEFAULT_CARDS_VISIBLES]
+    const idsConocidos = new Set(DASHBOARD_CARDS.map(card => card.id))
+    return [...new Set(valor.filter(id => id !== "patrimonio" && idsConocidos.has(id)))]
+}
+
+async function cargarCardsVisiblesDashboard() {
+    if (!uid) return
+    try {
+        const preferencias = await obtenerPreferencias(uid)
+        cardsVisiblesDashboard = normalizarCardsVisibles(preferencias?.dashboard?.cardsVisibles)
+    } catch (error) {
+        console.warn("No se pudieron cargar las cards visibles del dashboard:", error)
+        cardsVisiblesDashboard = [...DEFAULT_CARDS_VISIBLES]
+    }
+}
+
 function aplicarLayoutDashboard() {
     const grid = document.querySelector(".dashboard")
     if (!grid) return
     const cards = [...grid.querySelectorAll("[data-dashboard-card]")]
-    cards.forEach(card => { card.hidden = false })
+    const visibles = new Set(["patrimonio", ...cardsVisiblesDashboard])
+    cards.forEach(card => { card.hidden = !visibles.has(card.dataset.dashboardCard) })
     DASHBOARD_CARDS.forEach(({ id }) => {
         const card = cards.find(item => item.dataset.dashboardCard === id)
         if (card) grid.appendChild(card)
@@ -184,6 +209,7 @@ export async function init() {
     periodoGrafico = PERIODO_POR_DEFECTO
     console.log("[INFO] Dashboard iniciado para UID:", uid)
 
+    await cargarCardsVisiblesDashboard()
     aplicarLayoutDashboard()
     configurarDivisa()
     configurarPeriodos()
