@@ -56,70 +56,19 @@ const DASHBOARD_CARDS = [
     { id: "metas", label: "Metas de ahorro" },
     { id: "grafico", label: "Evolución patrimonial" }
 ]
-const MAX_DASHBOARD_CARDS = 8
-const CLAVE_LAYOUT_DASHBOARD = "escinco_dashboard_cards"
-
-function obtenerIdsDashboard() {
-    try {
-        const guardados = JSON.parse(localStorage.getItem(CLAVE_LAYOUT_DASHBOARD) || "null")
-        if (!Array.isArray(guardados)) return DASHBOARD_CARDS.map(card => card.id)
-        const validos = guardados.filter(id => DASHBOARD_CARDS.some(card => card.id === id))
-        if (validos.length < 2) return DASHBOARD_CARDS.map(card => card.id)
-        return [...new Set(validos)].slice(0, MAX_DASHBOARD_CARDS)
-    } catch {
-        return DASHBOARD_CARDS.map(card => card.id)
-    }
-}
-
 function aplicarLayoutDashboard() {
     const grid = document.querySelector(".dashboard")
     if (!grid) return
-    const ids = obtenerIdsDashboard()
-    const visibles = new Set(ids)
     const cards = [...grid.querySelectorAll("[data-dashboard-card]")]
-    cards.forEach(card => { card.hidden = !visibles.has(card.dataset.dashboardCard) })
-    ids.forEach(id => {
+    cards.forEach(card => { card.hidden = false })
+    DASHBOARD_CARDS.forEach(({ id }) => {
         const card = cards.find(item => item.dataset.dashboardCard === id)
         if (card) grid.appendChild(card)
     })
 }
 
 export function abrirEditorDashboard() {
-    const activos = new Set(obtenerIdsDashboard())
-    const opciones = DASHBOARD_CARDS.map(card => `
-        <label class="dashboard-card-opcion">
-            <input type="checkbox" value="${card.id}" ${activos.has(card.id) ? "checked" : ""}>
-            <span>${card.label}</span>
-        </label>
-    `).join("")
-
-    abrirModal({
-        titulo: "Editar dashboard",
-        variante: "form",
-        confirmText: "Guardar",
-        cancelText: "Cancelar",
-        contenido: `
-            <div class="dashboard-editor">
-                <p class="dashboard-editor-hint">Selecciona hasta ${MAX_DASHBOARD_CARDS} cards visibles. Las cards con listas conservan scroll interno.</p>
-                <div class="dashboard-editor-grid">${opciones}</div>
-            </div>
-        `,
-        onConfirm: () => {
-            const seleccionados = [...document.querySelectorAll(".dashboard-editor-grid input:checked")].map(input => input.value)
-            if (seleccionados.length < 2) {
-                mostrarNotificacion("warning", "Deja al menos dos cards visibles")
-                return false
-            }
-            if (seleccionados.length > MAX_DASHBOARD_CARDS) {
-                mostrarNotificacion("warning", `Muestra un máximo de ${MAX_DASHBOARD_CARDS} cards`)
-                return false
-            }
-            localStorage.setItem(CLAVE_LAYOUT_DASHBOARD, JSON.stringify(seleccionados))
-            aplicarLayoutDashboard()
-            mostrarNotificacion("exito", "Dashboard actualizado")
-            return true
-        }
-    })
+    mostrarNotificacion("info", "La edición de cards estará disponible próximamente")
 }
 
 // Periodos del gráfico de patrimonio. "todo" usa un tope alto de días.
