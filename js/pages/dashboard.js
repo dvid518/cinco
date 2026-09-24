@@ -1,7 +1,7 @@
 import { sesion } from "../core/sesion.js"
 import { cacheCapa } from "../core/cache.js"
 import { activarSpinLogo, desactivarSpinLogo, navigateTo } from "../core/router.js"
-import { obtenerCuentas, obtenerMovimientos, obtenerPreferencias } from "../../firebase/firestore.js"
+import { obtenerCuentas, obtenerMovimientos, obtenerPreferencias, actualizarPreferencias } from "../../firebase/firestore.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
 import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import {
@@ -62,6 +62,9 @@ const DEFAULT_CARDS_VISIBLES = DASHBOARD_CARDS
     .filter(id => id !== "patrimonio")
 
 let cardsVisiblesDashboard = [...DEFAULT_CARDS_VISIBLES]
+let modoEdicionDashboard = false
+let cambiosPendientesDashboard = false
+let eventosEdicionDashboardListos = false
 
 function normalizarCardsVisibles(valor) {
     if (!Array.isArray(valor)) return [...DEFAULT_CARDS_VISIBLES]
@@ -92,8 +95,91 @@ function aplicarLayoutDashboard() {
     })
 }
 
+function configurarEdicionDashboard() {
+    if (eventosEdicionDashboardListos) return
+    eventosEdicionDashboardListos = true
+
+    document.getElementById("dashboard-abrir-cards")?.addEventListener("click", abrirSelectorCardsDashboard)
+    document.getElementById("dashboard-listo")?.addEventListener("click", () => salirModoEdicionDashboard())
+
+    document.addEventListener("pagina-cambiando", (evento) => {
+        if (evento.detail?.desde !== "dashboard") return
+        salirModoEdicionDashboard(true)
+    })
+}
+
+function activarModoEdicionDashboard() {
+    modoEdicionDashboard = true
+    cambiosPendientesDashboard = false
+    document.getElementById("dashboard-edicion-bar")?.removeAttribute("hidden")
+    document.querySelector(".dashboard")?.classList.add("dashboard-edicion-activo")
+    mostrarNotificacion("info", "Modo edición del dashboard activo")
+}
+
+function salirModoEdicionDashboard(forzar = false) {
+    if (!modoEdicionDashboard) return
+    if (cambiosPendientesDashboard && !forzar) {
+        mostrarNotificacion("warning", "Guarda o reinicia los cambios antes de salir")
+        return
+    }
+    modoEdicionDashboard = false
+    cambiosPendientesDashboard = false
+    document.getElementById("dashboard-edicion-bar")?.setAttribute("hidden", "")
+    document.querySelector(".dashboard")?.classList.remove("dashboard-edicion-activo")
+}
+
+function abrirSelectorCardsDashboard() {
+    if (!modoEdicionDashboard) return
+    const cards = DASHBOARD_CARDS.filter(card => card.id !== "patrimonio")
+    const activas = new Set(cardsVisiblesDashboard)
+    const opciones = cards.map(card => `
+        <label class="dashboard-card-opcion">
+            <input type="checkbox" value="${card.id}" ${activas.has(card.id) ? "checked" : ""}>
+            <span>${card.label}</span>
+        </label>
+    `).join("")
+
+    const modal = abrirModal({
+        titulo: "Elegir cards del dashboard",
+        variante: "form",
+        confirmText: "Guardar",
+        cancelText: "Cancelar",
+        onCancel: () => { cambiosPendientesDashboard = false },
+        footerExtra: '<button type="button" class="modal-btn modal-btn-secondary" data-dashboard-reset>Restablecer</button>',
+        contenido: `
+            <div class="dashboard-editor">
+                <p class="dashboard-editor-hint">Patrimonio siempre permanece visible. Las demás cards pueden mostrarse u ocultarse.</p>
+                <div class="dashboard-editor-grid">${opciones}</div>
+            </div>
+        `,
+        onConfirm: async () => {
+            const seleccionadas = [...modal.querySelectorAll(".dashboard-editor-grid input:checked")].map(input => input.value)
+            try {
+                await actualizarPreferencias(uid, { "dashboard.cardsVisibles": seleccionadas })
+                cardsVisiblesDashboard = normalizarCardsVisibles(seleccionadas)
+                cambiosPendientesDashboard = false
+                aplicarLayoutDashboard()
+                mostrarNotificacion("exito", "Cards del dashboard actualizadas")
+                return true
+            } catch (error) {
+                console.error("Error guardando cards del dashboard:", error)
+                mostrarNotificacion("error", "No se pudo guardar la selección de cards")
+                return false
+            }
+        }
+    })
+
+    modal.querySelector("[data-dashboard-reset]")?.addEventListener("click", () => {
+        cambiosPendientesDashboard = true
+        modal.querySelectorAll(".dashboard-editor-grid input").forEach(input => { input.checked = true })
+    })
+    modal.querySelectorAll(".dashboard-editor-grid input").forEach(input => {
+        input.addEventListener("change", () => { cambiosPendientesDashboard = true })
+    })
+}
+
 export function abrirEditorDashboard() {
-    mostrarNotificacion("info", "La edición de cards estará disponible próximamente")
+    activarModoEdicionDashboard()
 }
 
 // Periodos del gráfico de patrimonio. "todo" usa un tope alto de días.
@@ -118,6 +204,13 @@ function obtenerPeriodo(id) {
 
 export function render() {
     return `
+        <div class="dashboard-edicion-bar" id="dashboard-edicion-bar" hidden>
+            <span>Modo edición</span>
+            <div class="dashboard-edicion-acciones">
+                <button type="button" class="glass-btn" id="dashboard-abrir-cards">Añadir/quitar cards</button>
+                <button type="button" class="glass-btn" id="dashboard-listo">Listo</button>
+            </div>
+        </div>
         <div class="dashboard">
             <div class="glass card primary patrimonio-card" data-dashboard-card="patrimonio">
                 <div class="card-header">
@@ -215,6 +308,7 @@ export async function init() {
     configurarPeriodos()
     configurarCardsNavegacion()
     configurarMetas()
+    configurarEdicionDashboard()
     configurarRefreshDashboard()
 
     await cargarTodo()
@@ -708,7 +802,10 @@ function configurarCardsNavegacion() {
     const bindNavegacion = (id, ruta) => {
         const el = document.getElementById(id)
         if (!el) return
-        const ir = () => navigateTo(ruta)
+        const ir = () => {
+            if (modoEdicionDashboard) return
+            navigateTo(ruta)
+        }
         el.addEventListener("click", ir)
         el.addEventListener("keydown", (e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -724,10 +821,14 @@ function configurarCardsNavegacion() {
     bindNavegacion("card-movimientos", "/movimientos")
 
     const vencimientos = document.getElementById("card-vencimientos")
-    vencimientos?.addEventListener("click", abrirModalVencimientos)
+    vencimientos?.addEventListener("click", () => {
+        if (modoEdicionDashboard) return
+        abrirModalVencimientos()
+    })
     vencimientos?.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
+            if (modoEdicionDashboard) return
             abrirModalVencimientos()
         }
     })
@@ -887,7 +988,10 @@ function plantillaFavorito(posicion) {
 
 function configurarMetas() {
     document.getElementById("btn-nueva-meta")
-        ?.addEventListener("click", () => abrirModalMeta())
+        ?.addEventListener("click", () => {
+            if (modoEdicionDashboard) return
+            abrirModalMeta()
+        })
 
     instalarSincronizacionMetas()
 }

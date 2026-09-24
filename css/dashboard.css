@@ -18,6 +18,28 @@
     overflow: visible;
 }
 
+.dashboard-edicion-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: var(--gap-card);
+}
+
+.dashboard-edicion-bar[hidden] {
+    display: none;
+}
+
+.dashboard-edicion-acciones {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dashboard-edicion-activo .card.card-navegable {
+    cursor: default;
+}
+
 /* ============================================
    CARDS - ESTILO MEJORADO
    ============================================ */
