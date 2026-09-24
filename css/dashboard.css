@@ -36,6 +36,43 @@
     gap: 8px;
 }
 
+.dashboard-card-edicion {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    display: none;
+    align-items: center;
+    gap: 4px;
+}
+
+.dashboard-edicion-activo .dashboard-card-edicion {
+    display: flex;
+}
+
+.dashboard-card-edicion button {
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--background);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.dashboard-card-handle {
+    cursor: grab;
+}
+
+.dashboard-card-mover {
+    display: none;
+}
+
+.dashboard-card-arrastrando {
+    opacity: 0.5;
+}
+
 .dashboard-edicion-activo .card.card-navegable {
     cursor: default;
 }
@@ -305,6 +342,14 @@
         height: auto;
         min-height: 100%;
         overflow: visible;
+    }
+
+    .dashboard-card-handle {
+        display: none;
+    }
+
+    .dashboard-card-mover {
+        display: inline-flex;
     }
 
     #panel:has(.dashboard) {

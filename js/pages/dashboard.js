@@ -60,8 +60,10 @@ const DASHBOARD_CARDS = [
 const DEFAULT_CARDS_VISIBLES = DASHBOARD_CARDS
     .map(card => card.id)
     .filter(id => id !== "patrimonio")
+const DEFAULT_CARDS_ORDEN = [...DEFAULT_CARDS_VISIBLES]
 
 let cardsVisiblesDashboard = [...DEFAULT_CARDS_VISIBLES]
+let cardsOrdenDashboard = [...DEFAULT_CARDS_ORDEN]
 let modoEdicionDashboard = false
 let cambiosPendientesDashboard = false
 let eventosEdicionDashboardListos = false
@@ -72,14 +74,23 @@ function normalizarCardsVisibles(valor) {
     return [...new Set(valor.filter(id => id !== "patrimonio" && idsConocidos.has(id)))]
 }
 
+function normalizarCardsOrden(valor) {
+    if (!Array.isArray(valor)) return [...DEFAULT_CARDS_ORDEN]
+    const idsConocidos = new Set(DEFAULT_CARDS_ORDEN)
+    const validos = [...new Set(valor.filter(id => idsConocidos.has(id)))]
+    return [...validos, ...DEFAULT_CARDS_ORDEN.filter(id => !validos.includes(id))]
+}
+
 async function cargarCardsVisiblesDashboard() {
     if (!uid) return
     try {
         const preferencias = await obtenerPreferencias(uid)
         cardsVisiblesDashboard = normalizarCardsVisibles(preferencias?.dashboard?.cardsVisibles)
+        cardsOrdenDashboard = normalizarCardsOrden(preferencias?.dashboard?.orden)
     } catch (error) {
         console.warn("No se pudieron cargar las cards visibles del dashboard:", error)
         cardsVisiblesDashboard = [...DEFAULT_CARDS_VISIBLES]
+        cardsOrdenDashboard = [...DEFAULT_CARDS_ORDEN]
     }
 }
 
@@ -89,23 +100,123 @@ function aplicarLayoutDashboard() {
     const cards = [...grid.querySelectorAll("[data-dashboard-card]")]
     const visibles = new Set(["patrimonio", ...cardsVisiblesDashboard])
     cards.forEach(card => { card.hidden = !visibles.has(card.dataset.dashboardCard) })
-    DASHBOARD_CARDS.forEach(({ id }) => {
+
+    const ordenVisible = ["patrimonio", ...cardsOrdenDashboard.filter(id => visibles.has(id))]
+    ordenVisible.forEach(id => {
         const card = cards.find(item => item.dataset.dashboardCard === id)
         if (card) grid.appendChild(card)
     })
+    cards.forEach(card => {
+        if (!card.hidden) return
+        grid.appendChild(card)
+    })
 }
 
+function reordenarCardDashboard(idOrigen, idDestino) {
+    if (!idOrigen || !idDestino || idOrigen === idDestino || idOrigen === "patrimonio" || idDestino === "patrimonio") return
+    const origen = cardsOrdenDashboard.indexOf(idOrigen)
+    const destino = cardsOrdenDashboard.indexOf(idDestino)
+    if (origen < 0 || destino < 0) return
+    cardsOrdenDashboard.splice(origen, 1)
+    cardsOrdenDashboard.splice(destino, 0, idOrigen)
+    cambiosPendientesDashboard = true
+    aplicarLayoutDashboard()
+}
+
+function moverCardDashboard(id, direccion) {
+    const indice = cardsOrdenDashboard.indexOf(id)
+    const destino = indice + direccion
+    if (indice < 0 || destino < 0 || destino >= cardsOrdenDashboard.length || id === "patrimonio") return
+    [cardsOrdenDashboard[indice], cardsOrdenDashboard[destino]] = [cardsOrdenDashboard[destino], cardsOrdenDashboard[indice]]
+    cambiosPendientesDashboard = true
+    aplicarLayoutDashboard()
+}
+
+function prepararEdicionCardsDashboard() {
+    document.querySelectorAll(".dashboard [data-dashboard-card]").forEach(card => {
+        const id = card.dataset.dashboardCard
+        if (id === "patrimonio") {
+            card.draggable = false
+            return
+        }
+        card.draggable = false
+        const controlesExistentes = card.querySelector(".dashboard-card-edicion")
+        if (controlesExistentes) {
+            controlesExistentes.querySelector("[data-dashboard-drag-handle]")?.setAttribute("draggable", "true")
+            return
+        }
+        const controles = document.createElement("div")
+        controles.className = "dashboard-card-edicion"
+        controles.innerHTML = `
+            <button type="button" class="dashboard-card-handle" data-dashboard-drag-handle aria-label="Arrastrar card">⋮⋮</button>
+            <button type="button" class="dashboard-card-mover" data-dashboard-mover data-id="${id}" data-direccion="-1" aria-label="Mover card hacia arriba">↑</button>
+            <button type="button" class="dashboard-card-mover" data-dashboard-mover data-id="${id}" data-direccion="1" aria-label="Mover card hacia abajo">↓</button>
+        `
+        card.appendChild(controles)
+    })
+}
+
+function desactivarEdicionCardsDashboard() {
+    document.querySelectorAll(".dashboard [data-dashboard-card]").forEach(card => {
+        card.draggable = false
+    })
+}
+
+function configurarEventosReordenamientoDashboard() {
+    const grid = document.querySelector(".dashboard")
+    if (!grid || grid.dataset.reordenamientoListos === "1") return
+    grid.dataset.reordenamientoListos = "1"
+
+    grid.addEventListener("dragstart", (evento) => {
+        const card = evento.target.closest("[data-dashboard-card]")
+        if (!modoEdicionDashboard || !card || card.dataset.dashboardCard === "patrimonio") {
+            evento.preventDefault()
+            return
+        }
+        evento.dataTransfer?.setData("text/plain", card.dataset.dashboardCard)
+        if (evento.dataTransfer) evento.dataTransfer.effectAllowed = "move"
+        card.classList.add("dashboard-card-arrastrando")
+    })
+
+    grid.addEventListener("dragover", (evento) => {
+        const card = evento.target.closest("[data-dashboard-card]")
+        if (!modoEdicionDashboard || !card || card.dataset.dashboardCard === "patrimonio") return
+        evento.preventDefault()
+        if (evento.dataTransfer) evento.dataTransfer.dropEffect = "move"
+    })
+
+    grid.addEventListener("drop", (evento) => {
+        const destino = evento.target.closest("[data-dashboard-card]")
+        if (!modoEdicionDashboard || !destino || destino.dataset.dashboardCard === "patrimonio") return
+        evento.preventDefault()
+        const origen = evento.dataTransfer?.getData("text/plain")
+        reordenarCardDashboard(origen, destino.dataset.dashboardCard)
+    })
+
+    grid.addEventListener("dragend", (evento) => {
+        evento.target.closest("[data-dashboard-card]")?.classList.remove("dashboard-card-arrastrando")
+    })
+
+    grid.addEventListener("click", (evento) => {
+        const boton = evento.target.closest("[data-dashboard-mover]")
+        if (!modoEdicionDashboard || !boton) return
+        evento.stopPropagation()
+        moverCardDashboard(boton.dataset.id, Number(boton.dataset.direccion))
+    })
+}
+
+
 function configurarEdicionDashboard() {
-    if (eventosEdicionDashboardListos) return
-    eventosEdicionDashboardListos = true
+    if (!eventosEdicionDashboardListos) {
+        eventosEdicionDashboardListos = true
+        document.addEventListener("pagina-cambiando", (evento) => {
+            if (evento.detail?.desde !== "dashboard") return
+            salirModoEdicionDashboard(true)
+        })
+    }
 
     document.getElementById("dashboard-abrir-cards")?.addEventListener("click", abrirSelectorCardsDashboard)
-    document.getElementById("dashboard-listo")?.addEventListener("click", () => salirModoEdicionDashboard())
-
-    document.addEventListener("pagina-cambiando", (evento) => {
-        if (evento.detail?.desde !== "dashboard") return
-        salirModoEdicionDashboard(true)
-    })
+    document.getElementById("dashboard-listo")?.addEventListener("click", guardarYSalirEdicionDashboard)
 }
 
 function activarModoEdicionDashboard() {
@@ -113,6 +224,8 @@ function activarModoEdicionDashboard() {
     cambiosPendientesDashboard = false
     document.getElementById("dashboard-edicion-bar")?.removeAttribute("hidden")
     document.querySelector(".dashboard")?.classList.add("dashboard-edicion-activo")
+    configurarEventosReordenamientoDashboard()
+    prepararEdicionCardsDashboard()
     mostrarNotificacion("info", "Modo edición del dashboard activo")
 }
 
@@ -126,6 +239,23 @@ function salirModoEdicionDashboard(forzar = false) {
     cambiosPendientesDashboard = false
     document.getElementById("dashboard-edicion-bar")?.setAttribute("hidden", "")
     document.querySelector(".dashboard")?.classList.remove("dashboard-edicion-activo")
+    desactivarEdicionCardsDashboard()
+}
+
+async function guardarYSalirEdicionDashboard() {
+    if (!cambiosPendientesDashboard) {
+        salirModoEdicionDashboard()
+        return
+    }
+    try {
+        await actualizarPreferencias(uid, { "dashboard.orden": cardsOrdenDashboard })
+        cambiosPendientesDashboard = false
+        salirModoEdicionDashboard(true)
+        mostrarNotificacion("exito", "Orden del dashboard guardado")
+    } catch (error) {
+        console.error("Error guardando orden del dashboard:", error)
+        mostrarNotificacion("error", "No se pudo guardar el orden del dashboard")
+    }
 }
 
 function abrirSelectorCardsDashboard() {
@@ -139,12 +269,13 @@ function abrirSelectorCardsDashboard() {
         </label>
     `).join("")
 
+    const cambiosPendientesAntesModal = cambiosPendientesDashboard
     const modal = abrirModal({
         titulo: "Elegir cards del dashboard",
         variante: "form",
         confirmText: "Guardar",
         cancelText: "Cancelar",
-        onCancel: () => { cambiosPendientesDashboard = false },
+        onCancel: () => { cambiosPendientesDashboard = cambiosPendientesAntesModal },
         footerExtra: '<button type="button" class="modal-btn modal-btn-secondary" data-dashboard-reset>Restablecer</button>',
         contenido: `
             <div class="dashboard-editor">
@@ -155,7 +286,10 @@ function abrirSelectorCardsDashboard() {
         onConfirm: async () => {
             const seleccionadas = [...modal.querySelectorAll(".dashboard-editor-grid input:checked")].map(input => input.value)
             try {
-                await actualizarPreferencias(uid, { "dashboard.cardsVisibles": seleccionadas })
+                await actualizarPreferencias(uid, {
+                    "dashboard.cardsVisibles": seleccionadas,
+                    "dashboard.orden": cardsOrdenDashboard
+                })
                 cardsVisiblesDashboard = normalizarCardsVisibles(seleccionadas)
                 cambiosPendientesDashboard = false
                 aplicarLayoutDashboard()
