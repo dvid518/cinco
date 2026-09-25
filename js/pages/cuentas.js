@@ -1,5 +1,6 @@
 import { sesion } from "../core/sesion.js"
-import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
+import { icono } from "../core/iconos.js"
+import { skeletonMarkup } from "../ui/skeletons.js"
 import {
     obtenerCuentas,
     obtenerMovimientos,
@@ -18,9 +19,11 @@ import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { eliminarMovimiento, restaurarMovimiento } from "../services/MovimientoServicio.js"
 import { estadoCicloDe, nivelEstadoCuenta, notificarCruces, proximaAnualidad } from "../services/CreditoServicio.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
+import { expandirSeleccion } from "../ui/seleccion.js"
 
 let cuentas = []
 let cuentaSeleccionada = null
+let cuentaSolicitadaId = null
 let uid = null
 
 // Interacción con las cards de movimientos de la cuenta seleccionada.
@@ -39,7 +42,6 @@ let eventosRefreshCuentaListos = false
 // ============================================
 
 const ICONOS_POR_TIPO = {
-    banco: "landmark",
     efectivo: "banknote",
     broker: "trending-up",
     exchange: "arrow-left-right",
@@ -67,11 +69,11 @@ export function render() {
     return `
         ${envolverSidebar(`
             <section id="sidebar">
-                <button name="cta" class="glass act" aria-label="Cargando cuentas"></button>
+                ${skeletonMarkup({ variant: "sidebar", rows: 4 })}
             </section>
         `)}
-        <section id="panel" class="glass">
-            <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
+        <section id="panel" class="glass" aria-busy="true">
+            ${skeletonMarkup({ variant: "panel", rows: 3 })}
         </section>
     `
 }
@@ -104,7 +106,17 @@ function configurarRefreshCuentas() {
 // CARGA
 // ============================================
 
+function mostrarEsqueletosCuentas() {
+    const sidebar = document.getElementById("sidebar")
+    const panel = document.getElementById("panel")
+    sidebar?.setAttribute("aria-busy", "true")
+    panel?.setAttribute("aria-busy", "true")
+    if (sidebar) sidebar.innerHTML = skeletonMarkup({ variant: "sidebar", rows: 4 })
+    if (panel) panel.innerHTML = skeletonMarkup({ variant: "panel", rows: 3 })
+}
+
 async function cargarCuentas() {
+    mostrarEsqueletosCuentas()
     try {
         cuentas = await obtenerCuentas(uid)
         await normalizarOrdenCuentas(uid, cuentas)
@@ -117,20 +129,32 @@ async function cargarCuentas() {
 
         renderizarSidebar()
 
+        if (cuentaSolicitadaId) {
+            await seleccionarCuenta(cuentaSolicitadaId)
+            cuentaSolicitadaId = null
+        }
+
         if (cuentaSeleccionada) {
             cuentaSeleccionada = cuentas.find(c => c.id === cuentaSeleccionada.id) || null
         }
 
         if (!cuentaSeleccionada && cuentas.length > 0) {
-            seleccionarCuenta(cuentas[0].id)
+            await seleccionarCuenta(cuentas[0].id)
         } else if (cuentas.length === 0) {
             mostrarVacio()
         } else {
-            mostrarDetalleCuenta()
+            await mostrarDetalleCuenta()
         }
     } catch (error) {
         console.error("Error cargando cuentas:", error)
+        const panel = document.getElementById("panel")
+        const sidebar = document.getElementById("sidebar")
+        if (sidebar) sidebar.innerHTML = `<p class="lista-vacia">No se pudieron cargar las cuentas.</p>`
+        if (panel) panel.innerHTML = `<p class="lista-vacia error">Error al cargar cuentas</p>`
         mostrarNotificacion("error", "No se pudieron cargar las cuentas")
+    } finally {
+        document.getElementById("sidebar")?.removeAttribute("aria-busy")
+        document.getElementById("panel")?.removeAttribute("aria-busy")
     }
 }
 
@@ -201,7 +225,16 @@ function renderizarSidebar() {
 // SELECCIÓN
 // ============================================
 
-function seleccionarCuenta(id) {
+export async function seleccionarCuentaPorId(id) {
+    if (!id) return
+    cuentaSolicitadaId = id
+    if (cuentas.some(cuenta => cuenta.id === id)) {
+        await seleccionarCuenta(id)
+        cuentaSolicitadaId = null
+    }
+}
+
+async function seleccionarCuenta(id) {
     // Si hacemos click sobre la misma cuenta ya seleccionada, mantenerla seleccionada
     // y no cerrar el panel (mostrar detalle de la cuenta)
     if (cuentaSeleccionada && cuentaSeleccionada.id === id) {
@@ -217,7 +250,7 @@ function seleccionarCuenta(id) {
         btn.classList.toggle("act", btn.dataset.id === id)
     })
 
-    mostrarDetalleCuenta()
+    await mostrarDetalleCuenta()
     actualizarLastbar()
 }
 
@@ -229,6 +262,10 @@ async function mostrarDetalleCuenta() {
     const panel = document.getElementById("panel")
     if (!panel || !cuentaSeleccionada) return
 
+    panel.setAttribute("aria-busy", "true")
+    if (!panel.querySelector(".cuenta-vista")) {
+        panel.innerHTML = skeletonMarkup({ variant: "panel", rows: 3 })
+    }
     const cuenta = cuentaSeleccionada
     let movimientos = []
     try {
@@ -236,21 +273,25 @@ async function mostrarDetalleCuenta() {
     } catch (error) {
         console.error("Error cargando movimientos de la cuenta:", error)
     }
-    if (cuentaSeleccionada?.id !== cuenta.id) return
+    if (cuentaSeleccionada?.id !== cuenta.id) {
+        panel.removeAttribute("aria-busy")
+        return
+    }
 
     const ciclo = cuenta.tipo === "credito" ? estadoCicloDe(cuenta, movimientos) : null
     const panelInfo = cuenta.tipo === "credito"
         ? plantillaInfoTarjeta(cuenta, ciclo)
         : plantillaInfoNormal(cuenta)
 
+    const lateralidad = sesion.getPreferencias()?.accesibilidad?.lateralidadCuentaInfo === "izquierda" ? "info-izquierda" : "info-derecha"
     panel.innerHTML = `
-        <div class="cuenta-vista">
+        <div class="cuenta-vista ${lateralidad}">
             <div class="cuenta-vista-movimientos">
                 <div class="cuenta-mov-head">
                     <div class="totales" id="totales-movimientos-cuenta"></div>
                 </div>
                 <div class="lista-cards" id="lista-movimientos-cuenta">
-                    ${LOGO_ESCINCO_CARGA}
+                    ${skeletonMarkup({ rows: 3 })}
                 </div>
             </div>
             <div class="cuenta-vista-info">
@@ -259,7 +300,8 @@ async function mostrarDetalleCuenta() {
         </div>
     `
 
-    cargarMovimientosDeCuenta(cuenta, movimientos)
+    await cargarMovimientosDeCuenta(cuenta, movimientos)
+    panel.removeAttribute("aria-busy")
     vincularInteraccionCardsCuenta()
 
     panel.querySelectorAll(".btn-copiar").forEach(btn => {
@@ -333,6 +375,7 @@ function plantillaInfoTarjeta(c, ciclo) {
     const corteInfo = calcularDiasHasta(c.diaCorte)
     const pagoInfo = calcularDiasHasta(c.diaPago)
     const anualidad = proximaAnualidad(c)
+    const saldoPorPagarIgual = Math.abs(deuda - estado.restante) < 0.005
 
     return `
         <div class="cuenta-perfil">
@@ -353,16 +396,16 @@ function plantillaInfoTarjeta(c, ciclo) {
             </div>
             <div class="resumen-card">
                 <div class="resumen-label">Deuda total</div>
-                <div class="resumen-valor">${formatearMontoConDivisa(deuda, c.moneda)}</div>
+                <div class="resumen-valor ${saldoPorPagarIgual || deuda > 0 ? "negative" : ""}">${formatearMontoConDivisa(deuda, c.moneda)}</div>
             </div>
             <div class="resumen-card">
                 <div class="resumen-label">Consumos del ciclo</div>
                 <div class="resumen-valor ${claseEstado}">${formatearMontoConDivisa(estado.consumos, c.moneda)}</div>
             </div>
-            <div class="resumen-card">
+            ${saldoPorPagarIgual ? "" : `<div class="resumen-card">
                 <div class="resumen-label">Saldo por pagar</div>
                 <div class="resumen-valor ${estado.restante > 0 ? "negative" : "positive"}">${formatearMontoConDivisa(estado.restante, c.moneda)}</div>
-            </div>
+            </div>`}
         </div>
 
         <div class="credito-uso">
@@ -428,6 +471,8 @@ async function cargarMovimientosDeCuenta(cuenta, movimientosCargados = null) {
     const contenedor = document.getElementById("lista-movimientos-cuenta")
     if (!contenedor) return
     const contenedorTotales = document.getElementById("totales-movimientos-cuenta")
+    contenedor.setAttribute("aria-busy", "true")
+    contenedor.innerHTML = skeletonMarkup({ rows: 3 })
 
     seleccionadosCuenta.clear()
     ordenSeleccionCuenta.length = 0
@@ -469,6 +514,8 @@ async function cargarMovimientosDeCuenta(cuenta, movimientosCargados = null) {
         console.error("Error cargando movimientos de la cuenta:", error)
         if (contenedorTotales) contenedorTotales.innerHTML = ""
         contenedor.innerHTML = `<p class="lista-vacia error">Error al cargar movimientos</p>`
+    } finally {
+        contenedor.removeAttribute("aria-busy")
     }
 }
 
@@ -661,6 +708,11 @@ function manejarClickCardCuenta(evento) {
     if (!card) return
 
     const id = card.dataset.id
+
+    if (evento.shiftKey && expandirSeleccion(movimientosCuentaActivos.map(m => m.id), id, seleccionadosCuenta, ordenSeleccionCuenta)) {
+        actualizarSeleccionCuentaEnDOM()
+        return
+    }
 
     if (modoUnClickSeleccion()) {
         seleccionarPorUnClickCuenta(id, evento.shiftKey)
@@ -953,7 +1005,6 @@ function formatearFecha(valor) {
 
 function nombreTipo(tipo) {
     const NOMBRES = {
-        banco: "Banco",
         efectivo: "Efectivo",
         broker: "Broker",
         exchange: "Exchange",
@@ -1251,8 +1302,29 @@ function configurarEventos() {
 
 const esTipoTarjeta = tipo => tipo === "credito" || tipo === "debito"
 
+function campoFechaAnualidad(id, value = "") {
+    return `
+        <div class="campo-fecha">
+            <input type="date" id="${id}" class="form-input" value="${value}">
+            <button type="button" class="btn-calendario" aria-label="Abrir calendario">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days preview-icon">
+                    <path d="M8 2v4"/>
+                    <path d="M16 2v4"/>
+                    <rect width="18" height="18" x="3" y="4" rx="2"/>
+                    <path d="M3 10h18"/>
+                    <path d="M8 14h.01"/>
+                    <path d="M12 14h.01"/>
+                    <path d="M16 14h.01"/>
+                    <path d="M8 18h.01"/>
+                    <path d="M12 18h.01"/>
+                    <path d="M16 18h.01"/>
+                </svg>
+            </button>
+        </div>
+    `
+}
+
 const TIPOS_CUENTA_CREACION = [
-    { id: "banco", nombre: "Banco", icono: "landmark" },
     { id: "efectivo", nombre: "Efectivo", icono: "banknote" },
     { id: "broker", nombre: "Broker", icono: "trending-up" },
     { id: "exchange", nombre: "Exchange", icono: "arrow-left-right" },
@@ -1265,28 +1337,20 @@ function _abrirModalCrearCuentaDosPasos() {
     let paso = 1
 
     const paso1 = `
-        <div class="cuenta-pasos">
-            <span class="cuenta-paso activo">1. Tipo</span>
-            <span class="cuenta-paso">2. Datos</span>
-        </div>
         <div class="cuenta-tipos-grid">
             ${TIPOS_CUENTA_CREACION.map(tipo => `
                 <button type="button" class="cuenta-tipo-opcion" data-tipo="${tipo.id}">
-                    ${icono(tipo.icono, 22)}
-                    <span>${tipo.nombre}</span>
+                    <span class="cuenta-tipo-icono">${icono(tipo.icono, 22)}</span>
+                    <span class="cuenta-tipo-texto">${tipo.nombre}</span>
                 </button>
             `).join("")}
         </div>
     `
 
     const formulario = tipo => `
-        <div class="cuenta-pasos">
-            <button type="button" class="cuenta-paso activo" id="cuenta-paso-atras">1. Tipo</button>
-            <span class="cuenta-paso activo">2. Datos</span>
-        </div>
         <form id="form-crear-cuenta" class="form-movimiento form-movimiento-grid">
             <input type="hidden" id="campo-tipo" value="${tipo}">
-            <div class="form-group">
+            <div class="form-group full">
                 <label for="campo-nombre">Nombre de la cuenta</label>
                 <input type="text" id="campo-nombre" class="form-input" placeholder="Ej: BBVA, BCP..." required>
             </div>
@@ -1302,25 +1366,33 @@ function _abrirModalCrearCuentaDosPasos() {
                 <label for="campo-saldo">Saldo inicial</label>
                 <input type="number" id="campo-saldo" class="form-input" step="0.01" min="0" value="0">
             </div>
-            <div class="form-group banco-only">
-                <label for="campo-num-cuenta">Número de cuenta (opcional)</label>
+            <div class="form-group cuenta-only">
+                <label for="campo-num-cuenta">Número de cuenta</label>
                 <input type="text" id="campo-num-cuenta" class="form-input" placeholder="000-000000000000">
             </div>
-            <div class="form-group banco-only">
-                <label for="campo-cci">CCI (opcional)</label>
+            <div class="form-group cuenta-only">
+                <label for="campo-cci">CCI</label>
                 <input type="text" id="campo-cci" class="form-input" placeholder="000000000000000000000000">
             </div>
             <div class="form-group card-only" hidden>
-                <label for="campo-num-tarjeta">Número de tarjeta (opcional)</label>
+                <label for="campo-num-tarjeta">Número de tarjeta</label>
                 <input type="text" id="campo-num-tarjeta" class="form-input" placeholder="0000 0000 0000 0000" maxlength="19">
             </div>
             <div class="form-group card-only" hidden>
-                <label for="campo-vence">Fecha de vencimiento (opcional)</label>
+                <label for="campo-vence">Fecha de vencimiento</label>
                 <input type="text" id="campo-vence" class="form-input" placeholder="MM/AA" maxlength="5">
             </div>
             <div class="form-group credit-only" hidden>
                 <label for="campo-limite">Límite de crédito</label>
                 <input type="number" id="campo-limite" class="form-input" step="0.01" min="0" value="0">
+            </div>
+            <div class="form-group credit-only" hidden>
+                <label for="campo-anualidad">Anualidad</label>
+                <input type="number" id="campo-anualidad" class="form-input" step="0.01" min="0" value="0">
+            </div>
+            <div class="form-group credit-only full" hidden>
+                <label for="campo-anualidad-fecha">Fecha de anualidad</label>
+                ${campoFechaAnualidad("campo-anualidad-fecha")}
             </div>
             <div class="form-group credit-only" hidden>
                 <label for="campo-diaCorte">Día de corte</label>
@@ -1329,14 +1401,6 @@ function _abrirModalCrearCuentaDosPasos() {
             <div class="form-group credit-only" hidden>
                 <label for="campo-diaPago">Día de pago</label>
                 <input type="number" id="campo-diaPago" class="form-input" min="1" max="31" value="6">
-            </div>
-            <div class="form-group credit-only" hidden>
-                <label for="campo-anualidad">Anualidad</label>
-                <input type="number" id="campo-anualidad" class="form-input" step="0.01" min="0" value="0">
-            </div>
-            <div class="form-group credit-only" hidden>
-                <label for="campo-anualidad-fecha">Fecha de anualidad (opcional)</label>
-                <input type="date" id="campo-anualidad-fecha" class="form-input">
             </div>
             <div class="form-group credit-only" hidden>
                 <label for="campo-desgravamen">Desgravamen (%)</label>
@@ -1354,12 +1418,12 @@ function _abrirModalCrearCuentaDosPasos() {
     `
 
     const modalEl = abrirModal({
-        titulo: "Nueva cuenta · 1. Tipo",
+        titulo: "Nueva cuenta",
         contenido: paso1,
-        variante: "form",
-        confirmText: "Continuar",
-        cancelText: "Cancelar",
-        onCancel: () => true,
+        variante: "wide",
+        confirmText: null,
+        cancelText: null,
+        onCancel: null,
         onConfirm: async () => {
             if (paso === 1) {
                 if (!tipoSeleccionado) {
@@ -1367,20 +1431,20 @@ function _abrirModalCrearCuentaDosPasos() {
                     return false
                 }
                 paso = 2
-                modalEl.querySelector(".modal-title").textContent = "Nueva cuenta · 2. Datos"
+                modalEl.querySelector(".modal-title").textContent = "Nueva cuenta"
                 modalEl.querySelector(".modal-body").innerHTML = formulario(tipoSeleccionado)
                 const confirmar = modalEl.querySelector("#modal-confirm")
                 if (confirmar) confirmar.textContent = "Crear cuenta"
                 const esCredito = tipoSeleccionado === "credito"
                 const esTarjeta = esCredito || tipoSeleccionado === "debito"
-                const esCuenta = tipoSeleccionado === "banco" || tipoSeleccionado === "efectivo"
+                const esCuenta = tipoSeleccionado === "broker" || tipoSeleccionado === "exchange"
                 modalEl.querySelectorAll(".credit-only").forEach(el => { el.hidden = !esCredito })
                 modalEl.querySelectorAll(".card-only").forEach(el => { el.hidden = !esTarjeta })
-                modalEl.querySelectorAll(".banco-only").forEach(el => { el.hidden = !esCuenta })
+                modalEl.querySelectorAll(".cuenta-only").forEach(el => { el.hidden = !esCuenta })
                 modalEl.querySelector("#cuenta-paso-atras")?.addEventListener("click", () => {
                     paso = 1
                     tipoSeleccionado = null
-                    modalEl.querySelector(".modal-title").textContent = "Nueva cuenta · 1. Tipo"
+                    modalEl.querySelector(".modal-title").textContent = "Nueva cuenta"
                     modalEl.querySelector(".modal-body").innerHTML = paso1
                     const boton = modalEl.querySelector("#modal-confirm")
                     if (boton) boton.textContent = "Continuar"
@@ -1437,7 +1501,7 @@ function _abrirModalCrearCuentaDosPasos() {
             if (esTipoTarjeta(tipo)) {
                 datos.num = modalEl.querySelector("#campo-num-tarjeta")?.value.trim() || ""
                 datos.vence = modalEl.querySelector("#campo-vence")?.value.trim() || ""
-            } else if (tipo === "banco" || tipo === "efectivo") {
+            } else if (tipo === "broker" || tipo === "exchange") {
                 datos.num = modalEl.querySelector("#campo-num-cuenta")?.value.trim() || ""
                 datos.cci = modalEl.querySelector("#campo-cci")?.value.trim() || ""
             }
@@ -1457,25 +1521,160 @@ function _abrirModalCrearCuentaDosPasos() {
 
     modalEl.querySelectorAll(".cuenta-tipo-opcion").forEach(boton => {
         boton.addEventListener("click", () => {
-            tipoSeleccionado = boton.dataset.tipo
-            modalEl.querySelectorAll(".cuenta-tipo-opcion").forEach(opcion => {
-                opcion.classList.toggle("seleccionada", opcion === boton)
-            })
+            cerrarModal()
+            abrirFormularioCrearCuenta(boton.dataset.tipo)
         })
     })
+}
+
+function abrirFormularioCrearCuenta(tipo) {
+    const esCredito = tipo === "credito"
+    const esTarjeta = esCredito || tipo === "debito"
+    const esCuenta = tipo === "broker" || tipo === "exchange"
+    const contenido = `
+        <form id="form-crear-cuenta" class="form-movimiento form-movimiento-grid">
+            <input type="hidden" id="campo-tipo" value="${tipo}">
+            <div class="form-group full">
+                <label for="campo-nombre">Nombre de la cuenta</label>
+                <input type="text" id="campo-nombre" class="form-input" placeholder="Ej: Broker principal..." required>
+            </div>
+            <div class="form-group">
+                <label for="campo-moneda">Moneda</label>
+                <select id="campo-moneda" class="form-input" required>
+                    <option value="pen">PEN</option>
+                    <option value="usd">USD</option>
+                    <option value="usdt">USDT</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="campo-saldo">Saldo inicial</label>
+                <input type="number" id="campo-saldo" class="form-input" step="0.01" min="0" value="0">
+            </div>
+            <div class="form-group cuenta-only" ${esCuenta ? "" : "hidden"}>
+                <label for="campo-num-cuenta">Número de cuenta</label>
+                <input type="text" id="campo-num-cuenta" class="form-input" placeholder="000-000000000000">
+            </div>
+            <div class="form-group cuenta-only" ${esCuenta ? "" : "hidden"}>
+                <label for="campo-cci">CCI</label>
+                <input type="text" id="campo-cci" class="form-input" placeholder="000000000000000000000000">
+            </div>
+            <div class="form-group card-only" ${esTarjeta ? "" : "hidden"}>
+                <label for="campo-num-tarjeta">Número de tarjeta</label>
+                <input type="text" id="campo-num-tarjeta" class="form-input" placeholder="0000 0000 0000 0000" maxlength="19">
+            </div>
+            <div class="form-group card-only" ${esTarjeta ? "" : "hidden"}>
+                <label for="campo-vence">Fecha de vencimiento</label>
+                <input type="text" id="campo-vence" class="form-input" placeholder="MM/AA" maxlength="5">
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-limite">Límite de crédito</label>
+                <input type="number" id="campo-limite" class="form-input" step="0.01" min="0" value="0">
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-anualidad">Anualidad</label>
+                <input type="number" id="campo-anualidad" class="form-input" step="0.01" min="0" value="0">
+            </div>
+            <div class="form-group credit-only full" ${esCredito ? "" : "hidden"}>
+                <label for="campo-anualidad-fecha">Fecha de anualidad</label>
+                ${campoFechaAnualidad("campo-anualidad-fecha")}
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-diaCorte">Día de corte</label>
+                <input type="number" id="campo-diaCorte" class="form-input" min="1" max="31" value="10">
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-diaPago">Día de pago</label>
+                <input type="number" id="campo-diaPago" class="form-input" min="1" max="31" value="6">
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-desgravamen">Desgravamen (%)</label>
+                <input type="number" id="campo-desgravamen" class="form-input" step="0.01" min="0" value="0.34">
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-umbralAviso">Umbral de advertencia (%)</label>
+                <input type="number" id="campo-umbralAviso" class="form-input" min="1" max="99" value="30">
+            </div>
+            <div class="form-group credit-only" ${esCredito ? "" : "hidden"}>
+                <label for="campo-umbralCritico">Umbral crítico (%)</label>
+                <input type="number" id="campo-umbralCritico" class="form-input" min="1" max="100" value="70">
+            </div>
+        </form>
+    `
+
+    const modal = abrirModal({
+        titulo: `Nueva cuenta · ${nombreTipo(tipo)}`,
+        contenido,
+        variante: "form",
+        confirmText: "Crear cuenta",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+            const nombre = modal.querySelector("#campo-nombre")?.value.trim()
+            const moneda = modal.querySelector("#campo-moneda")?.value || "pen"
+            const saldo = parseFloat(modal.querySelector("#campo-saldo")?.value) || 0
+            if (!nombre) {
+                mostrarNotificacion("warning", "El nombre es obligatorio")
+                return false
+            }
+
+            const datos = {
+                nombre,
+                tipo,
+                moneda,
+                saldoInicial: saldo,
+                estado: "activa",
+                esPatrimonio: true,
+                orden: cuentas.length
+            }
+            if (esCredito) {
+                datos.limite = parseFloat(modal.querySelector("#campo-limite")?.value) || 0
+                datos.deuda = 0
+                datos.desgravamen = parseFloat(modal.querySelector("#campo-desgravamen")?.value) || 0.34
+                datos.diaCorte = parseInt(modal.querySelector("#campo-diaCorte")?.value) || 10
+                datos.diaPago = parseInt(modal.querySelector("#campo-diaPago")?.value) || 6
+                datos.umbralAviso = parseInt(modal.querySelector("#campo-umbralAviso")?.value) || 30
+                datos.umbralCritico = parseInt(modal.querySelector("#campo-umbralCritico")?.value) || 70
+                datos.anualidad = parseFloat(modal.querySelector("#campo-anualidad")?.value) || 0
+                const anualidadFecha = modal.querySelector("#campo-anualidad-fecha")?.value
+                if (datos.anualidad > 0 && anualidadFecha) {
+                    const [, mes, dia] = anualidadFecha.split("-").map(Number)
+                    datos.anualidadFecha = `${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`
+                }
+                datos.avisoUsoEnviado = false
+                datos.avisoCriticoEnviado = false
+            }
+            if (esTarjeta) {
+                datos.num = modal.querySelector("#campo-num-tarjeta")?.value.trim() || ""
+                datos.vence = modal.querySelector("#campo-vence")?.value.trim() || ""
+            } else if (esCuenta) {
+                datos.num = modal.querySelector("#campo-num-cuenta")?.value.trim() || ""
+                datos.cci = modal.querySelector("#campo-cci")?.value.trim() || ""
+            }
+
+            try {
+                await crearCuenta(uid, datos)
+                await cargarCuentas()
+                mostrarNotificacion("exito", "Cuenta creada")
+                return true
+            } catch (error) {
+                console.error("Error creando cuenta:", error)
+                mostrarNotificacion("error", `No se pudo crear la cuenta: ${error.message}`)
+                return false
+            }
+        }
+    })
+    modal.querySelector("#campo-nombre")?.focus()
 }
 
 function _abrirModalCrearCuentaLegacy() {
     const html = `
         <form id="form-crear-cuenta" class="form-movimiento">
-            <div class="form-group">
+            <div class="form-group full">
                 <label for="campo-nombre">Nombre de la cuenta</label>
                 <input type="text" id="campo-nombre" class="form-input" placeholder="Ej: BBVA, BCP..." required>
             </div>
             <div class="form-group">
                 <label for="campo-tipo">Tipo</label>
                 <select id="campo-tipo" class="form-input" required>
-                    <option value="banco">Banco</option>
                     <option value="efectivo">Efectivo</option>
                     <option value="broker">Broker</option>
                     <option value="exchange">Exchange</option>
@@ -1496,21 +1695,21 @@ function _abrirModalCrearCuentaLegacy() {
                 <input type="number" id="campo-saldo" class="form-input" step="0.01" placeholder="0.00">
             </div>
 
-            <div class="form-group banco-only" id="campo-num-cuenta-group">
-                <label for="campo-num-cuenta">Número de cuenta (opcional)</label>
+            <div class="form-group cuenta-only" id="campo-num-cuenta-group">
+                <label for="campo-num-cuenta">Número de cuenta</label>
                 <input type="text" id="campo-num-cuenta" class="form-input" placeholder="000-000000000000">
             </div>
-            <div class="form-group banco-only" id="campo-cci-group">
-                <label for="campo-cci">CCI (opcional)</label>
+            <div class="form-group cuenta-only" id="campo-cci-group">
+                <label for="campo-cci">CCI</label>
                 <input type="text" id="campo-cci" class="form-input" placeholder="000000000000000000000000">
             </div>
 
             <div class="form-group card-only" id="campo-num-tarjeta-group" hidden>
-                <label for="campo-num-tarjeta">Número de tarjeta (opcional)</label>
+                <label for="campo-num-tarjeta">Número de tarjeta</label>
                 <input type="text" id="campo-num-tarjeta" class="form-input" placeholder="0000 0000 0000 0000" maxlength="19">
             </div>
             <div class="form-group card-only" id="campo-vence-group" hidden>
-                <label for="campo-vence">Fecha de vencimiento (opcional)</label>
+                <label for="campo-vence">Fecha de vencimiento</label>
                 <input type="text" id="campo-vence" class="form-input" placeholder="MM/AA" maxlength="5">
             </div>
 
@@ -1585,7 +1784,7 @@ function _abrirModalCrearCuentaLegacy() {
                 const vence = document.getElementById("campo-vence")?.value.trim()
                 if (numTarjeta) datos.num = numTarjeta
                 if (vence) datos.vence = vence
-            } else if (tipo === "banco" || tipo === "efectivo") {
+            } else if (tipo === "broker" || tipo === "exchange") {
                 const numCuenta = document.getElementById("campo-num-cuenta")?.value.trim()
                 const cci = document.getElementById("campo-cci")?.value.trim()
                 if (numCuenta) datos.num = numCuenta
@@ -1610,14 +1809,14 @@ function _abrirModalCrearCuentaLegacy() {
         const tipo = e.target.value
         const esCredito = tipo === "credito"
         const esTarjeta = tipo === "credito" || tipo === "debito"
-        const esCuenta = tipo === "banco" || tipo === "efectivo"
+        const esCuenta = tipo === "broker" || tipo === "exchange"
         document.querySelectorAll(".credit-only").forEach(el => {
             el.hidden = !esCredito
         })
         document.querySelectorAll(".card-only").forEach(el => {
             el.hidden = !esTarjeta
         })
-        document.querySelectorAll(".banco-only").forEach(el => {
+        document.querySelectorAll(".cuenta-only").forEach(el => {
             el.hidden = !esCuenta
         })
     })
@@ -1639,7 +1838,7 @@ function _abrirModalEditarCuenta(cuenta) {
 
     const html = `
         <form id="form-editar-cuenta" class="form-movimiento form-movimiento-grid">
-            <div class="form-group">
+            <div class="form-group full">
                 <label for="edit-nombre">Nombre</label>
                 <input type="text" id="edit-nombre" class="form-input" value="${cuenta.nombre || ""}" required>
             </div>
@@ -1676,7 +1875,7 @@ function _abrirModalEditarCuenta(cuenta) {
                 </div>
                 <div class="form-group">
                     <label for="edit-anualidad-fecha">Fecha de anualidad</label>
-                    <input type="date" id="edit-anualidad-fecha" class="form-input" value="${anualidadFechaInput}">
+                    ${campoFechaAnualidad("edit-anualidad-fecha", anualidadFechaInput)}
                 </div>
                 <span class="form-section-title">Manejo del dinero</span>
                 <div class="form-group">
@@ -1690,15 +1889,15 @@ function _abrirModalEditarCuenta(cuenta) {
             ` : ""}
             ${cuenta.tipo === "credito" || cuenta.tipo === "debito" ? `
                 <div class="form-group">
-                    <label for="edit-num-tarjeta">Número de tarjeta (opcional)</label>
+                    <label for="edit-num-tarjeta">Número de tarjeta</label>
                     <input type="text" id="edit-num-tarjeta" class="form-input" maxlength="19" placeholder="0000 0000 0000 0000" value="${cuenta.num || ""}">
                 </div>
                 <div class="form-group">
-                    <label for="edit-vence">Fecha de vencimiento (opcional)</label>
+                    <label for="edit-vence">Fecha de vencimiento</label>
                     <input type="text" id="edit-vence" class="form-input" maxlength="5" placeholder="MM/AA" value="${cuenta.vence || ""}">
                 </div>
             ` : ""}
-            ${cuenta.tipo === "banco" || cuenta.tipo === "efectivo" ? `
+            ${cuenta.tipo === "broker" || cuenta.tipo === "exchange" ? `
                 <div class="form-group">
                     <label for="edit-num">Número de cuenta</label>
                     <input type="text" id="edit-num" class="form-input" value="${cuenta.num || ""}">
@@ -1763,7 +1962,7 @@ function _abrirModalEditarCuenta(cuenta) {
                 datos.vence = document.getElementById("edit-vence")?.value.trim() || ""
             }
 
-            if (cuenta.tipo === "banco" || cuenta.tipo === "efectivo") {
+            if (cuenta.tipo === "broker" || cuenta.tipo === "exchange") {
                 datos.num = document.getElementById("edit-num")?.value.trim() || ""
                 datos.cci = document.getElementById("edit-cci")?.value.trim() || ""
             }

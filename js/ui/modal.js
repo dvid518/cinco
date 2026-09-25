@@ -1,6 +1,6 @@
 import { mostrarNotificacion } from "./notificaciones.js"
 import { sesion } from "../core/sesion.js"
-import { LOGO_ESCINCO } from "../core/iconos.js"
+import { LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 
 // ============================================
 // ESTADO
@@ -71,33 +71,45 @@ export function abrirModal(opciones) {
     overlay.className = "modal-overlay" + (persistente ? " modal-overlay-ventana" : "")
     overlay.style.setProperty("--z-modal", ++zContador)
 
-    const mostrarCancelar = !!onCancel
-    const mostrarConfirmar = !!onConfirm
+    const textoTitulo = titulo == null || String(titulo).trim().toLowerCase() === "null" ? "escinco" : String(titulo)
+    const textoContenido = contenido == null ? "" : contenido
+    const textoHeaderExtra = headerExtra == null ? "" : headerExtra
+    const textoFooterExtra = footerExtra == null ? "" : String(footerExtra).trim()
+    const textoCancelar = cancelText == null ? "" : String(cancelText)
+    const textoConfirmar = confirmText == null || String(confirmText).trim().toLowerCase() === "null"
+        ? "Aceptar"
+        : String(confirmText)
+    const mostrarCancelar = typeof onCancel === "function" && textoCancelar.trim() !== ""
+    const mostrarConfirmar = typeof onConfirm === "function" && textoConfirmar.trim() !== ""
+    const soloCerrar = mostrarConfirmar && !mostrarCancelar && textoFooterExtra === "" && textoConfirmar.trim().toLowerCase() === "cerrar"
+    const mostrarFooter = !soloCerrar && (mostrarCancelar || mostrarConfirmar || !!textoFooterExtra)
 
     overlay.innerHTML = `
         <div class="modal modal-${variante}" role="dialog" aria-modal="true" tabindex="-1">
             <div class="modal-header">
-                <h2 class="modal-title">${titulo}</h2>
-                <div class="modal-header-acciones">
-                    ${headerExtra}
+                <h2 class="modal-title">${textoTitulo}</h2>
+                <div class="modal-header-controls">
+                    <div class="modal-header-acciones">
+                        ${textoHeaderExtra}
+                    </div>
+                    <button class="modal-close" type="button" aria-label="Cerrar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
+                            <path d="M18 6 6 18"/>
+                            <path d="m6 6 12 12"/>
+                        </svg>
+                    </button>
                 </div>
-                <button class="modal-close" type="button" aria-label="Cerrar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x preview-icon">
-                        <path d="M18 6 6 18"/>
-                        <path d="m6 6 12 12"/>
-                    </svg>
-                </button>
             </div>
             <div class="modal-body">
-                ${contenido}
+                ${textoContenido}
             </div>
-            ${(mostrarCancelar || mostrarConfirmar) ? `
+            ${mostrarFooter ? `
             <div class="modal-footer">
                 ${mostrarCancelar ? `<button class="modal-btn modal-btn-secondary" id="modal-cancel"
-                    type="button">${cancelText}</button>` : ""}
-                ${footerExtra}
+                    type="button">${textoCancelar}</button>` : ""}
+                ${textoFooterExtra}
                 ${mostrarConfirmar ? `<button class="modal-btn modal-btn-primary" id="modal-confirm"
-                    type="button">${confirmText}</button>` : ""}
+                    type="button">${textoConfirmar}</button>` : ""}
             </div>
             ` : ""}
         </div>
@@ -158,7 +170,7 @@ export function abrirModal(opciones) {
         const logoProcesando = document.createElement("div")
         logoProcesando.className = "modal-procesando-logo"
         logoProcesando.setAttribute("aria-hidden", "true")
-        logoProcesando.innerHTML = LOGO_ESCINCO
+        logoProcesando.innerHTML = LOGO_ESCINCO_CARGA
         modalEl.appendChild(logoProcesando)
 
         let resultado
@@ -185,7 +197,7 @@ export function abrirModal(opciones) {
         }
     }
 
-    closeBtn?.addEventListener("click", () => cerrar("cancelar"))
+    closeBtn?.addEventListener("click", () => soloCerrar ? confirmar() : cerrar("cancelar"))
     cancelBtn?.addEventListener("click", () => cerrar("cancelar"))
     confirmBtn?.addEventListener("click", confirmar)
 
@@ -377,9 +389,6 @@ vincularBotonesCalendario()
 function activarDrag(modalEl, overlay) {
     if (!modalEl) return null
 
-    const header = modalEl.querySelector(".modal-header")
-    if (!header) return null
-
     let startX = 0
     let startY = 0
     let startOffsetX = 0
@@ -387,8 +396,8 @@ function activarDrag(modalEl, overlay) {
     let arrastrando = false
 
     const onDown = (e) => {
-        // Ignorar si el click fue en el botón ✕
-        if (e.target.closest(".modal-close")) return
+        if (!e.target.closest(".modal-header")) return
+        if (e.target.closest("button, a, input, select, textarea, [contenteditable='true']")) return
 
         const punto = obtenerPunto(e)
         startX = punto.x
@@ -397,7 +406,7 @@ function activarDrag(modalEl, overlay) {
         startOffsetY = leerOffset(modalEl, "--modal-y")
         arrastrando = true
 
-        header.classList.add("dragging")
+        modalEl.classList.add("dragging")
         document.addEventListener("mousemove", onMove)
         document.addEventListener("mouseup", onUp)
         document.addEventListener("touchmove", onMove, { passive: false })
@@ -418,7 +427,7 @@ function activarDrag(modalEl, overlay) {
 
     const onUp = () => {
         arrastrando = false
-        header.classList.remove("dragging")
+        modalEl.classList.remove("dragging")
         document.removeEventListener("mousemove", onMove)
         document.removeEventListener("mouseup", onUp)
         document.removeEventListener("touchmove", onMove)
@@ -426,12 +435,12 @@ function activarDrag(modalEl, overlay) {
         document.removeEventListener("touchcancel", onUp)
     }
 
-    header.addEventListener("mousedown", onDown)
-    header.addEventListener("touchstart", onDown, { passive: true })
+    modalEl.addEventListener("mousedown", onDown)
+    modalEl.addEventListener("touchstart", onDown, { passive: true })
 
     return () => {
-        header.removeEventListener("mousedown", onDown)
-        header.removeEventListener("touchstart", onDown)
+        modalEl.removeEventListener("mousedown", onDown)
+        modalEl.removeEventListener("touchstart", onDown)
         onUp()
     }
 }

@@ -309,6 +309,42 @@ export function getLastbar(page) {
     return plantilla.replaceAll(PLACEHOLDER_TEMA, itemTema())
 }
 
+export function activarTooltipsLastbar() {
+    const lastbar = document.querySelector(".lastbar")
+    if (!lastbar) return
+
+    let tooltip = document.getElementById("lastbar-tooltip")
+    if (!tooltip) {
+        tooltip = document.createElement("div")
+        tooltip.id = "lastbar-tooltip"
+        tooltip.className = "lastbar-tooltip glass"
+        tooltip.setAttribute("role", "tooltip")
+        document.body.appendChild(tooltip)
+    }
+
+    lastbar.querySelectorAll(".item > span.glass").forEach(span => {
+        const item = span.parentElement
+        item.dataset.tooltip = span.textContent.trim()
+        span.remove()
+    })
+
+    const mostrar = item => {
+        const rect = item.getBoundingClientRect()
+        tooltip.textContent = item.dataset.tooltip || ""
+        tooltip.style.left = `${rect.left + rect.width / 2}px`
+        tooltip.style.top = `${rect.top - 10}px`
+        tooltip.classList.add("visible")
+    }
+
+    const ocultar = () => tooltip.classList.remove("visible")
+
+    lastbar.querySelectorAll(".item").forEach(item => {
+        item.addEventListener("mouseenter", () => mostrar(item))
+        item.addEventListener("mouseleave", ocultar)
+        item.addEventListener("click", ocultar)
+    })
+}
+
 // ============================================
 // DELEGACIÓN CENTRAL DE CLICKS
 // ============================================

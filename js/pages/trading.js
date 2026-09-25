@@ -11,15 +11,19 @@ import { abrirModal, cerrarModal, estaAbierto } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { restaurarDocumento } from "../../firebase/firestore.js"
-import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
+import { icono } from "../core/iconos.js"
+import { skeletonMarkup, skeletonText } from "../ui/skeletons.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
-import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
+import { expandirSeleccion } from "../ui/seleccion.js"
+import { formatearMontoConDivisa } from "../services/DivisaServicio.js"
 
 let uid = null
 let datosTrades = null
 let filtroActual = 'todos'
 let ordenesData = []
 let vistaActual = "trades"
+let cargasVisibles = 0
+let ordenesCargadas = false
 
 // Selección de tarjetas (mismas reglas que movimientos/pendientes/metas):
 // dblclick o clic sostenido alternan, modo "un click" selecciona con un
@@ -56,20 +60,20 @@ export function render() {
             <div class="portfolio-resumen">
                 <div class="resumen-card">
                     <div class="resumen-label" id="resumen-label-1">P&L Total</div>
-                    <div class="resumen-valor" id="pnl-total">0.00</div>
+                    <div class="resumen-valor" id="pnl-total">${skeletonText("skeleton-value-large")}</div>
                 </div>
                 <div class="resumen-card">
                     <div class="resumen-label" id="resumen-label-2">Abiertos</div>
-                    <div class="resumen-valor" id="total-abiertos">0</div>
+                    <div class="resumen-valor" id="total-abiertos">${skeletonText("skeleton-value")}</div>
                 </div>
                 <div class="resumen-card">
                     <div class="resumen-label" id="resumen-label-3">Cerrados</div>
-                    <div class="resumen-valor" id="total-cerrados">0</div>
+                    <div class="resumen-valor" id="total-cerrados">${skeletonText("skeleton-value")}</div>
                 </div>
             </div>
 
-            <div id="lista-trades" class="lista-posiciones">
-                <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
+            <div id="lista-trades" class="lista-posiciones" aria-busy="true">
+                ${skeletonMarkup({ rows: 4 })}
             </div>
         </section>
     `
@@ -85,6 +89,32 @@ export async function init() {
 
     await evaluarYNotificar()
     await Promise.all([cargarTrades(), cargarOrdenes()])
+}
+
+function iniciarCargaVisible() {
+    cargasVisibles++
+    const panel = document.getElementById("panel")
+    const lista = document.getElementById("lista-trades")
+    panel?.setAttribute("aria-busy", "true")
+    lista?.setAttribute("aria-busy", "true")
+    if (lista) lista.innerHTML = skeletonMarkup({ rows: 4 })
+    const resumenIds = ["pnl-total", "total-abiertos", "total-cerrados"]
+    resumenIds.forEach(id => {
+        const valor = document.getElementById(id)
+        if (valor) valor.innerHTML = skeletonText(id === "pnl-total" ? "skeleton-value-large" : "skeleton-value")
+    })
+}
+
+function finalizarCargaVisible() {
+    cargasVisibles = Math.max(0, cargasVisibles - 1)
+    if (cargasVisibles > 0) return
+    const panel = document.getElementById("panel")
+    const lista = document.getElementById("lista-trades")
+    panel?.removeAttribute("aria-busy")
+    lista?.removeAttribute("aria-busy")
+    actualizarResumen()
+    if (vistaActual === "ordenes" && ordenesCargadas) renderizarOrdenes()
+    else if (vistaActual === "trades" && datosTrades) renderizarTrades()
 }
 
 // ============================================
@@ -109,11 +139,17 @@ async function evaluarYNotificar() {
  * Usada por el botón "Actualizar" de la lastbar.
  */
 export async function recargarTrading() {
-    await evaluarYNotificar()
-    await Promise.all([cargarTrades(), cargarOrdenes()])
+    iniciarCargaVisible()
+    try {
+        await evaluarYNotificar()
+        await Promise.all([cargarTrades(), cargarOrdenes()])
+    } finally {
+        finalizarCargaVisible()
+    }
 }
 
 export async function cargarTrades() {
+    iniciarCargaVisible()
     try {
         const filtros = {}
         if (filtroActual === 'long' || filtroActual === 'short') {
@@ -125,8 +161,10 @@ export async function cargarTrades() {
         }
 
         datosTrades = await obtenerTradesConFiltros(uid, filtros)
-        if (vistaActual === "trades") renderizarTrades()
-        actualizarResumen()
+        if (cargasVisibles === 0) {
+            renderizarTrades()
+            actualizarResumen()
+        }
     } catch (error) {
         console.error("Error cargando trades:", error)
         if (vistaActual !== "trades") return
@@ -134,6 +172,8 @@ export async function cargarTrades() {
         if (container) {
             container.innerHTML = `<p class="lista-vacia error">Error al cargar trades</p>`
         }
+    } finally {
+        finalizarCargaVisible()
     }
 }
 
@@ -142,10 +182,14 @@ export async function cargarTrades() {
 // ============================================
 
 async function cargarOrdenes() {
+    iniciarCargaVisible()
     try {
         ordenesData = await obtenerOrdenesConFiltros(uid, {})
-        if (vistaActual === "ordenes") renderizarOrdenes()
-        actualizarResumen()
+        ordenesCargadas = true
+        if (cargasVisibles === 0) {
+            if (vistaActual === "ordenes") renderizarOrdenes()
+            actualizarResumen()
+        }
     } catch (error) {
         console.error("Error cargando órdenes:", error)
         if (vistaActual !== "ordenes") return
@@ -153,6 +197,8 @@ async function cargarOrdenes() {
         if (container) {
             container.innerHTML = `<p class="lista-vacia error">Error al cargar órdenes</p>`
         }
+    } finally {
+        finalizarCargaVisible()
     }
 }
 
@@ -182,8 +228,6 @@ function renderizarTrades() {
         const pnl = t.pnl
         const pnlPct = t.pnlPorcentaje
         const esGanancia = pnl >= 0
-        const simbolo = DIVISAS_SYMBOLS[t.divisa] || '$'
-
         return `
             <div class="posicion-item trade-item${seleccionadas.has(t.id) ? " seleccionado" : ""}" data-trade-id="${t.id}">
                 <div class="card-item-main">
@@ -200,14 +244,14 @@ function renderizarTrades() {
                         <div class="posicion-valores">
                             ${t.estaCerrado ? `
                                 <div class="posicion-valor ${esGanancia ? 'positive' : 'negative'}">
-                                    ${esGanancia ? '+' : ''}${simbolo} ${pnl.toFixed(2)}
+                                    ${esGanancia ? '+' : ''}${formatearMontoConDivisa(Math.abs(pnl), t.divisa)}
                                 </div>
                                 <div class="posicion-rendimiento ${esGanancia ? 'positive' : 'negative'}">
                                     ${esGanancia ? '+' : ''}${pnlPct.toFixed(2)}%
                                 </div>
                             ` : t.pnlFlotante !== null && t.pnlFlotante !== undefined ? `
                                 <div class="posicion-valor ${t.pnlFlotante >= 0 ? 'positive' : 'negative'}">
-                                    ${t.pnlFlotante >= 0 ? '+' : ''}${simbolo} ${t.pnlFlotante.toFixed(2)}
+                                    ${t.pnlFlotante >= 0 ? '+' : ''}${formatearMontoConDivisa(Math.abs(t.pnlFlotante), t.divisa)}
                                 </div>
                                 <div class="posicion-rendimiento ${t.pnlFlotante >= 0 ? 'positive' : 'negative'}">
                                     P&L flotante
@@ -262,7 +306,6 @@ function renderizarOrdenes() {
     }
 
     container.innerHTML = lista.map(o => {
-        const simbolo = DIVISAS_SYMBOLS[o.divisa] || '$'
         const claseDireccion = o.direccion === "long" ? "positive" : "negative"
         const claseEstado = o.estaPendiente ? "pendiente" : (o.fueEjecutada ? "ejecutada" : "cancelada")
 
@@ -282,7 +325,7 @@ function renderizarOrdenes() {
                     <div class="card-item-valor-wrap">
                         <div class="posicion-valores">
                             <div class="posicion-valor">
-                                ${simbolo} ${o.precioDisparo.toFixed(2)}
+                                ${formatearMontoConDivisa(o.precioDisparo, o.divisa)}
                             </div>
                             <div class="posicion-rendimiento ${claseDireccion}">
                                 ${o.tipoLabel}
@@ -373,9 +416,12 @@ function cambiarVista(vista) {
     actualizarBotonesVista()
     actualizarResumen()
 
-    if (vistaActual === "ordenes") {
+    if (cargasVisibles > 0) {
+        const lista = document.getElementById("lista-trades")
+        if (lista) lista.innerHTML = skeletonMarkup({ rows: 4 })
+    } else if (vistaActual === "ordenes" && ordenesCargadas) {
         renderizarOrdenes()
-    } else {
+    } else if (vistaActual === "trades" && datosTrades) {
         renderizarTrades()
     }
 }
@@ -565,6 +611,16 @@ function manejarClickTarjeta(evento) {
 
     const id = card.dataset.tradeId || card.dataset.ordenId
     if (!id) return
+
+    if (evento.shiftKey && expandirSeleccion(
+        [...document.querySelectorAll("#lista-trades .trade-item")].map(card => card.dataset.tradeId || card.dataset.ordenId).filter(Boolean),
+        id,
+        seleccionadas,
+        ordenSeleccion
+    )) {
+        aplicarSeleccionDOM()
+        return
+    }
 
     if (modoUnClickSeleccion()) {
         seleccionarPorUnClick(id, evento.shiftKey)
@@ -916,7 +972,7 @@ function abrirModalEditarTrade(tradeId) {
     const trade = datosTrades?.trades.find(t => t.id === tradeId)
     if (!trade) return
 
-    const simbolo = DIVISAS_SYMBOLS[trade.divisa] || '$'
+    const simbolo = formatearMontoConDivisa(0, trade.divisa)
 
     const html = `
         <form class="form-movimiento form-movimiento-grid">
@@ -1165,8 +1221,6 @@ function abrirModalDetalleOrden(ordenId) {
     const orden = ordenesData.find(o => o.id === ordenId)
     if (!orden) return
 
-    const simbolo = DIVISAS_SYMBOLS[orden.divisa] || '$'
-
     const html = `
         <div class="form-movimiento form-movimiento-grid">
             <div class="form-group">
@@ -1183,7 +1237,7 @@ function abrirModalDetalleOrden(ordenId) {
             </div>
             <div class="form-group">
                 <label>Precio de disparo</label>
-                <span class="form-static">${simbolo} ${orden.precioDisparo.toFixed(2)}</span>
+                <span class="form-static">${formatearMontoConDivisa(orden.precioDisparo, orden.divisa)}</span>
             </div>
             <div class="form-group">
                 <label>Lotaje</label>
@@ -1191,16 +1245,16 @@ function abrirModalDetalleOrden(ordenId) {
             </div>
             <div class="form-group">
                 <label>Stop Loss</label>
-                <span class="form-static">${orden.sl ? `${simbolo} ${Number(orden.sl).toFixed(2)}` : "—"}</span>
+                <span class="form-static">${orden.sl ? formatearMontoConDivisa(orden.sl, orden.divisa) : "—"}</span>
             </div>
             <div class="form-group">
                 <label>Take Profit</label>
-                <span class="form-static">${orden.tp ? `${simbolo} ${Number(orden.tp).toFixed(2)}` : "—"}</span>
+                <span class="form-static">${orden.tp ? formatearMontoConDivisa(orden.tp, orden.divisa) : "—"}</span>
             </div>
             ${orden.fueEjecutada && orden.precioEjecucion ? `
                 <div class="form-group">
                     <label>Precio ejecutado</label>
-                    <span class="form-static">${simbolo} ${Number(orden.precioEjecucion).toFixed(2)}</span>
+                    <span class="form-static">${formatearMontoConDivisa(orden.precioEjecucion, orden.divisa)}</span>
                 </div>
             ` : ''}
             <div class="form-group">

@@ -53,6 +53,10 @@
 }
 
 /* Columna derecha: info de la cuenta */
+.cuenta-vista.info-izquierda .cuenta-vista-info {
+    order: -1;
+}
+
 .cuenta-vista-info {
     flex: 1 1 45%;
     min-width: 0;
@@ -82,6 +86,10 @@
     .cuenta-vista-movimientos {
         min-height: 260px;
     }
+    .cuenta-vista.info-izquierda .cuenta-vista-info {
+        order: initial;
+    }
+
     .cuenta-vista-info {
         max-height: calc(100vh - 200px);
     }
@@ -540,32 +548,56 @@
 
 .cuenta-tipos-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 12px;
 }
 
 .cuenta-tipo-opcion {
-    min-height: 92px;
+    min-height: 112px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    padding: 16px;
-    border-radius: 18px;
-    border: 1px solid var(--border);
-    background: var(--background);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: var(--textSecondary);
     font-family: var(--font-primary);
     cursor: pointer;
-    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+    transition: color 0.2s ease;
+}
+
+.cuenta-tipo-icono {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    transition: all 0.2s ease;
+}
+
+.cuenta-tipo-texto {
+    font-size: 15px;
+    font-weight: 600;
 }
 
 .cuenta-tipo-opcion:hover,
 .cuenta-tipo-opcion.seleccionada {
     color: var(--text);
-    border-color: var(--textSecondary);
+}
+
+.cuenta-tipo-opcion:hover .cuenta-tipo-icono,
+.cuenta-tipo-opcion.seleccionada .cuenta-tipo-icono {
+    transform: rotate(-45deg);
+    border-color: var(--text);
     background: var(--lightHover);
+    box-shadow: 0 0 10px var(--shadow);
 }
 
 .totales-btn.pagar-tarjeta-btn {
@@ -579,6 +611,16 @@
 
 @media (max-width: 520px) {
     .cuenta-tipos-grid {
-        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+
+    .cuenta-tipo-icono {
+        width: 48px;
+        height: 48px;
+    }
+
+    .cuenta-tipo-texto {
+        font-size: 11px;
+        text-align: center;
     }
 }

@@ -1,7 +1,8 @@
 import { obtenerMovimientos, obtenerCuentas } from "../../firebase/firestore.js"
 import { sesion } from "../core/sesion.js"
 import { getFechaHoy } from "../core/fechas.js"
-import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
+import { icono } from "../core/iconos.js"
+import { skeletonMarkup } from "../ui/skeletons.js"
 import { CONFIG_MOVIMIENTOS, TIPOS_MOVIMIENTO } from "../../constants/tiposMovimiento.js"
 import { abrirModal, cerrarModal, estaAbierto } from "../ui/modal.js"
 import {
@@ -13,6 +14,8 @@ import { registrarMovimiento, actualizarMovimiento, eliminarMovimiento, restaura
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
+import { expandirSeleccion } from "../ui/seleccion.js"
+import { formatearMontoConDivisa } from "../services/DivisaServicio.js"
 
 let movimientos = []
 let cuentas = []
@@ -128,9 +131,11 @@ export function render() {
                     </svg>
                 </button>
             </div>
-            <div id="totales-movimientos" class="totales"></div>
-            <div id="lista-movimientos" class="lista-cards">
-                <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
+            <div id="totales-movimientos" class="totales" aria-busy="true">
+                ${skeletonMarkup({ rows: 1, className: "skeleton-totals" })}
+            </div>
+            <div id="lista-movimientos" class="lista-cards" aria-busy="true">
+                ${skeletonMarkup({ rows: 4 })}
             </div>
         </section>
     `
@@ -159,6 +164,9 @@ async function cargarCuentas() {
         cuentas = await obtenerCuentas(uid)
         const select = document.getElementById("filtro-cuenta")
         if (select) {
+            select.disabled = true
+            select.setAttribute("aria-busy", "true")
+            select.innerHTML = `<option value="">Cargando cuentas...</option>`
             select.innerHTML = `<option value="">Todas las cuentas</option>` +
                 cuentas
                     .map(c => `<option value="${c.id}">${c.nombre}</option>`)
@@ -166,10 +174,22 @@ async function cargarCuentas() {
         }
     } catch (error) {
         console.error("Error cargando cuentas:", error)
+    } finally {
+        const select = document.getElementById("filtro-cuenta")
+        if (select) {
+            select.disabled = false
+            select.removeAttribute("aria-busy")
+        }
     }
 }
 
 async function cargarMovimientos() {
+    const container = document.getElementById("lista-movimientos")
+    const totales = document.getElementById("totales-movimientos")
+    container?.setAttribute("aria-busy", "true")
+    totales?.setAttribute("aria-busy", "true")
+    if (container) container.innerHTML = skeletonMarkup({ rows: 4 })
+    if (totales) totales.innerHTML = skeletonMarkup({ rows: 1, className: "skeleton-totals" })
     try {
         movimientos = await obtenerMovimientos(uid)
         movimientos.sort((a, b) => {
@@ -182,6 +202,9 @@ async function cargarMovimientos() {
     } catch (error) {
         console.error("Error cargando movimientos:", error)
         mostrarError()
+    } finally {
+        container?.removeAttribute("aria-busy")
+        totales?.removeAttribute("aria-busy")
     }
 }
 
@@ -226,7 +249,7 @@ function plantillaMovimiento(m) {
                 </div>
                 <div class="card-item-valor-wrap">
                     <span class="card-item-valor ${clase}">
-                        ${signo} ${Math.abs(monto).toFixed(2)} ${(m.divisa || "PEN").toUpperCase()}
+                        ${signo} ${formatearMontoConDivisa(Math.abs(monto), m.divisa || "pen")}
                     </span>
                     <div class="card-item-acciones">
                         <button type="button" class="card-action-btn" data-accion="editar" title="Editar" aria-label="Editar">
@@ -415,6 +438,12 @@ function manejarClickCard(evento) {
     if (!card) return
 
     const id = card.dataset.id
+
+    if (evento.shiftKey && expandirSeleccion(movimientos.map(m => m.id), id, seleccionados, ordenSeleccion)) {
+        actualizarSeleccionEnDOM()
+        actualizarEstadoLastbar()
+        return
+    }
 
     // Modo "un click para seleccionar": el click selecciona de inmediato.
     if (modoUnClickSeleccion()) {

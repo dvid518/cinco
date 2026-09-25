@@ -29,14 +29,19 @@ import { abrirModal, estaAbierto } from "../ui/modal.js"
 import { mostrarNotificacion } from "../ui/notificaciones.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { obtenerCuentas, restaurarDocumento } from "../../firebase/firestore.js"
-import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
+import { icono } from "../core/iconos.js"
+import { skeletonMarkup, skeletonText } from "../ui/skeletons.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
 import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
+import { expandirSeleccion } from "../ui/seleccion.js"
+import { formatearMontoConDivisa } from "../services/DivisaServicio.js"
 
 let uid = null
 let posicionesData = null
 let estrategiasData = []
 let vistaActual = "posiciones"
+let cargasVisibles = 0
+let estrategiasCargadas = false
 
 let clickTimer = null
 
@@ -76,19 +81,19 @@ export function render() {
             <div class="portfolio-resumen">
                 <div class="resumen-card">
                     <div class="resumen-label">Valor total</div>
-                    <div class="resumen-valor" id="valor-total">S/ 0.00</div>
+                    <div class="resumen-valor" id="valor-total">${skeletonText("skeleton-value-large")}</div>
                 </div>
                 <div class="resumen-card">
                     <div class="resumen-label">Rendimiento</div>
-                    <div class="resumen-valor" id="rendimiento-total">+0.00</div>
+                    <div class="resumen-valor" id="rendimiento-total">${skeletonText("skeleton-value-large")}</div>
                 </div>
                 <div class="resumen-card">
                     <div class="resumen-label">Posiciones</div>
-                    <div class="resumen-valor" id="total-posiciones">0</div>
+                    <div class="resumen-valor" id="total-posiciones">${skeletonText("skeleton-value")}</div>
                 </div>
             </div>
-            <div id="lista-posiciones" class="lista-posiciones">
-                <div class="lista-vacia">${LOGO_ESCINCO_CARGA}</div>
+            <div id="lista-posiciones" class="lista-posiciones" aria-busy="true">
+                ${skeletonMarkup({ rows: 4 })}
             </div>
         </section>
     `
@@ -113,12 +118,39 @@ export async function init() {
 // CARGAR POSICIONES
 // ============================================
 
+function iniciarCargaVisible() {
+    cargasVisibles++
+    const panel = document.getElementById("panel")
+    const lista = document.getElementById("lista-posiciones")
+    panel?.setAttribute("aria-busy", "true")
+    lista?.setAttribute("aria-busy", "true")
+    if (lista) lista.innerHTML = skeletonMarkup({ rows: 4 })
+    const resumenIds = ["valor-total", "rendimiento-total", "total-posiciones"]
+    resumenIds.forEach(id => {
+        const valor = document.getElementById(id)
+        if (valor) valor.innerHTML = skeletonText(id === "total-posiciones" ? "skeleton-value" : "skeleton-value-large")
+    })
+}
+
+function finalizarCargaVisible() {
+    cargasVisibles = Math.max(0, cargasVisibles - 1)
+    if (cargasVisibles > 0) return
+    const panel = document.getElementById("panel")
+    const lista = document.getElementById("lista-posiciones")
+    panel?.removeAttribute("aria-busy")
+    lista?.removeAttribute("aria-busy")
+    if (posicionesData) actualizarResumen()
+    if (vistaActual === "posiciones" && posicionesData) renderizarPosiciones()
+    else if (vistaActual === "estrategias" && estrategiasCargadas) renderizarEstrategias()
+}
+
 export async function cargarPosiciones() {
+    iniciarCargaVisible()
     try {
         posicionesData = await obtenerPosicionesConValor(uid)
-        actualizarResumen()
-        if (vistaActual === "posiciones") {
-            renderizarPosiciones()
+        if (cargasVisibles === 0) {
+            actualizarResumen()
+            if (vistaActual === "posiciones") renderizarPosiciones()
         }
     } catch (error) {
         console.error("Error cargando posiciones:", error)
@@ -127,6 +159,8 @@ export async function cargarPosiciones() {
         if (container) {
             container.innerHTML = `<p class="lista-vacia error">Error al cargar posiciones</p>`
         }
+    } finally {
+        finalizarCargaVisible()
     }
 }
 
@@ -135,9 +169,11 @@ export async function cargarPosiciones() {
 // ============================================
 
 async function cargarEstrategias() {
+    iniciarCargaVisible()
     try {
         estrategiasData = await obtenerEstrategias(uid)
-        if (vistaActual === "estrategias") {
+        estrategiasCargadas = true
+        if (cargasVisibles === 0 && vistaActual === "estrategias") {
             renderizarEstrategias()
         }
     } catch (error) {
@@ -147,6 +183,8 @@ async function cargarEstrategias() {
         if (container) {
             container.innerHTML = `<p class="lista-vacia error">Error al cargar estrategias</p>`
         }
+    } finally {
+        finalizarCargaVisible()
     }
 }
 
@@ -231,14 +269,14 @@ function plantillaPosicion(p) {
                     <span class="posicion-fuente ${fuenteClase}">${fuenteLabel}</span>
                 </div>
                 <div class="posicion-detalle">
-                    ${p.cantidad.toFixed(4)} · Precio: ${activo?.ultimoPrecio?.toFixed(2) || "0.00"} ${p.divisa.toUpperCase()}
+                    ${p.cantidad.toFixed(4)} · Precio: ${formatearMontoConDivisa(activo?.ultimoPrecio || 0, p.divisa)}
                     ${fechaActualizacion ? ` · Act. ${fechaActualizacion}` : ""}
                 </div>
             </div>
             <div class="card-item-valor-wrap">
                     <div class="posicion-valores">
                         <div class="posicion-valor">
-                            ${valor.toFixed(2)} ${p.divisa.toUpperCase()}
+                            ${formatearMontoConDivisa(valor, p.divisa)}
                         </div>
                         <div class="posicion-rendimiento ${esGanancia ? "positive" : "negative"}">
                             ${esGanancia ? "+" : ""}${rendimiento.toFixed(2)}%
@@ -324,6 +362,11 @@ function enlazarListaPosiciones(container) {
 
         const tarjeta = resolverTarjetaInversiones(card)
         if (!tarjeta) return
+
+        if (evento.shiftKey && expandirSeleccion((vistaActual === "estrategias" ? estrategiasData : posicionesData?.posiciones || []).map(item => item.id), tarjeta.id, seleccionadas, ordenSeleccion)) {
+            aplicarSeleccionDOM()
+            return
+        }
 
         if (modoUnClickSeleccion()) {
             seleccionarPorUnClick(tarjeta.id, evento.shiftKey)
@@ -678,9 +721,12 @@ function cambiarVista(vista) {
     limpiarSeleccion()
     actualizarBotonesVista()
 
-    if (vistaActual === "estrategias") {
+    if (cargasVisibles > 0) {
+        const lista = document.getElementById("lista-posiciones")
+        if (lista) lista.innerHTML = skeletonMarkup({ rows: 4 })
+    } else if (vistaActual === "estrategias" && estrategiasCargadas) {
         renderizarEstrategias()
-    } else {
+    } else if (vistaActual === "posiciones" && posicionesData) {
         renderizarPosiciones()
     }
 }
@@ -852,8 +898,8 @@ export function abrirModalEstrategia(estrategia = null) {
     const divisa = estrategia?.divisa || "pen"
 
     const html = `
-        <form id="form-estrategia" class="form-movimiento estrategia-form">
-            <div class="form-group">
+        <form id="form-estrategia" class="form-movimiento form-movimiento-grid estrategia-form">
+            <div class="form-group full">
                 <label for="estrategia-nombre">Nombre de la estrategia *</label>
                 <input type="text" id="estrategia-nombre" class="form-input"
                     placeholder="Ej: DCA mensual VOO" value="${estrategia?.nombre || ""}" required>
@@ -862,7 +908,6 @@ export function abrirModalEstrategia(estrategia = null) {
                 <label for="estrategia-simbolo">Símbolo del activo *</label>
                 <input type="text" id="estrategia-simbolo" class="form-input"
                     placeholder="Ej: VOO, BTC, AAPL" value="${estrategia?.activoSimbolo || ""}" required>
-                <span class="form-hint">Debe existir un activo registrado con ese símbolo.</span>
             </div>
             <div class="form-group">
                 <label for="estrategia-cuenta">Cuenta de origen *</label>
@@ -1242,15 +1287,15 @@ function actualizarResumen() {
     const totalPosiciones = document.getElementById("total-posiciones")
 
     if (valorTotal) {
-        const divisa = posicionesData?.posiciones?.[0]?.divisa?.toUpperCase() || "USD"
-        valorTotal.textContent = `${posicionesData?.valorTotal?.toFixed(2) || "0.00"} ${divisa}`
+        const divisa = posicionesData?.posiciones?.[0]?.divisa || "usd"
+        valorTotal.textContent = formatearMontoConDivisa(posicionesData?.valorTotal || 0, divisa)
     }
 
     if (rendimientoTotal) {
         const divisaRaw = posicionesData?.posiciones?.[0]?.divisa || "usd"
-        const simbolo = DIVISAS_SYMBOLS[String(divisaRaw).toLowerCase()] || String(divisaRaw).toUpperCase()
         const ganancia = posicionesData?.gananciaTotal || 0
-        rendimientoTotal.textContent = `${simbolo} ${ganancia >= 0 ? "+" : ""}${ganancia.toFixed(2)}`
+        const signo = ganancia >= 0 ? "+" : ""
+        rendimientoTotal.textContent = `${signo}${formatearMontoConDivisa(Math.abs(ganancia), divisaRaw)}`
         rendimientoTotal.className = `resumen-valor ${ganancia >= 0 ? "positive" : "negative"}`
     }
 
@@ -1312,34 +1357,39 @@ function configurarEventos() {
  * Refresca posiciones y, si hay activos automáticos, consulta la API.
  */
 export async function actualizarPrecios() {
-    const posiciones = posicionesData?.posiciones || []
-    const automaticos = posiciones.filter(p => p.activo?.fuente === "api")
+    iniciarCargaVisible()
+    try {
+        const posiciones = posicionesData?.posiciones || []
+        const automaticos = posiciones.filter(p => p.activo?.fuente === "api")
 
-    if (automaticos.length === 0) {
-        await cargarPosiciones()
-        mostrarNotificacion("exito", "Posiciones actualizadas")
-        return
-    }
-
-    let actualizados = 0
-    let errores = 0
-
-    for (const posicion of automaticos) {
-        try {
-            await actualizarPrecioAutomatico(uid, posicion.activo)
-            actualizados++
-        } catch (error) {
-            console.error(`Error actualizando ${posicion.activo?.simbolo}:`, error)
-            errores++
+        if (automaticos.length === 0) {
+            await cargarPosiciones()
+            mostrarNotificacion("exito", "Posiciones actualizadas")
+            return
         }
-    }
 
-    await cargarPosiciones()
+        let actualizados = 0
+        let errores = 0
 
-    if (errores > 0) {
-        mostrarNotificacion("error", `${actualizados} actualizados, ${errores} errores`)
-    } else {
-        mostrarNotificacion("exito", `${actualizados} precios actualizados`)
+        for (const posicion of automaticos) {
+            try {
+                await actualizarPrecioAutomatico(uid, posicion.activo)
+                actualizados++
+            } catch (error) {
+                console.error(`Error actualizando ${posicion.activo?.simbolo}:`, error)
+                errores++
+            }
+        }
+
+        await cargarPosiciones()
+
+        if (errores > 0) {
+            mostrarNotificacion("error", `${actualizados} actualizados, ${errores} errores`)
+        } else {
+            mostrarNotificacion("exito", `${actualizados} precios actualizados`)
+        }
+    } finally {
+        finalizarCargaVisible()
     }
 }
 

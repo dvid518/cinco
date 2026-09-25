@@ -4,6 +4,8 @@
    ============================================ */
 
 .nav-section {
+    position: relative;
+    z-index: 3;
     display: flex;
     align-items: center;
     flex-direction: row;
@@ -314,19 +316,6 @@
     max-width: 0;
 }
 
-/* El indicador de carga se muestra SIEMPRE (también colapsado): no es una
-   etiqueta, es el logo girando mientras se carga el panel. */
-.sidebar-wrap.sidebar-colapsado #sidebar button .loading-logo {
-    opacity: 1;
-    max-width: none;
-}
-
-/* Logo de escinco girando dentro de un botón del sidebar (carga) */
-.sidebar-wrap #sidebar button .loading-logo svg {
-    width: 20px;
-    height: 20px;
-}
-
 /* ============================================
    PANEL
    ============================================ */
@@ -451,39 +440,33 @@
     transform: scale(1.05);
 }
 
-.lastbar .item span {
+.lastbar-tooltip {
+    position: fixed;
+    z-index: 3000;
     visibility: hidden;
     opacity: 0;
-    position: absolute;
-    transform: translateY(-10px);
-    color: var(--text);
-    padding: 4px 12px;
+    padding: 6px 12px;
     border-radius: 30px;
-    font-size: 12px;
+    color: var(--text);
+    background: color-mix(in srgb, var(--surface) 58%, transparent);
+    border: 1px solid var(--lightBorder);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--shadow) 45%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(18px);
+    font-size: 15px;
     white-space: nowrap;
     pointer-events: none;
-    z-index: 100;
     user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    pointer-events: none;
-    transition: all 0.3s ease;
+    transform: translate(-50%, calc(-100% + 8px));
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
+    will-change: transform, opacity;
 }
 
-.lastbar .item:hover span {
+.lastbar-tooltip.visible {
     visibility: visible;
     opacity: 1;
-    pointer-events: none;
-    position: absolute;
-    display: flex;
-    font-size: 15px;
-    padding: 3px 8px;
-    border-radius: 30px;
-    margin-bottom: 80px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(12px);
-    animation: shake 1.5s infinite;
+    transform: translate(-50%, -100%);
+    transition-delay: 0s;
 }
 
 .lastbar .item svg {

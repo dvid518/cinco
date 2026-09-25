@@ -7,6 +7,7 @@ import { initPWA } from "./pwa.js"
 import { initDoodles } from "../ui/doodles.js"
 import { configurarDelegacionLastbar } from "./lastbar.js"
 import { configurarColapsoSidebar } from "../ui/colapsoSidebar.js"
+import { iniciarDesvanecidoScrolls } from "../ui/scrollEdges.js"
 
 let appInicializado = false
 let bootFinalizado = false
@@ -16,6 +17,7 @@ let avisoBootVisible = false
 // Aplicar tema ANTES de cualquier otra cosa (evita flash)
 initTemaLocal()
 initPWA()
+iniciarDesvanecidoScrolls()
 
 // Escincos doodles (solo el tap de 5 dedos; el spin del logo es de login/register)
 initDoodles({ logoSpin: false })

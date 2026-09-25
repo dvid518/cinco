@@ -10,6 +10,7 @@ import { aplicarTema, setTemaLocal } from "../core/tema.js"
 import { icono, LOGO_ESCINCO_CARGA } from "../core/iconos.js"
 import { accionExportar } from "../ui/exportar.js"
 import { envolverSidebar } from "../ui/colapsoSidebar.js"
+import { skeletonMarkup, skeletonText } from "../ui/skeletons.js"
 
 let uid = null
 let hayCambios = false
@@ -20,6 +21,11 @@ let temaPendiente = false
 let lastbarPendiente = false
 
 const CANTIDAD_MOVIMIENTOS_DEFAULT = 5
+
+function normalizarNivelResalte(valor) {
+    const nivel = Number(valor)
+    return [0, 1, 2].includes(nivel) ? nivel : 0
+}
 
 // Sincroniza el panel de tema cuando el tema cambia desde el lastbar
 // (u otra fuente), sin recargar la página.
@@ -49,7 +55,11 @@ export function render() {
                 <button class="glass" data-section="datos">${icono("database", 18)}<span>Datos</span></button>
             </section>
         `)}
-        <section id="panel" class="glass">
+        <section id="panel" class="glass" aria-busy="true">
+            <div id="configuracion-cargando">
+                ${skeletonMarkup({ variant: "settings", rows: 6 })}
+            </div>
+            <div id="configuracion-contenido" class="configuracion-cargando" hidden>
 
             <!-- APARIENCIA -->
             <div class="panel-section hidden-section" id="section-apariencia">
@@ -61,6 +71,16 @@ export function render() {
                         <span class="toggle-option" data-tema="light">Claro</span>
                         <span class="toggle-option" data-tema="system">Sistema</span>
                     </div>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Resaltar patrimonio</span>
+                    <div class="toggle-group" id="resaltar-patrimonio">
+                        <span class="toggle-option active" data-nivel="0">0</span>
+                        <span class="toggle-option" data-nivel="1">1</span>
+                        <span class="toggle-option" data-nivel="2">2</span>
+                    </div>
+                    <span class="config-hint">0 sin resalte · 1 resalte tenue · 2 resalte intenso</span>
                 </div>
 
                 <div class="config-group">
@@ -99,19 +119,14 @@ export function render() {
 
                 <div class="config-group">
                     <span class="config-label">Últimos movimientos en el dashboard</span>
-                    <input
-                        type="text"
-                        id="movimientos-recientes"
-                        class="form-input"
-                        inputmode="numeric"
-                        pattern="[0-9]{1,2}"
-                        maxlength="2"
-                        value="5"
-                        aria-label="Cantidad de últimos movimientos en el dashboard"
-                    >
+                    <div class="toggle-group" id="movimientos-recientes" role="group" aria-label="Cantidad de últimos movimientos en el dashboard">
+                        ${[2, 3, 4, 5].map(cantidad => `
+                            <span class="toggle-option${cantidad === CANTIDAD_MOVIMIENTOS_DEFAULT ? " active" : ""}" data-cantidad="${cantidad}">${cantidad}</span>
+                        `).join("")}
+                    </div>
                     <span class="config-hint">
                         Cantidad de movimientos a mostrar en la tarjeta
-                        "Últimos movimientos" del dashboard. Entre 1 y 10.
+                        "Últimos movimientos" del dashboard.
                     </span>
                 </div>
 
@@ -193,6 +208,17 @@ export function render() {
                     <div class="toggle-group" id="formato-divisa">
                         <span class="toggle-option active" data-formato="simbolo">Símbolo ($)</span>
                         <span class="toggle-option" data-formato="codigo">Código (USD)</span>
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Periodo de evolución patrimonial</span>
+                    <div class="toggle-group" id="periodo-evolucion">
+                        <span class="toggle-option" data-periodo="7d">7D</span>
+                        <span class="toggle-option" data-periodo="30d">30D</span>
+                        <span class="toggle-option" data-periodo="90d">90D</span>
+                        <span class="toggle-option" data-periodo="1a">1A</span>
+                        <span class="toggle-option" data-periodo="todo">Todo</span>
                     </div>
                 </div>
 
@@ -344,8 +370,17 @@ export function render() {
                     </div>
                     <span class="config-hint">
                         Con la opción activa, el doble click abre el detalle del movimiento en lugar de
-                        seleccionarlo. Desactivada, el click abre el detalle como siempre.
+                        seleccionarlo. Desactivada, el click abre el detalle como siempre. En móvil se
+                        mantiene desactivada por defecto.
                     </span>
+                </div>
+
+                <div class="config-group">
+                    <span class="config-label">Lateralidad de la información de cuenta</span>
+                    <div class="toggle-group toggle-lateralidad-cuenta" id="toggle-lateralidad-cuenta">
+                        <span class="toggle-option" data-lateralidad="izquierda">Izquierda</span>
+                        <span class="toggle-option active" data-lateralidad="derecha">Derecha</span>
+                    </div>
                 </div>
 
                 <div class="config-group">
@@ -402,6 +437,7 @@ export function render() {
                 <span class="footer-version">v${VERSION.numero}</span>
                 <span class="footer-copy">© ${VERSION.ano} ${VERSION.nombre}</span>
             </div>
+            </div>
         </section>
     `
 }
@@ -415,6 +451,9 @@ export async function init() {
     console.log("[INFO] Configuración iniciado para UID:", uid)
 
     await cargarPreferencias()
+    document.getElementById("configuracion-cargando")?.remove()
+    document.getElementById("configuracion-contenido")?.removeAttribute("hidden")
+    document.getElementById("panel")?.removeAttribute("aria-busy")
 
     configurarSidebar()
     configurarTema()
@@ -424,6 +463,9 @@ export async function init() {
     configurarDetectorCambios()
     configurarTipoCambio()
     configurarFormatoDivisa()
+    configurarLateralidadCuenta()
+    configurarPeriodoEvolucion()
+    configurarResaltarPatrimonio()
 }
 
 // ============================================
@@ -706,20 +748,17 @@ function cerrarSesionConAviso(titulo, mensaje) {
 // PREFERENCIAS
 // ============================================
 
-// Ajusta un valor de "cantidad de últimos movimientos" a 1-10 (por defecto 5).
+// Ajusta un valor de "cantidad de últimos movimientos" a 2-5 (por defecto 5).
 function validarCantidadMovimientos(valor) {
     const n = Number.parseInt(valor, 10)
     if (!Number.isFinite(n)) return CANTIDAD_MOVIMIENTOS_DEFAULT
-    return Math.min(10, Math.max(1, n))
+    return Math.min(5, Math.max(2, n))
 }
 
-// Lee la cantidad escrita en el input; null si no es un número entre 1 y 10.
 function leerCantidadMovimientos() {
-    const input = document.getElementById("movimientos-recientes")
-    if (!input) return null
-    const n = Number.parseInt(input.value.trim(), 10)
-    if (!Number.isFinite(n) || n < 1 || n > 10) return null
-    return n
+    const activo = document.querySelector("#movimientos-recientes .toggle-option.active")
+    const n = Number.parseInt(activo?.dataset.cantidad, 10)
+    return Number.isFinite(n) ? validarCantidadMovimientos(n) : null
 }
 
 async function cargarPreferencias() {
@@ -730,10 +769,10 @@ async function cargarPreferencias() {
         temaActual = prefs?.tema || "dark"
 
         // Últimos movimientos en el dashboard
-        const movRecientes = document.getElementById("movimientos-recientes")
-        if (movRecientes) {
-            movRecientes.value = String(validarCantidadMovimientos(prefs?.movimientosRecientes))
-        }
+        const cantidadMovimientos = validarCantidadMovimientos(prefs?.movimientosRecientes)
+        document.querySelectorAll("#movimientos-recientes .toggle-option").forEach(opcion => {
+            opcion.classList.toggle("active", Number(opcion.dataset.cantidad) === cantidadMovimientos)
+        })
 
         // Páginas: los guardados del servidor tienen prioridad; si no hay,
         // se usan los valores por defecto de la sesión (cuentas nuevas).
@@ -765,9 +804,15 @@ async function cargarPreferencias() {
             accDoodles.checked = acc.doodles === true
         }
         const accUnClick = document.getElementById("acc-un-click-seleccion")
+        const esMovil = window.matchMedia("(max-width: 760px)").matches
         if (accUnClick) {
-            accUnClick.checked = acc.unClickSeleccion === true
+            accUnClick.checked = !esMovil && acc.unClickSeleccion === true
+            accUnClick.disabled = esMovil
         }
+        const lateralidad = acc.lateralidadCuentaInfo === "izquierda" ? "izquierda" : "derecha"
+        document.querySelectorAll("#toggle-lateralidad-cuenta .toggle-option").forEach(opcion => {
+            opcion.classList.toggle("active", opcion.dataset.lateralidad === lateralidad)
+        })
         const accResaltar = document.getElementById("acc-resaltar-ingreso-gasto")
         if (accResaltar) {
             accResaltar.checked = acc.resaltarIngresoGasto !== false
@@ -786,6 +831,16 @@ async function cargarPreferencias() {
         marcarTipo("toggle-tipo-p2p-compra", tipos.p2pCompra)
         marcarTipo("toggle-tipo-p2p-venta", tipos.p2pVenta)
         marcarTipo("toggle-tipo-trade", tipos.trade)
+
+        const periodoEvolucion = prefs?.periodoEvolucion || "30d"
+        document.querySelectorAll("#periodo-evolucion .toggle-option").forEach(opcion => {
+            opcion.classList.toggle("active", opcion.dataset.periodo === periodoEvolucion)
+        })
+
+        const nivelPatrimonio = normalizarNivelResalte(prefs?.resaltarPatrimonio)
+        document.querySelectorAll("#resaltar-patrimonio .toggle-option").forEach(opcion => {
+            opcion.classList.toggle("active", Number(opcion.dataset.nivel) === nivelPatrimonio)
+        })
 
         actualizarEstadoGuardar()
     } catch (error) {
@@ -845,6 +900,7 @@ function hayCambiosEnVivo() {
         (accModalesUI !== undefined && accModalesUI !== (accBase.modalesPersistentes === true)) ||
         (accDoodlesUI !== undefined && accDoodlesUI !== (accBase.doodles === true)) ||
         (accUnClickUI !== undefined && accUnClickUI !== (accBase.unClickSeleccion === true)) ||
+        (getLateralidadCuentaUI() !== (accBase.lateralidadCuentaInfo || "derecha")) ||
         (accResaltarUI !== undefined && accResaltarUI !== (accBase.resaltarIngresoGasto !== false)) ||
         (movRecientesUI !== null && movRecientesUI !== (base.movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT)) ||
         (document.getElementById("toggle-dashboard")?.checked !== (basePaginas.dashboard !== false)) ||
@@ -853,6 +909,8 @@ function hayCambiosEnVivo() {
         (document.getElementById("toggle-trading")?.checked !== (basePaginas.trading !== false)) ||
         tiposDifieren ||
         (document.getElementById("divisa-principal")?.value !== getDivisaPrincipal()) ||
+        (getPeriodoEvolucionUI() !== (base.periodoEvolucion || "30d")) ||
+        (getNivelResalteUI() !== normalizarNivelResalte(base.resaltarPatrimonio)) ||
         (getFormatoDivisaUI() !== getFormatoDivisa()) ||
         (modoTCUI !== null && modoTCUI !== (tc.modo === "auto" ? "auto" : "manual")) ||
         (modoTCUI !== "auto" && parseFloat(document.getElementById("tc-pen-usd")?.value) !== tc.pen_usd)
@@ -892,10 +950,14 @@ function configurarDetectorCambios() {
         }
     })
 
-    const movRecientes = document.getElementById("movimientos-recientes")
-    movRecientes?.addEventListener("input", () => {
-        marcarCambioNuevo()
-        actualizarEstadoGuardar()
+    const opcionesMovimientos = document.querySelectorAll("#movimientos-recientes .toggle-option")
+    opcionesMovimientos.forEach(opcion => {
+        opcion.addEventListener("click", () => {
+            opcionesMovimientos.forEach(otra => otra.classList.remove("active"))
+            opcion.classList.add("active")
+            marcarCambioNuevo()
+            actualizarEstadoGuardar()
+        })
     })
 }
 
@@ -909,6 +971,54 @@ function configurarFormatoDivisa() {
             actualizarEstadoGuardar()
         })
     })
+}
+
+function configurarLateralidadCuenta() {
+    const opciones = document.querySelectorAll("#toggle-lateralidad-cuenta .toggle-option")
+    opciones.forEach(opcion => {
+        opcion.addEventListener("click", () => {
+            opciones.forEach(otra => otra.classList.remove("active"))
+            opcion.classList.add("active")
+            marcarCambioNuevo()
+            actualizarEstadoGuardar()
+        })
+    })
+}
+
+function getLateralidadCuentaUI() {
+    return document.querySelector("#toggle-lateralidad-cuenta .toggle-option.active")?.dataset.lateralidad || "derecha"
+}
+
+function configurarPeriodoEvolucion() {
+    const opciones = document.querySelectorAll("#periodo-evolucion .toggle-option")
+    opciones.forEach(opcion => {
+        opcion.addEventListener("click", () => {
+            opciones.forEach(otra => otra.classList.remove("active"))
+            opcion.classList.add("active")
+            marcarCambioNuevo()
+            actualizarEstadoGuardar()
+        })
+    })
+}
+
+function getPeriodoEvolucionUI() {
+    return document.querySelector("#periodo-evolucion .toggle-option.active")?.dataset.periodo || "30d"
+}
+
+function configurarResaltarPatrimonio() {
+    const opciones = document.querySelectorAll("#resaltar-patrimonio .toggle-option")
+    opciones.forEach(opcion => {
+        opcion.addEventListener("click", () => {
+            opciones.forEach(otra => otra.classList.remove("active"))
+            opcion.classList.add("active")
+            marcarCambioNuevo()
+            actualizarEstadoGuardar()
+        })
+    })
+}
+
+function getNivelResalteUI() {
+    return normalizarNivelResalte(document.querySelector("#resaltar-patrimonio .toggle-option.active")?.dataset.nivel)
 }
 
 function getFormatoDivisaUI() {
@@ -982,6 +1092,13 @@ async function actualizarTipoCambioAutomatico() {
     const btn = document.getElementById("tc-actualizar-btn")
     const btnText = btn?.querySelector(".tc-btn-text")
     const status = document.getElementById("tc-status")
+    const autoBox = document.getElementById("tc-input-auto")
+    const valorAuto = document.getElementById("tc-valor-auto")
+    const fechaAuto = document.getElementById("tc-fecha-auto")
+
+    autoBox?.setAttribute("aria-busy", "true")
+    if (valorAuto) valorAuto.innerHTML = skeletonMarkup({ rows: 1, className: "skeleton-exchange" })
+    if (fechaAuto) fechaAuto.innerHTML = skeletonText()
 
     if (status) {
         status.hidden = true
@@ -1010,6 +1127,8 @@ async function actualizarTipoCambioAutomatico() {
         }
         mostrarNotificacion("error", `No se pudo actualizar el tipo de cambio: ${error.message}`)
     } finally {
+        actualizarInfoAuto()
+        autoBox?.removeAttribute("aria-busy")
         if (btn) {
             btn.disabled = false
             if (btnText) btnText.textContent = "Actualizar ahora"
@@ -1113,6 +1232,7 @@ function construirPreferencias() {
         modalesPersistentes: document.getElementById("acc-modales-persistentes")?.checked === true,
         doodles: document.getElementById("acc-doodles")?.checked === true,
         unClickSeleccion: document.getElementById("acc-un-click-seleccion")?.checked === true,
+        lateralidadCuentaInfo: getLateralidadCuentaUI(),
         resaltarIngresoGasto: document.getElementById("acc-resaltar-ingreso-gasto")?.checked !== false
     }
 
@@ -1128,6 +1248,8 @@ function construirPreferencias() {
 
     return {
         tema: temaActual,
+        periodoEvolucion: getPeriodoEvolucionUI(),
+        resaltarPatrimonio: getNivelResalteUI(),
         movimientosRecientes: leerCantidadMovimientos() ?? (sesion.getPreferencias().movimientosRecientes ?? CANTIDAD_MOVIMIENTOS_DEFAULT),
         paginas: {
             dashboard: document.getElementById("toggle-dashboard").checked,
@@ -1169,6 +1291,8 @@ async function aplicarPreferencias(preferencias) {
 
         await actualizarPreferencias(uid, {
             tema: preferencias.tema,
+            periodoEvolucion: preferencias.periodoEvolucion || "30d",
+            resaltarPatrimonio: normalizarNivelResalte(preferencias.resaltarPatrimonio),
             formatoDivisa: preferencias.formatoDivisa,
             movimientosRecientes: preferencias.movimientosRecientes,
             paginas: preferencias.paginas,

@@ -6,6 +6,8 @@ import { obtenerTiposCompatibles, consolidarPendienteAMovimiento } from "../serv
 import { generarFormularioMovimiento, recogerDatosFormulario, vincularSimboloDivisa } from "./formularioMovimiento.js"
 import { DIVISAS } from "../../constants/divisas.js"
 import { mostrarNotificacion } from "./notificaciones.js"
+import { expandirSeleccion } from "./seleccion.js"
+import { formatearMontoConDivisa } from "../services/DivisaServicio.js"
 import { ofrecerDeshacer } from "../services/DeshacerServicio.js"
 import { icono } from "../core/iconos.js"
 
@@ -20,7 +22,6 @@ function plantillaPendiente(p) {
     const esCobro = p.tipo !== false
     const clase = esCobro ? "positive" : "negative"
     const signo = esCobro ? "+" : "-"
-    const divisa = (p.divisa || "pen").toUpperCase()
     const vence = formatearFechaPendiente(p.fechaVencimiento)
 
     return `
@@ -36,7 +37,7 @@ function plantillaPendiente(p) {
                     </span>
                 </div>
                 <div class="card-item-valor-wrap">
-                    <span class="card-item-valor ${clase}">${signo} ${p.monto.toFixed(2)} ${divisa}</span>
+                    <span class="card-item-valor ${clase}">${signo} ${formatearMontoConDivisa(p.monto, p.divisa)}</span>
                     <div class="card-item-acciones">
                         <button type="button" class="card-action-btn" data-accion="consolidar" title="Consolidar" aria-label="Consolidar">
                             ${icono("circle-check", 16)}
@@ -459,6 +460,12 @@ export async function mostrarPendientes() {
             // Click inmediatamente tras selección por clic sostenido/swipe.
             if (consumirSupresorClick()) return
             if (!card) return
+
+            if (evento.shiftKey && expandirSeleccion(pendientes.map(p => p.id), card.dataset.id, seleccionados, ordenSeleccion)) {
+                sincronizarEstadoCards()
+                actualizarBotonLote()
+                return
+            }
 
             // Modo "un click para seleccionar".
             if (modoUnClick()) {

@@ -1,6 +1,6 @@
 import { VERSION } from "./constants/version.js"
 
-// v1.0.0-beta.13 · reinicio de precache (módulos JS actualizados)
+// v1.0.0-beta.14 · reinicio de precache (módulos JS actualizados)
 const VERSION_APP = `escinco-v${VERSION.numero}`
 const CACHE_SHELL = `${VERSION_APP}-shell`
 const CACHE_RUNTIME = `${VERSION_APP}-runtime`
@@ -59,6 +59,9 @@ const SHELL_ASSETS = [
     "/js/ui/notificaciones.js",
     "/js/ui/exportar.js",
     "/js/ui/colapsoSidebar.js",
+    "/js/ui/skeletons.js",
+    "/js/ui/scrollEdges.js",
+    "/js/ui/seleccion.js",
 
     // JS models
     "/js/models/Activo.js",

@@ -17,6 +17,18 @@ const TIPOS = {
 let contenedorInyectado = false
 const activas = new Map()
 
+export function cerrarNotificacionMasAntigua() {
+    const primera = activas.values().next().value
+    if (!primera) return false
+    primera.cerrar()
+    return true
+}
+
+document.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Delete" || evento.target.closest("input, textarea, select, [contenteditable='true']")) return
+    cerrarNotificacionMasAntigua()
+})
+
 function obtenerContenedor() {
     let contenedor = document.querySelector(".notificaciones-container")
     if (!contenedor) {
@@ -54,10 +66,15 @@ export function mostrarNotificacion(tipo = "info", mensaje, duracion = 3000, acc
     const contenedor = obtenerContenedor()
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
-    const acciones = Array.isArray(accion) ? accion : (accion ? [accion] : [])
+    const acciones = (Array.isArray(accion) ? accion : (accion ? [accion] : []))
+        .filter(Boolean)
+        .map(a => ({
+            ...a,
+            texto: a.texto ?? a.text ?? "Aceptar"
+        }))
 
     const notificacion = document.createElement("div")
-    notificacion.className = `notificacion notificacion-${config.clase}`
+    notificacion.className = `glass notificacion notificacion-${config.clase}`
     notificacion.dataset.id = id
     notificacion.innerHTML = `
         <span class="notificacion-icono">${icono(config.icono, 20)}</span>

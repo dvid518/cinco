@@ -135,6 +135,14 @@
     color: var(--negative);
 }
 
+#valor-total > .skeleton-value,
+#rendimiento-total > .skeleton-value,
+#total-posiciones > .skeleton-value {
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+}
+
 /* ============================================
    LISTA DE POSICIONES
    ============================================ */

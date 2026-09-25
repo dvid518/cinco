@@ -69,13 +69,14 @@
     -webkit-user-select: none;
 }
 
-/* El cabecera solo es arrastrable en modo persistente (ventanas); en modo
+/* El modal solo es arrastrable en modo persistente (ventanas); en modo
    estándar el modal queda fijo y centrado. */
 .modal-overlay-ventana .modal-header {
     cursor: grab;
 }
 
-.modal-header.dragging {
+.modal-overlay-ventana .modal.dragging,
+.modal-overlay-ventana .modal.dragging .modal-header {
     cursor: grabbing;
 }
 
@@ -87,6 +88,19 @@
     flex: 1;
     min-width: 0;
     pointer-events: none;
+}
+
+.modal-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+
+.modal-header-acciones {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .modal-close {
@@ -102,19 +116,7 @@
     font-size: 18px;
     cursor: pointer;
     flex-shrink: 0;
-    margin-left: auto;
     transition: all 0.2s ease;
-}
-
-.modal-header-acciones {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-}
-
-.modal-header-acciones .modal-close {
-    margin-left: 0;
 }
 
 /* Botones de acción junto al botón de cerrar */
@@ -159,6 +161,21 @@
     overflow-y: auto;
     flex: 1;
     color: var(--text);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
 }
 
 .modal-footer {

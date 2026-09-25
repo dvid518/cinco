@@ -1,5 +1,13 @@
 
 /* Estilos específicos de trading */
+#pnl-total > .skeleton-value,
+#total-abiertos > .skeleton-value,
+#total-cerrados > .skeleton-value {
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+}
+
 .trading {
     display: flex;
     flex-direction: column;

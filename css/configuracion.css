@@ -72,6 +72,15 @@
     padding: 3px;
 }
 
+.toggle-lateralidad-cuenta {
+    width: min(280px, 100%);
+}
+
+.toggle-lateralidad-cuenta .toggle-option {
+    flex: 1 1 0;
+    text-align: center;
+}
+
 .pages-toggle-group {
     display: flex;
     flex-direction: row;

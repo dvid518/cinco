@@ -3,8 +3,8 @@ import { obtenerMetas, crearMeta, actualizarMeta, eliminarMeta } from "../reposi
 import { sesion } from "../core/sesion.js"
 import { aportarMeta } from "../services/MetaServicio.js"
 import { obtenerCuentas, restaurarDocumento } from "../../firebase/firestore.js"
-import { getDivisaPrincipal } from "../services/DivisaServicio.js"
-import { DIVISAS_SYMBOLS } from "../../constants/divisas.js"
+import { getDivisaPrincipal, formatearMontoConDivisa } from "../services/DivisaServicio.js"
+import { expandirSeleccion } from "./seleccion.js"
 import { parseFechaLocal, fechaLocalISO } from "../core/fechas.js"
 import { icono } from "../core/iconos.js"
 import { mostrarNotificacion } from "./notificaciones.js"
@@ -94,7 +94,7 @@ async function cargarCuentasEnSelect(selectId, divisa = null) {
 // estado con la fecha límite. Las acciones (aportar/editar/eliminar) se
 // revelan con hover, foco o tocando la card.
 function plantillaMetaCard(meta) {
-    const simbolo = DIVISAS_SYMBOLS[meta.divisa] || "S/"
+    const simbolo = formatearMontoConDivisa(0, meta.divisa)
     const estado = meta.completada
         ? '<span class="pendiente-vencido"> · Completada</span>'
         : (meta.activa ? "" : '<span class="pendiente-vencido"> · Pausada</span>')
@@ -105,7 +105,7 @@ function plantillaMetaCard(meta) {
                 <div class="card-item-info">
                     <span class="card-item-titulo">${meta.nombre}${estado}</span>
                     <span class="card-item-detalle">
-                        Faltan ${simbolo} ${meta.montoRestante.toFixed(2)}
+                        Faltan ${formatearMontoConDivisa(meta.montoRestante, meta.divisa)}
                     </span>
                 </div>
                 <div class="card-item-valor-wrap">
@@ -316,6 +316,12 @@ export async function mostrarMetas() {
 
             // Click inmediatamente tras selección por clic sostenido.
             if (consumirSupresorClick()) return
+
+            if (evento.shiftKey && expandirSeleccion(metas.map(meta => meta.id), card.dataset.id, seleccionadas, ordenSeleccion)) {
+                sincronizarEstadoCards()
+                actualizarBotones()
+                return
+            }
 
             if (modoUnClick()) {
                 seleccionarPorUnClick(card.dataset.id, evento.shiftKey)
@@ -566,7 +572,6 @@ export function abrirModalMeta(meta = null) {
 // ============================================
 
 export function abrirModalAporteMeta(meta) {
-    const simbolo = DIVISAS_SYMBOLS[meta.divisa] || "S/"
     const total = meta.montoObjetivo || 0
     const actual = meta.montoActual || 0
     const pctActual = total > 0 ? Math.min(100, (actual / total) * 100) : 0
@@ -582,11 +587,11 @@ export function abrirModalAporteMeta(meta) {
             <div class="aporte-valores">
                 <div class="aporte-valor">
                     <span class="aporte-valor-label">Total</span>
-                    <span class="aporte-valor-fuerte">${simbolo} ${total.toFixed(2)}</span>
+                    <span class="aporte-valor-fuerte">${formatearMontoConDivisa(total, meta.divisa)}</span>
                 </div>
                 <div class="aporte-valor">
                     <span class="aporte-valor-label">Aportado</span>
-                    <span class="aporte-valor-fuerte">${simbolo} ${actual.toFixed(2)}</span>
+                    <span class="aporte-valor-fuerte">${formatearMontoConDivisa(actual, meta.divisa)}</span>
                 </div>
                 <div class="aporte-valor">
                     <span class="aporte-valor-label">Fecha límite</span>
@@ -629,7 +634,7 @@ export function abrirModalAporteMeta(meta) {
             try {
                 await aportarMeta(sesion.uid, meta, { monto, cuentaId })
                 notificarCambioMetas()
-                mostrarNotificacion("exito", `Aporte de ${simbolo} ${monto.toFixed(2)} registrado`)
+                mostrarNotificacion("exito", `Aporte de ${formatearMontoConDivisa(monto, meta.divisa)} registrado`)
                 return true
             } catch (error) {
                 console.error("Error registrando aporte:", error)

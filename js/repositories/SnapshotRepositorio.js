@@ -11,6 +11,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
 import { db } from "../../firebase/firestore.js"
 import { getFechaHoy } from "../core/fechas.js"
+import { cacheCapa } from "../core/cache.js"
+
+const TTL_SNAPSHOTS = 45 * 1000
 
 // ============================================
 // SNAPSHOT REPOSITORIO
@@ -27,6 +30,10 @@ export async function guardarSnapshotDelDia(uid, datos) {
     const existente = await getDoc(referencia)
     
     if (existente.exists()) {
+        const actuales = existente.data()
+        const totalesSinCambios = ["patrimonioPEN", "patrimonioUSD", "patrimonioUSDT"]
+            .every(campo => Number(actuales[campo] ?? 0) === Number(datos[campo] ?? 0))
+        if (totalesSinCambios) return false
         await setDoc(referencia, {
             ...datos,
             actualizacion: serverTimestamp()
@@ -38,8 +45,9 @@ export async function guardarSnapshotDelDia(uid, datos) {
             actualizacion: serverTimestamp()
         })
     }
-    
-    return fecha
+
+    cacheCapa.invalidarPrefijo(uid, "snapshots")
+    return true
 }
 
 // ============================================
@@ -50,6 +58,7 @@ export async function cerrarSnapshotDelDia(uid) {
     const fecha = getFechaHoy()
     const referencia = doc(db, "usuarios", uid, "snapshots", fecha)
     await setDoc(referencia, { cerrado: true }, { merge: true })
+    cacheCapa.invalidarPrefijo(uid, "snapshots")
 }
 
 // ============================================
@@ -57,17 +66,18 @@ export async function cerrarSnapshotDelDia(uid) {
 // ============================================
 
 export async function obtenerSnapshots(uid, dias = 30) {
-    const referencia = collection(db, "usuarios", uid, "snapshots")
-    const q = query(referencia, orderBy("__name__", "desc"), limit(dias))
-    const resultado = await getDocs(q)
-    
-    const snapshots = resultado.docs.map(doc => ({
-        fecha: doc.id,
-        ...doc.data()
-    }))
-    
-    // Ordenar de más antiguo a más reciente
-    return snapshots.reverse()
+    return cacheCapa.obtener(uid, `snapshots:periodo:${dias}`, async () => {
+        const referencia = collection(db, "usuarios", uid, "snapshots")
+        const q = query(referencia, orderBy("__name__", "desc"), limit(dias))
+        const resultado = await getDocs(q)
+
+        const snapshots = resultado.docs.map(doc => ({
+            fecha: doc.id,
+            ...doc.data()
+        }))
+
+        return snapshots.reverse()
+    }, { ttl: TTL_SNAPSHOTS })
 }
 
 // ============================================
@@ -75,18 +85,20 @@ export async function obtenerSnapshots(uid, dias = 30) {
 // ============================================
 
 export async function obtenerSnapshotHoy(uid) {
-    const fecha = getFechaHoy()
-    const referencia = doc(db, "usuarios", uid, "snapshots", fecha)
-    const resultado = await getDoc(referencia)
-    
-    if (!resultado.exists()) {
-        return null
-    }
-    
-    return {
-        fecha: resultado.id,
-        ...resultado.data()
-    }
+    return cacheCapa.obtener(uid, "snapshots:hoy", async () => {
+        const fecha = getFechaHoy()
+        const referencia = doc(db, "usuarios", uid, "snapshots", fecha)
+        const resultado = await getDoc(referencia)
+
+        if (!resultado.exists()) {
+            return null
+        }
+
+        return {
+            fecha: resultado.id,
+            ...resultado.data()
+        }
+    }, { ttl: TTL_SNAPSHOTS })
 }
 
 // ============================================
@@ -94,15 +106,17 @@ export async function obtenerSnapshotHoy(uid) {
 // ============================================
 
 export async function obtenerSnapshotPorFecha(uid, fecha) {
-    const referencia = doc(db, "usuarios", uid, "snapshots", fecha)
-    const resultado = await getDoc(referencia)
-    
-    if (!resultado.exists()) {
-        return null
-    }
-    
-    return {
-        fecha: resultado.id,
-        ...resultado.data()
-    }
+    return cacheCapa.obtener(uid, `snapshots:fecha:${fecha}`, async () => {
+        const referencia = doc(db, "usuarios", uid, "snapshots", fecha)
+        const resultado = await getDoc(referencia)
+
+        if (!resultado.exists()) {
+            return null
+        }
+
+        return {
+            fecha: resultado.id,
+            ...resultado.data()
+        }
+    }, { ttl: TTL_SNAPSHOTS })
 }

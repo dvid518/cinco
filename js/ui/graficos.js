@@ -2,47 +2,38 @@
 // GRÁFICOS CON CHART.JS
 // ============================================
 
+import { formatearMontoConDivisa, presentarDivisa } from "../services/DivisaServicio.js"
+
 let chartInstance = null
-let patrimonioChartInstance = null
+const patrimonioCharts = new Map()
+const configuracionesPatrimonio = new Map()
 
 // Última configuración usada, para poder redibujar al cambiar el tema
 let ultimoGraficoLinea = null
-let ultimoGraficoPatrimonio = null
 let observadorTema = null
 
 // ============================================
 // CARGA DE CHART.JS (local)
 // ============================================
 
-let chartCargado = false
+let promesaChartJS = null
 
 async function cargarChartJS() {
     if (window.Chart) return window.Chart
+    if (promesaChartJS) return promesaChartJS
 
-    if (chartCargado) {
-        // Si ya se está cargando, esperar
-        return new Promise(resolve => {
-            const check = setInterval(() => {
-                if (window.Chart) {
-                    clearInterval(check)
-                    resolve(window.Chart)
-                }
-            }, 50)
-        })
-    }
-
-    chartCargado = true
-
-    return new Promise((resolve, reject) => {
+    promesaChartJS = new Promise((resolve, reject) => {
         const script = document.createElement("script")
         script.src = "/js/lib/chart.umd.min.js"
         script.onload = () => resolve(window.Chart)
         script.onerror = () => {
-            chartCargado = false
+            promesaChartJS = null
             reject(new Error("No se pudo cargar Chart.js"))
         }
         document.head.appendChild(script)
     })
+
+    return promesaChartJS
 }
 
 // ============================================
@@ -60,9 +51,9 @@ function configurarObservadorTema() {
             const { canvasId, datos, opciones } = ultimoGraficoLinea
             crearGraficoLinea(canvasId, datos, opciones)
         }
-        if (ultimoGraficoPatrimonio) {
-            const { canvasId, datos, opciones } = ultimoGraficoPatrimonio
-            crearGraficoPatrimonio(canvasId, datos, opciones)
+        for (const [chartKey, configuracion] of configuracionesPatrimonio) {
+            const { canvasId, datos, opciones } = configuracion
+            crearGraficoPatrimonio(canvasId, datos, { ...opciones, chartKey })
         }
     })
 
@@ -219,12 +210,21 @@ export function destruirGrafico() {
 // GRÁFICO DE PATRIMONIO (múltiples líneas)
 // ============================================
 
+function simplificarEtiquetasPatrimonio(labels) {
+    if (labels.length <= 8) return [...labels]
+    const step = Math.ceil(labels.length / 8)
+    return labels.map((label, indice) => indice % step === 0 || indice === labels.length - 1 ? label : "")
+}
+
 export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
+    const { chartKey = "dashboard", ...opcionesGrafico } = opciones
+
     try {
         const Chart = await cargarChartJS()
 
-        if (patrimonioChartInstance) {
-            patrimonioChartInstance.destroy()
+        const instanciaAnterior = patrimonioCharts.get(chartKey)
+        if (instanciaAnterior) {
+            instanciaAnterior.destroy()
         }
 
         const canvas = document.getElementById(canvasId)
@@ -243,7 +243,10 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
         const colorTextAct = colores.textAct
         const colorPaleSky = colores.paleSky
 
-        const divisa = opciones.divisa || 'PEN'
+        const divisa = opcionesGrafico.divisa || 'PEN'
+        const etiquetaDivisa = opcionesGrafico.etiquetaDivisa || presentarDivisa(divisa.toLowerCase())
+        const etiquetasOriginales = datos.labels || []
+        const etiquetasVisibles = simplificarEtiquetasPatrimonio(etiquetasOriginales)
 
         // Seleccionar datos según divisa
         let data
@@ -263,12 +266,12 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
         gradient.addColorStop(0, color + '40')
         gradient.addColorStop(1, color + '00')
 
-        patrimonioChartInstance = new Chart(ctx, {
+        const instancia = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: datos.labels || [],
+                labels: etiquetasVisibles,
                 datasets: [{
-                    label: `Patrimonio ${divisa}`,
+                    label: `Patrimonio ${etiquetaDivisa}`,
                     data: data || [],
                     borderColor: color,
                     backgroundColor: gradient,
@@ -295,8 +298,12 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
                         cornerRadius: 8,
                         displayColors: false,
                         callbacks: {
+                            title: (items) => {
+                                const indice = items?.[0]?.dataIndex ?? 0
+                                return etiquetasOriginales[indice] || ""
+                            },
                             label: (context) => {
-                                return `${divisa} ${context.parsed.y.toFixed(2)}`
+                                return formatearMontoConDivisa(context.parsed.y, divisa.toLowerCase())
                             }
                         }
                     }
@@ -306,10 +313,16 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
                         grid: { display: false },
                         ticks: {
                             color: colorTextSecondary,
-                            font: { size: 10, family: 'Roboto Mono' }
+                            font: { size: 10, family: 'Roboto Mono' },
+                            maxRotation: 0,
+                            autoSkip: false,
+                            maxTicksLimit: 8
                         }
                     },
                     y: {
+                        beginAtZero: true,
+                        min: 0,
+                        suggestedMin: 0,
                         grid: {
                             color: colorBorder + '30',
                             drawBorder: false
@@ -323,26 +336,28 @@ export async function crearGraficoPatrimonio(canvasId, datos, opciones = {}) {
                 },
                 interaction: {
                     intersect: false,
-                    mode: 'index'
+                    mode: 'nearest'
                 }
             }
         })
 
         // Recordar para redibujar al cambiar el tema
-        ultimoGraficoPatrimonio = { canvasId, datos, opciones }
+        patrimonioCharts.set(chartKey, instancia)
+        configuracionesPatrimonio.set(chartKey, { canvasId, datos, opciones: opcionesGrafico })
         configurarObservadorTema()
 
-        return patrimonioChartInstance
+        return instancia
     } catch (error) {
         console.error("Error creando gráfico de patrimonio:", error)
         return null
     }
 }
 
-export function destruirGraficoPatrimonio() {
-    if (patrimonioChartInstance) {
-        patrimonioChartInstance.destroy()
-        patrimonioChartInstance = null
+export function destruirGraficoPatrimonio(chartKey = "dashboard") {
+    const instancia = patrimonioCharts.get(chartKey)
+    if (instancia) {
+        instancia.destroy()
+        patrimonioCharts.delete(chartKey)
     }
-    ultimoGraficoPatrimonio = null
+    configuracionesPatrimonio.delete(chartKey)
 }

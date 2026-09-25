@@ -19,6 +19,7 @@ class Sesion {
                 modalesPersistentes: false,
                 doodles: false,
                 unClickSeleccion: false,
+                lateralidadCuentaInfo: "derecha",
                 resaltarIngresoGasto: true
             },
             tiposMovimiento: {
@@ -31,6 +32,8 @@ class Sesion {
                 trade: true
             },
             movimientosRecientes: 5,
+            periodoEvolucion: "30d",
+            resaltarPatrimonio: 0,
             formatoDivisa: "simbolo"
         }
         // Intentar cargar preferencias guardadas al instanciar
@@ -112,6 +115,12 @@ class Sesion {
         }
         if (preferencias?.movimientosRecientes !== undefined) {
             this.preferencias.movimientosRecientes = preferencias.movimientosRecientes
+        }
+        if (preferencias?.periodoEvolucion) {
+            this.preferencias.periodoEvolucion = preferencias.periodoEvolucion
+        }
+        if (preferencias?.resaltarPatrimonio !== undefined) {
+            this.preferencias.resaltarPatrimonio = Number(preferencias.resaltarPatrimonio) || 0
         }
         if (preferencias?.formatoDivisa) {
             this.preferencias.formatoDivisa = preferencias.formatoDivisa
@@ -206,6 +215,7 @@ class Sesion {
                 modalesPersistentes: false,
                 doodles: false,
                 unClickSeleccion: false,
+                lateralidadCuentaInfo: "derecha",
                 resaltarIngresoGasto: true
             },
             tiposMovimiento: {
@@ -218,6 +228,8 @@ class Sesion {
                 trade: true
             },
             movimientosRecientes: 5,
+            periodoEvolucion: "30d",
+            resaltarPatrimonio: 0,
             formatoDivisa: "simbolo"
         }
         try {

@@ -1,4 +1,4 @@
-import { ciclarTema, nombreModoTema } from "../core/tema.js"
+import { cambiarTema, nombreModoTema } from "../core/tema.js"
 import { sesion } from "../core/sesion.js"
 import { mostrarNotificacion } from "./notificaciones.js"
 
@@ -8,7 +8,7 @@ import { mostrarNotificacion } from "./notificaciones.js"
 // Pequeños easter eggs ocultos. Funcionan SIEMPRE (independientemente de la
 // preferencia "Habilitar escindos doodles", que se registra en accesibilidad).
 //
-//  · Tap con 5 dedos → cicla el tema de la app (dark → light → system).
+//  · Tap con 5 dedos → alterna entre tema claro y oscuro.
 //  · Clic en el logotipo "cinco" (login / register) → clase .spin (toggle).
 // ============================================
 
@@ -59,7 +59,9 @@ function manejarTouches(evento) {
 
 async function ciclarTemaDoodle() {
     try {
-        const tema = await ciclarTema(sesion.uid)
+        const actual = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"
+        const siguiente = actual === "light" ? "dark" : "light"
+        const tema = await cambiarTema(sesion.uid, siguiente)
         mostrarNotificacion("exito", nombreModoTema(tema))
     } catch (error) {
         console.error("[ERROR] No se pudo cambiar el tema con el doodle:", error)

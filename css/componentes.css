@@ -65,16 +65,18 @@
     align-items: center;
     gap: 10px;
     padding: 12px 14px;
-    background: var(--surface);
     color: var(--text);
-    border: 1px solid var(--border);
     border-radius: 30px;
-    box-shadow: 0 8px 24px var(--shadow);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     opacity: 0;
     transform: translateY(-16px);
     transition: all 0.3s ease;
+}
+
+.notificacion:hover {
+    box-shadow: 0 0 24px var(--shadow);
+    border: 1px solid var(--border);
 }
 
 .notificacion.notificacion-activa {
@@ -258,7 +260,6 @@
 
 /* Botones de acción dentro de la fila de totales */
 .totales-acciones {
-    margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 8px;

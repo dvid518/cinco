@@ -3,6 +3,7 @@ import { obtenerCuentas } from "../../firebase/firestore.js"
 import { sesion } from "../core/sesion.js"
 import { getFechaHoy } from "../core/fechas.js"
 import { mostrarNotificacion } from "./notificaciones.js"
+import { presentarDivisa, formatearMontoConDivisa } from "../services/DivisaServicio.js"
 
 // ============================================
 // GENERAR FORMULARIO SEGÚN TIPO
@@ -29,7 +30,7 @@ export async function generarFormularioMovimiento(tipo, divisaPreseleccionada = 
             : cuentasActivas
 
     const cuentasOptions = cuentasElegibles
-        .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}" data-tipo="${c.tipo || "otro"}">${c.nombre} (${c.moneda?.toUpperCase() || "PEN"})</option>`)
+        .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}" data-tipo="${c.tipo || "otro"}">${c.nombre} (${presentarDivisa(c.moneda || "pen")})</option>`)
         .join("")
 
     // Las tarjetas solo se filtran por divisa (siguen disponibles para pagar
@@ -38,7 +39,7 @@ export async function generarFormularioMovimiento(tipo, divisaPreseleccionada = 
         ? cuentasActivas.filter(c => c.tipo === "credito" && comparteDivisa(c))
         : cuentasActivas.filter(c => c.tipo === "credito")
     const tarjetasOptions = tarjetas
-        .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (deuda: ${(c.deuda || 0).toFixed(2)})</option>`)
+        .map(c => `<option value="${c.id}" data-moneda="${(c.moneda || "pen").toLowerCase()}">${c.nombre} (deuda: ${formatearMontoConDivisa(c.deuda || 0, c.moneda || "pen")})</option>`)
         .join("")
 
     const hoy = getFechaHoy()
